@@ -66,6 +66,7 @@ enum CLI {
     static func renderUI(dir: String) -> Int32 {
         let out = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        UserDefaults.standard.set(true, forKey: "setupCompleted")
         let state = AppState()
         state.scan.appState = state
         let phases: [(String, ScanPhase)] = [
@@ -83,6 +84,11 @@ enum CLI {
             let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
                 .environment(\.previewPhase, phase)
             if render(view, to: out.appendingPathComponent("\(name).png")) { written += 1 }
+        }
+        for i in 0..<6 {
+            let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
+                .environment(\.previewSetupStep, i)
+            if render(view, to: out.appendingPathComponent("setup-\(i + 1).png")) { written += 1 }
         }
         for (name, tab) in [("library", AppTab.library), ("review", .review), ("settings", .settings)] {
             state.tab = tab

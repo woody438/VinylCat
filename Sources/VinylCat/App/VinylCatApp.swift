@@ -23,14 +23,8 @@ struct VinylCatApp: App {
                 .background(Theme.bg)
                 .preferredColorScheme(.dark)
                 .task {
-                    state.scan.appState = state
-                    state.reviewCount = Store.shared.reviewCount()
-                    state.voice.onCommand = { [weak state] cmd in state?.scan.handle(command: cmd) }
-                    state.scan.speaker.onSpeakingChanged = { [weak state] speaking in state?.voice.muted = speaking }
-                    await state.camera.start()
-                    state.scan.start(camera: state.camera)
-                    await state.voice.start()
-                    state.listening = state.voice.status == .listening
+                    // First run: the wizard drives permissions and starts services when it finishes.
+                    if UserDefaults.standard.bool(forKey: "setupCompleted") { state.startServices() }
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -40,8 +34,18 @@ struct VinylCatApp: App {
 
 struct RootView: View {
     @Environment(AppState.self) private var state
+    @AppStorage("setupCompleted") private var setupCompleted = false
+    @Environment(\.previewSetupStep) private var previewSetupStep
 
     var body: some View {
+        if !setupCompleted || previewSetupStep != nil {
+            SetupWizard()
+        } else {
+            mainView
+        }
+    }
+
+    private var mainView: some View {
         VStack(spacing: 0) {
             TopBar()
             Divider().overlay(Theme.line)

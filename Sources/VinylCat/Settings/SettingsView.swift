@@ -80,6 +80,7 @@ struct SettingsView: View {
                     HStack(spacing: 12) {
                         Button("Test Discogs") { Task { testResult = await state.discogs.selfTest() } }
                         Button("Test model") { Task { testResult = await testModel() } }
+                        Button("Run setup again") { UserDefaults.standard.set(false, forKey: "setupCompleted") }
                     }
                     Text(testResult).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(6).fixedSize(horizontal: false, vertical: true)
                 }

@@ -4,7 +4,12 @@ Hands-free vinyl cataloguing for macOS: hold a record up to the camera, it photo
 finds the release on Discogs, speaks the result, asks for the B-side / back cover / disc 2, and files everything in a
 local database (with an optional push to your Discogs Collection).
 
-## First run — three things to do
+## First run
+
+The app opens with a setup wizard (Welcome → Permissions → Discogs → Vision model → Preferences → Ready) that walks
+through everything below and tests each piece. Re-run it any time from Settings → "Run setup again".
+
+## What the wizard sets up
 
 1. **Discogs token** — create an account, make a personal access token at discogs.com/settings/developers, paste it in
    **Settings → Discogs → Personal token → Save**, then **Test Discogs**. Without a token the app still looks records up
@@ -50,6 +55,16 @@ scripts/test.sh                      # 35 self-checks (ranker, catalogue numbers
 | add anyway | keep a second copy of a duplicate |
 | forty-fives · twelve inch · albums | switch session format |
 | pause / resume | stop / start auto-capture |
+
+## Sharing the app
+
+```bash
+scripts/package.sh      # release build → output/VinylCat_vN_YYYY-MM-DD.zip
+```
+
+The recipient needs macOS 15 or later. The app is signed locally, not notarised, so on first launch they must
+**right-click VinylCat.app → Open** (or System Settings → Privacy & Security → Open Anyway). Their own Discogs token and
+model key go in via the wizard; nothing of yours is in the zip.
 
 ## Where things live
 
