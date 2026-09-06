@@ -92,22 +92,24 @@ struct VinylRecord: Identifiable, Sendable, Equatable {
 
 /// Which shots to ask for per format. Discogs metadata (2×LP, gatefold) extends the list.
 struct CaptureProfile: Sendable {
-    var seven: [ShotKind] = [.labelA, .labelB]
-    var twelve: [ShotKind] = [.coverFront, .labelA]
-    var lp: [ShotKind] = [.coverFront, .coverBack, .labelA]
+    /// Once a release is matched, Discogs already knows the tracklist — so by default singles need no extra shots
+    /// (the B-side is only asked for when a match is ambiguous), and albums get front + back covers.
+    var seven: [ShotKind] = []
+    var twelve: [ShotKind] = []
+    var lp: [ShotKind] = [.coverFront, .coverBack]
 
     static func load() -> CaptureProfile {
         var p = CaptureProfile()
         let d = UserDefaults.standard
-        if d.object(forKey: "askForLabelsOnLP") as? Bool == false { p.lp.removeAll { $0 == .labelA } }
-        if d.object(forKey: "askForBSide") as? Bool == false { p.seven.removeAll { $0 == .labelB } }
+        if d.object(forKey: "askForLabelsOnLP") as? Bool == true { p.lp.append(.labelA) }
+        if d.object(forKey: "askForBSide") as? Bool == true { p.seven = [.labelA, .labelB]; p.twelve = [.labelA, .labelB] }
         return p
     }
 
     func expected(format: String, discCount: Int, descriptors: [String], hadPictureSleeve: Bool) -> [ShotKind] {
         var shots: [ShotKind]
         switch format {
-        case "7\"": shots = seven; if hadPictureSleeve { shots.insert(.coverFront, at: 0) }
+        case "7\"": shots = seven; if hadPictureSleeve, !shots.isEmpty { shots.insert(.coverFront, at: 0) }
         case "12\"": shots = twelve
         default: shots = lp
         }

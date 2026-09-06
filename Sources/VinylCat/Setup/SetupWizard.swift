@@ -224,8 +224,9 @@ private struct ModelStep: View {
 private struct PreferencesStep: View {
     @Environment(AppState.self) private var state
     @AppStorage("currency") private var currency = "GBP"
-    @AppStorage("askForBSide") private var askForBSide = true
-    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = true
+    @AppStorage("askForBSide") private var askForBSide = false
+    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = false
+    @AppStorage("autoCapture") private var autoCapture = true
     @AppStorage("defaultFormat") private var defaultFormat = VinylFormat.seven.rawValue
 
     var body: some View {
@@ -267,8 +268,9 @@ private struct PreferencesStep: View {
                     }
                 }
             }
-            Toggle(isOn: $askForBSide) { Text("Ask for the B-side label on singles").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
-            Toggle(isOn: $askForLabelsOnLP) { Text("Ask for a label shot on albums (front + back cover are always asked)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
+            Toggle(isOn: $autoCapture) { Text("Auto-capture when a record is held steady (off = say “capture” or press space)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
+            Toggle(isOn: $askForBSide) { Text("Also photograph both labels on singles (off: Discogs already knows the B-side)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
+            Toggle(isOn: $askForLabelsOnLP) { Text("Also photograph a label on albums (front + back cover are always asked)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
             Text("Double albums and gatefolds are detected from Discogs and asked for automatically. Everything here can be changed later in Settings.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
         }
         .onAppear { state.camera.refreshDevices(); state.voice.refreshInputs() }
@@ -283,7 +285,7 @@ private struct ReadyStep: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Bullet("Put the Mac where you can hold a record about 40 cm from the camera, on a plain background.")
                     Bullet("Set the format in the top bar — or say “forty-fives”, “twelve inch”, “albums”.")
-                    Bullet("Hold the cover (or the label, if there's no picture sleeve) still for about a second. Chime = captured.")
+                    Bullet("Line the cover or label up in the guide and hold still for a second — or say “capture” / press space. Chime = captured.")
                     Bullet("Listen: it reads the match back, then asks for the B-side or back cover. Flip, hold, chime, next record.")
                     Bullet("Can't identify it? It's parked in REVIEW with the photo — finish it later by voice or typing.")
                 }

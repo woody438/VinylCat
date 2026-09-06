@@ -18,6 +18,10 @@ final class AppState {
     var tab: AppTab = .scan
     var format: VinylFormat = .seven
     var autoMode = true
+    /// true = auto-capture when steady; false = manual ("capture" / space bar).
+    var autoCapture: Bool = UserDefaults.standard.object(forKey: "autoCapture") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoCapture, forKey: "autoCapture"); scan.setAutoCapture(autoCapture) }
+    }
     var listening = false
     var sessionCount = 0
     var reviewCount = 0
@@ -36,6 +40,7 @@ final class AppState {
         guard !servicesStarted else { return }
         servicesStarted = true
         scan.appState = self
+        scan.setAutoCapture(autoCapture)
         reviewCount = Store.shared.reviewCount()
         voice.onCommand = { [weak self] cmd in self?.scan.handle(command: cmd) }
         scan.speaker.onSpeakingChanged = { [weak self] speaking in self?.voice.muted = speaking }

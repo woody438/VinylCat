@@ -9,10 +9,11 @@ struct SettingsView: View {
     @AppStorage("currency") private var currency = "GBP"
     @AppStorage("discogsSync") private var discogsSync = true
     @AppStorage("sharpnessMin") private var sharpnessMin = 60.0
-    @AppStorage("steadySeconds") private var steadySeconds = 0.6
+    @AppStorage("steadySeconds") private var steadySeconds = 1.0
     @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0
-    @AppStorage("askForBSide") private var askForBSide = true
-    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = true
+    @AppStorage("askForBSide") private var askForBSide = false
+    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = false
+    @AppStorage("steadySeconds") private var steadySecondsDefault = 1.0
     @State private var testResult = ""
 
     var body: some View {
@@ -78,9 +79,9 @@ struct SettingsView: View {
             }
             VStack(alignment: .leading, spacing: 32) {
                 Section("SHOTS") {
-                    Row("Ask for the B-side on singles") { Toggle("", isOn: $askForBSide).labelsHidden().toggleStyle(.switch) }
-                    Row("Ask for a label shot on LPs") { Toggle("", isOn: $askForLabelsOnLP).labelsHidden().toggleStyle(.switch) }
-                    Text("LPs: front + back (+ label). 2×LP and gatefolds are detected from Discogs. Say “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
+                    Row("Also photograph both labels on singles") { Toggle("", isOn: $askForBSide).labelsHidden().toggleStyle(.switch) }
+                    Row("Also photograph a label on LPs") { Toggle("", isOn: $askForLabelsOnLP).labelsHidden().toggleStyle(.switch) }
+                    Text("After a confident match Discogs already knows the tracklist, so singles need no extra shots; the B-side is only asked for when a match is ambiguous. LPs: front + back. 2×LP and gatefolds are detected from Discogs. Say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Section("TESTS") {

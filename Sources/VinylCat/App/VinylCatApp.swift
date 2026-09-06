@@ -94,15 +94,23 @@ struct TopBar: View {
                 }
             }
             Spacer()
-            HStack(spacing: 8) {
-                Circle().fill(state.autoMode ? Theme.green : Theme.muted).frame(width: 8, height: 8)
-                Text(state.autoMode ? "AUTO MODE" : "PAUSED").font(Theme.mono(13)).tracking(1.5)
+            // Capture mode pill: AUTO ↔ MANUAL (space bar / "capture" always work).
+            Button {
+                state.autoCapture.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(state.autoCapture ? Theme.green : Theme.amber).frame(width: 8, height: 8)
+                    Text(state.autoCapture ? "AUTO CAPTURE" : "MANUAL · SPACE").font(Theme.mono(13)).tracking(1.5)
+                }
+                .foregroundStyle(state.autoCapture ? Theme.green : Theme.amber)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .overlay(Rectangle().stroke(state.autoCapture ? Theme.green : Theme.amber, lineWidth: 1))
+                .contentShape(Rectangle())
             }
-            .foregroundStyle(state.autoMode ? Theme.green : Theme.muted)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .overlay(Rectangle().stroke(state.autoMode ? Theme.green : Theme.muted, lineWidth: 1))
-            .contentShape(Rectangle())
-            .onTapGesture { state.autoMode.toggle(); state.scan.setAuto(state.autoMode) }
+            .buttonStyle(.plain)
+            .help("Click to switch between auto-capture and manual (say “capture” or press space)")
+            // Space bar = capture, from anywhere in the window.
+            Button("") { state.scan.forceCapture() }.keyboardShortcut(.space, modifiers: []).hidden().frame(width: 0, height: 0)
 
             Caption("FORMAT")
             Picker("", selection: $state.format) {
@@ -112,14 +120,21 @@ struct TopBar: View {
             .font(Theme.display(22))
 
             Rectangle().fill(Theme.line).frame(width: 1, height: 24)
-            HStack(spacing: 6) {
-                Image(systemName: state.voice.status == .listening ? "mic.fill" : "mic.slash").font(.system(size: 13))
-                Text(state.voice.status == .listening ? "LISTENING" : (state.voice.problem == nil ? "MIC OFF" : "VOICE OFF · CLICK")).font(Theme.mono(13)).tracking(1.5)
+            // Voice button: listening → click to mute; off → click to start (tooltip says why if it can't).
+            Button {
+                if state.voice.status == .listening { state.voice.stop() } else { Task { await state.voice.retry() } }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: state.voice.status == .listening ? "mic.fill" : "mic.slash").font(.system(size: 13))
+                    Text(state.voice.status == .listening ? "LISTENING" : (state.voice.problem == nil ? "VOICE OFF" : "VOICE OFF · WHY?")).font(Theme.mono(13)).tracking(1.5)
+                }
+                .foregroundStyle(state.voice.status == .listening ? Theme.green : (state.voice.problem == nil ? Theme.muted : Theme.amber))
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .overlay(Rectangle().stroke(state.voice.status == .listening ? Theme.line : (state.voice.problem == nil ? Theme.line : Theme.amber), lineWidth: 1))
+                .contentShape(Rectangle())
             }
-            .foregroundStyle(state.voice.status == .listening ? Theme.green : (state.voice.problem == nil ? Theme.muted : Theme.amber))
-            .help(state.voice.problem ?? state.voice.lastHeard)
-            .contentShape(Rectangle())
-            .onTapGesture { Task { await state.voice.retry() } }
+            .buttonStyle(.plain)
+            .help(state.voice.problem ?? (state.voice.status == .listening ? "Listening — click to mute. Last heard: \(state.voice.lastHeard)" : "Click to start listening"))
         }
         .padding(.horizontal, 24)
         .frame(height: 56)

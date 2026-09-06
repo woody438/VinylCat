@@ -219,14 +219,16 @@ extension CLI {
         }
         func phaseName(_ p: ScanPhase) -> String { "\(p)".components(separatedBy: "(").first ?? "\(p)" }
         let scan = state.scan
-        print("scenario · 7\" single: match → B-side → done")
+        print("scenario · 7\" single: match → done (no extra shots) → “flip” reopens for the B-side")
         state.format = .seven
         guard let jam = still("label-jam-posp113"), let specials = still("label-specials-chstt17"), let clash = still("cover-clash-clash3") else { return 1 }
         await scan.inject(still: jam)
-        check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "B-SIDE LABEL" } else { return false } }(), "after side A: asks for B-side (phase \(phaseName(scan.phase)))")
-        check(scan.current?.discogsReleaseID != nil && store.count() == 1, "record saved with Discogs id \(scan.current?.discogsReleaseID ?? 0)")
+        check(scan.current == nil && store.count() == 1, "confident match closes the record immediately (phase \(phaseName(scan.phase)))")
+        check(store.all().first?.discogsReleaseID != nil && store.all().first?.isComplete == true, "record saved with Discogs id \(store.all().first?.discogsReleaseID ?? 0), complete")
+        scan.handle(command: .flip)
+        check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "B-SIDE LABEL" } else { return false } }(), "“flip” reopens the last record and asks for the B-side (phase \(phaseName(scan.phase)))")
         await scan.inject(still: jam)
-        check(scan.current == nil, "after B-side: record closed (phase \(phaseName(scan.phase)))")
+        check(scan.current == nil, "after B-side: record closed again (phase \(phaseName(scan.phase)))")
         let r1 = store.all().first
         check(r1?.photos.count == 2 && r1?.isComplete == true && r1?.photos.map(\.kind) == [.labelA, .labelB], "2 photos tagged A/B, complete")
         check(r1?.artist == "The Jam" && r1?.format == "7\"" && r1?.catalogNumber?.uppercased() == "POSP 113", "fields: \(r1?.artist ?? "") · \(r1?.format ?? "") · \(r1?.catalogNumber ?? "")")
@@ -235,19 +237,16 @@ extension CLI {
         await scan.inject(still: jam)
         check({ if case .duplicate = scan.phase { return true } else { return false } }(), "same record again → duplicate (phase \(phaseName(scan.phase)))")
         scan.handle(command: .addAnyway)
-        for _ in 0..<40 where scan.current == nil { try? await Task.sleep(for: .milliseconds(250)) }
-        check(store.count() == 2 && scan.current != nil, "add anyway creates a second copy (count \(store.count()))")
-        scan.handle(command: .done)
-        check(scan.current == nil, "done closes it")
+        for _ in 0..<40 where store.count() < 2 { try? await Task.sleep(for: .milliseconds(250)) }
+        check(store.count() == 2 && scan.current == nil, "add anyway creates a second copy and closes it (count \(store.count()))")
 
-        print("scenario · skip a shot")
+        print("scenario · second single, then manual extra photo")
         await scan.inject(still: specials)
-        check(scan.current?.artist == "The Specials", "matched The Specials (got \(scan.current?.artist ?? "nil"))")
-        let pendingBefore = scan.pending.count
-        check(pendingBefore == 1 && scan.pending.first == .labelB, "single label shot → only the B-side is pending (\(scan.pending.map(\.rawValue)))")
-        scan.handle(command: .skip)
-        let newest = store.all().first
-        check(scan.current == nil && newest?.isComplete == false, "skip closes record as incomplete (current \(scan.current?.artist ?? "nil") · newest \(newest?.artist ?? "nil") \(newest?.photos.map(\.kind.rawValue) ?? []) of \(newest?.expectedShots.map(\.rawValue) ?? []) · phase \(phaseName(scan.phase)))")
+        check(store.all().first?.artist == "The Specials" && scan.current == nil, "matched The Specials, closed (got \(store.all().first?.artist ?? "nil"))")
+        scan.handle(command: .addPhoto)
+        await scan.inject(still: specials)
+        check(store.all().first?.photos.count == 2 && store.all().first?.photos.last?.kind == .other, "“add photo” attaches an extra shot to the last record")
+        scan.handle(command: .done)
 
         print("scenario · album → front/back/label → undo → done")
         state.format = .lp

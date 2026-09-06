@@ -15,6 +15,7 @@
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSCameraUseContinuityCameraDeviceType</key><true/>
     <key>NSCameraUsageDescription</key>
     <string>VinylCat uses the camera to photograph record sleeves and labels so it can identify them.</string>
     <key>NSMicrophoneUsageDescription</key>

@@ -36,12 +36,15 @@ final class FrameAnalyzer {
         guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return [UInt8](repeating: 0, count: width * height) }
         let src = base.assumingMemoryBound(to: UInt8.self)
         var out = [UInt8](repeating: 0, count: width * height)
+        // Only the central region (the alignment guide) is analysed: hands entering at the edges don't count.
+        let cx0 = srcW * 15 / 100, cy0 = srcH * 12 / 100
+        let cw = srcW * 70 / 100, ch = srcH * 76 / 100
         // Box-sample: average a small block per output pixel, luma from BGRA.
-        let bx = max(1, srcW / width), by = max(1, srcH / height)
+        let bx = max(1, cw / width), by = max(1, ch / height)
         for y in 0..<height {
-            let sy0 = y * srcH / height
+            let sy0 = cy0 + y * ch / height
             for x in 0..<width {
-                let sx0 = x * srcW / width
+                let sx0 = cx0 + x * cw / width
                 var sum = 0, n = 0
                 var yy = sy0
                 while yy < min(srcH, sy0 + by) {

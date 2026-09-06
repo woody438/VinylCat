@@ -6,7 +6,7 @@ import Observation
 /// Everything the operator can say. Phrases are matched as whole words at the end of the live transcript.
 enum VoiceCommand: String, CaseIterable, Sendable {
     case capture, flip, skip, done, undo, review, again, one, two, three, none, yes, no
-    case sevens, twelves, albums, pause, resume, addPhoto, backCover, gatefold, discTwo, addAnyway, label
+    case sevens, twelves, albums, pause, resume, addPhoto, backCover, gatefold, discTwo, addAnyway, label, autoMode, manualMode
 
     static let phrases: [(VoiceCommand, [String])] = [
         (.capture, ["capture", "take it", "shoot", "snap"]),
@@ -33,6 +33,8 @@ enum VoiceCommand: String, CaseIterable, Sendable {
         (.gatefold, ["gatefold", "inside"]),
         (.discTwo, ["disc two", "disc 2", "second disc", "record two"]),
         (.addAnyway, ["add anyway", "add it anyway", "keep both"]),
+        (.autoMode, ["auto mode", "auto capture", "automatic"]),
+        (.manualMode, ["manual mode", "manual", "manual capture"]),
     ]
 
     static var contextualStrings: [String] { phrases.flatMap(\.1) }

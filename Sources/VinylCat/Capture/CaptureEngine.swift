@@ -8,7 +8,9 @@ struct CaptureTuning: Sendable {
     var sharpnessMin: Double = 60
     var motionMax: Double = 4
     var sceneDeltaMin: Double = 14
-    var steadySeconds: Double = 0.6
+    var steadySeconds: Double = 1.0
+    /// Hamming distance the frame may drift during the steady window before the timer restarts.
+    var steadyHashDrift: Int = 6
     /// Hamming distance below which a new steady frame is "the same item we just shot".
     var sameItemHash: Int = 10
     /// Scene must drop back near the baseline (or change this much from the last shot) before re-arming.
@@ -44,6 +46,9 @@ actor CaptureEngine {
     private let ciContext = CIContext(options: [.cacheIntermediates: false])
     private var tuning: CaptureTuning
     private var steadySince: Date?
+    private var steadyHash: UInt64?
+    /// false = manual mode: keep analysing (ring, hints) but never fire on our own; "capture"/space still works.
+    private var autoCapture = true
     private var lastCaptureHash: UInt64?
     private var cooldown = false
     private var enabled = true
@@ -67,6 +72,7 @@ actor CaptureEngine {
     }
 
     func setEnabled(_ on: Bool) { enabled = on; if !on { steadySince = nil } }
+    func setAutoCapture(_ on: Bool) { autoCapture = on; steadySince = nil }
     func setTuning(_ t: CaptureTuning) { tuning = t }
     /// Voice "capture": take the next sharp frame regardless of the steady timer.
     func forceCapture() { forceNext = true }
@@ -129,8 +135,12 @@ actor CaptureEngine {
         guard sharp else { steadySince = nil; emit(m, 0, true, "blurry"); return }
 
         let now = Date()
-        if steadySince == nil { steadySince = now }
+        // The steady window restarts if the content itself changes (a record sliding through looks "still" frame-to-frame).
+        if steadySince == nil || steadyHash.map({ FrameAnalyzer.hammingDistance($0, m.hash) > tuning.steadyHashDrift }) ?? true {
+            steadySince = now; steadyHash = m.hash
+        }
         let progress = min(1, now.timeIntervalSince(steadySince!) / tuning.steadySeconds)
+        guard autoCapture else { emit(m, progress, true, progress >= 1 ? "ready — say capture" : "steady"); return }
         if progress >= 1 {
             if mode == .identify, let h = lastCaptureHash, FrameAnalyzer.hammingDistance(h, m.hash) <= tuning.sameItemHash {
                 emit(m, 1, false, "same item"); return

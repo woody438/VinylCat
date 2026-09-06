@@ -60,8 +60,16 @@ struct HUDOverlay: View {
 
     var body: some View {
         let scan = state.scan
-        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey, voiceProblem: state.voice.problem)
-        VStack {
+        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey, voiceProblem: state.voice.problem, manual: !state.autoCapture)
+        ZStack {
+            AlignmentGuide(color: look.color, progress: look.ring)
+            hudChrome(look)
+        }
+    }
+
+    private func hudChrome(_ look: HUDLook) -> some View {
+        let scan = state.scan
+        return VStack {
             HStack(alignment: .top) {
                 Caption(cameraTag)
                 Spacer()
@@ -108,7 +116,7 @@ struct HUDLook {
     var ring: Double = 0
     var ringLabel = "READY"
 
-    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil) {
+    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil, manual: Bool = false) {
         let metrics = signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta) } ?? "camera starting"
         switch phase {
         case .learning:
@@ -118,13 +126,14 @@ struct HUDLook {
             state = "PAUSED"; headline = "AUTO MODE OFF"; hint = "Say “resume” or click AUTO MODE"
         case .armed(let reason):
             state = "ARMED"; meta = "record #\(recordNumber) · \(reason)"
-            headline = "HOLD UP A RECORD"
-            hint = "Auto-captures when the image is steady and sharp · say “capture” to force · " + metrics
+            headline = manual ? "LINE IT UP · SAY “CAPTURE” OR PRESS SPACE" : "HOLD UP A RECORD"
+            headlineSize = manual ? 48 : 64
+            hint = (manual ? "Manual capture · the ring fills when the shot would be sharp · " : "Line it up in the guide and hold still for a second · say “capture” or press space to force · ") + metrics
             if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only · " + metrics }
             if let vp = voiceProblem { hint = "Voice off — \(vp) · " + hint }
         case .steady(let p):
-            color = Theme.green; state = "STEADY"; meta = "record #\(recordNumber)"
-            headline = "HOLD IT…"; ring = p; ringLabel = "HOLD"; hint = metrics
+            color = Theme.green; state = manual ? "READY" : "STEADY"; meta = "record #\(recordNumber)"
+            headline = manual ? (p >= 1 ? "SAY “CAPTURE” OR PRESS SPACE" : "HOLD IT…") : "HOLD IT…"; ring = p; ringLabel = manual ? "GO" : "HOLD"; hint = metrics
         case .captured:
             color = Theme.green; state = "CAPTURED"; meta = "photo saved"
             headline = "GOT IT"; ring = 1; ringLabel = "SHOT"; hint = "Lift the record away to arm the next shot"
@@ -286,5 +295,36 @@ struct BottomBar: View {
         .font(Theme.mono(12)).foregroundStyle(Theme.muted)
         .padding(.horizontal, 24)
         .frame(height: 44)
+    }
+}
+
+/// Corner brackets around the analysed region plus a faint disc outline: "put the record here".
+struct AlignmentGuide: View {
+    let color: Color
+    let progress: Double
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let rect = CGRect(x: w * 0.15, y: h * 0.12, width: w * 0.70, height: h * 0.76)
+            let side = min(rect.width, rect.height)
+            let disc = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
+            ZStack {
+                Path { p in
+                    let l: CGFloat = 36
+                    for (x, y, dx, dy) in [(rect.minX, rect.minY, 1.0, 1.0), (rect.maxX, rect.minY, -1.0, 1.0), (rect.minX, rect.maxY, 1.0, -1.0), (rect.maxX, rect.maxY, -1.0, -1.0)] {
+                        p.move(to: CGPoint(x: x, y: y + dy * l)); p.addLine(to: CGPoint(x: x, y: y)); p.addLine(to: CGPoint(x: x + dx * l, y: y))
+                    }
+                }
+                .stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .square))
+                Circle().stroke(color.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [10, 8])).frame(width: disc.width, height: disc.height).position(x: disc.midX, y: disc.midY)
+                Circle().stroke(color.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [6, 6])).frame(width: disc.width * 0.36, height: disc.height * 0.36).position(x: disc.midX, y: disc.midY)
+                if progress > 0 {
+                    Rectangle().fill(color.opacity(0.08)).frame(width: rect.width, height: rect.height).position(x: rect.midX, y: rect.midY)
+                }
+                Text("LINE UP THE SLEEVE OR LABEL HERE").font(Theme.mono(11)).tracking(2).foregroundStyle(color.opacity(0.8))
+                    .position(x: rect.midX, y: rect.minY + 16)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }

@@ -65,6 +65,8 @@ final class ScanController {
     private var manualKind: ShotKind?
     private var ambiguity: (outcome: Identifier.Outcome, candidates: [Candidate], photo: String, thumb: CGImage?)?
     private var lastCaptured: (photo: String, thumb: CGImage?)?
+    /// The record most recently closed — "flip" / "back cover" / "add photo" reopen it for an extra shot.
+    private var lastClosedRecordID: UUID?
     private var duplicate: (candidate: Candidate, outcome: Identifier.Outcome, photo: String, thumb: CGImage?)?
 
     // MARK: - Lifecycle
@@ -84,6 +86,7 @@ final class ScanController {
     }
 
     func forceCapture() { Task { await engine.forceCapture() } }
+    func setAutoCapture(_ on: Bool) { Task { await engine.setAutoCapture(on) } }
 
     /// Reads the capture tunables from UserDefaults (Settings sliders) and pushes them to the engine.
     func applyTuning() {
@@ -179,6 +182,7 @@ final class ScanController {
             case .ambiguous(let cands):
                 ambiguity = (outcome, cands, fileName, thumb)
                 phase = .ambiguous(candidates: cands.map(\.summary))
+                await engine.setMode(.shot)
                 Chime.ambiguous.play()
                 speaker.say("\(cands.count) possible matches. " + cands.enumerated().map { "\($0 + 1): \($1.spoken)" }.joined(separator: ". ") + ". Say one, two, three, or none.")
             case .none:
@@ -273,6 +277,7 @@ final class ScanController {
             items[idx].meta += " · \(rec.photos.count) shot\(rec.photos.count == 1 ? "" : "s")"
         }
         if announce { Chime.matched.play(); speaker.say("Done. Next record.") }
+        lastClosedRecordID = current?.id
         current = nil; pending = []; manualKind = nil
         phase = .armed(reason: "next record")
         Task { await engine.setMode(.identify) }
@@ -388,11 +393,14 @@ final class ScanController {
         case .albums: app.format = .lp; speaker.say("Albums")
         case .pause: app.autoMode = false; setAuto(false); speaker.say("Paused")
         case .resume: app.autoMode = true; setAuto(true); phase = .armed(reason: "resumed"); speaker.say("Ready")
+        case .autoMode: app.autoCapture = true; speaker.say("Auto capture on")
+        case .manualMode: app.autoCapture = false; speaker.say("Manual. Say capture or press space")
         case .yes, .no: break
         }
     }
 
     private func manualShot(_ kind: ShotKind, say: String) {
+        if current == nil, let id = lastClosedRecordID, let rec = store.fetch(id) { current = rec; pending = [] }
         guard current != nil else {
             if kind == .labelB || kind == .labelA { expectLabel = true; speaker.say("Show me the label"); Task { await engine.setMode(.shot) } }
             else { speaker.say("No record open") }
