@@ -57,6 +57,12 @@ final class SpeechCommands {
     enum Status: Equatable { case idle, unauthorized, listening, error(String) }
     private(set) var status: Status = .idle { didSet { Log.voice.info("status \(String(describing: self.status))") } }
     private(set) var lastHeard = ""
+    /// Chosen microphone (Core Audio UID); nil = system default. Persisted as "micUID".
+    var micUID: String? = UserDefaults.standard.string(forKey: "micUID") {
+        didSet { UserDefaults.standard.set(micUID, forKey: "micUID"); if wantListening { beginSession() } }
+    }
+    private(set) var inputs: [AudioInputs.Device] = []
+    func refreshInputs() { inputs = AudioInputs.list() }
     var onCommand: ((VoiceCommand) -> Void)?
     /// While true (TTS speaking) microphone audio is not fed to the recogniser at all, so the app never hears itself.
     var muted = false { didSet { gate.muted = muted } }
@@ -128,6 +134,10 @@ final class SpeechCommands {
         lastLoggedLength = 0
         firedText = ""
 
+        refreshInputs()
+        if let uid = micUID, let dev = inputs.first(where: { $0.uid == uid }) {
+            if !AudioInputs.select(dev, for: audioEngine) { Log.voice.error("could not select mic \(dev.name)") }
+        }
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
         guard format.channelCount > 0, format.sampleRate > 0 else { status = .error("No microphone input"); return }

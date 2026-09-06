@@ -45,6 +45,7 @@ enum CLI {
         print("cameras     \(d.devices.map { "\($0.localizedName) [\($0.deviceType.rawValue)]" })")
         let rec = SFSpeechRecognizer(locale: Locale(identifier: "en-GB"))
         print("recogniser  available=\(rec?.isAvailable ?? false) onDevice=\(rec?.supportsOnDeviceRecognition ?? false)")
+        print("mics        \(AudioInputs.list().map(\.name))")
         print("voices(en)  \(Speaker.availableVoices.count)  e.g. \(Speaker.availableVoices.prefix(3).map(\.name))")
         for k in Keychain.Key.allCases { print("key         \(k.rawValue): \(Keychain.get(k) == nil ? "missing" : "set") ") }
         print("provider    \(Identifier().provider.title)")

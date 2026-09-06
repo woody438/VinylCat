@@ -110,7 +110,7 @@ private struct PermissionsStep: View {
                           ok: listening, denied: voiceChecked && !listening,
                           allow: { voiceChecked = true; Task { await state.voice.retry() } },
                           settings: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Dictation", allowTitle: "CHECK")
-            Text("Tip: an iPhone nearby appears as a second camera (Continuity Camera) — better optics for small label type.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+            Text("Tip: an iPhone nearby appears as a second camera and microphone (Continuity Camera) — better optics for small label type. Pick them on the Preferences step.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
         }
     }
 }
@@ -225,6 +225,7 @@ private struct PreferencesStep: View {
     var body: some View {
         @Bindable var camera = state.camera
         @Bindable var speaker = state.scan.speaker
+        @Bindable var voice = state.voice
         VStack(alignment: .leading, spacing: 22) {
             Text("PREFERENCES").font(Theme.display(44))
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 16) {
@@ -243,6 +244,13 @@ private struct PreferencesStep: View {
                     }.labelsHidden().frame(width: 260)
                 }
                 GridRow {
+                    Text("Microphone").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                    Picker("", selection: $voice.micUID) {
+                        Text("System default").tag(String?.none)
+                        ForEach(state.voice.inputs) { Text($0.name).tag(Optional($0.uid)) }
+                    }.labelsHidden().frame(width: 260)
+                }
+                GridRow {
                     Text("Voice").font(Theme.mono(13)).foregroundStyle(Theme.muted)
                     HStack {
                         Picker("", selection: $speaker.voiceIdentifier) {
@@ -257,7 +265,7 @@ private struct PreferencesStep: View {
             Toggle(isOn: $askForLabelsOnLP) { Text("Ask for a label shot on albums (front + back cover are always asked)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
             Text("Double albums and gatefolds are detected from Discogs and asked for automatically. Everything here can be changed later in Settings.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
         }
-        .onAppear { state.camera.refreshDevices() }
+        .onAppear { state.camera.refreshDevices(); state.voice.refreshInputs() }
     }
 }
 

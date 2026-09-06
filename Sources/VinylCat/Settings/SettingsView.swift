@@ -42,6 +42,13 @@ struct SettingsView: View {
             }
             VStack(alignment: .leading, spacing: 32) {
                 Section("VOICE") {
+                    Row("Microphone") {
+                        @Bindable var voice = state.voice
+                        Picker("", selection: $voice.micUID) {
+                            Text("System default").tag(String?.none)
+                            ForEach(state.voice.inputs) { Text($0.name).tag(Optional($0.uid)) }
+                        }.labelsHidden().frame(width: 240).onAppear { state.voice.refreshInputs() }
+                    }
                     Row("Read out results") { Toggle("", isOn: $speaker.enabled).labelsHidden().toggleStyle(.switch) }
                     Row("Speech rate") { Slider(value: $speaker.rate, in: 0.35...0.65).frame(width: 160) }
                     Row("Voice") {
