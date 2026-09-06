@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleExecutable</key><string>VinylCat</string>
+    <key>CFBundleIdentifier</key><string>com.woodall.vinylcat</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>VinylCat</string>
+    <key>CFBundleDisplayName</key><string>VinylCat</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>LSMinimumSystemVersion</key><string>15.0</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSCameraUsageDescription</key>
+    <string>VinylCat uses the camera to photograph record sleeves and labels so it can identify them.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>VinylCat listens for spoken commands so you can catalogue hands-free.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>VinylCat recognises spoken commands like “capture”, “skip” and “flip” on-device.</string>
+</dict>
+</plist>

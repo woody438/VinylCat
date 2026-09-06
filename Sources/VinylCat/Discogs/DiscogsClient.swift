@@ -1,0 +1,167 @@
+import Foundation
+import Observation
+
+/// Discogs REST client with a token-bucket limiter that tracks the X-Discogs-Ratelimit headers.
+@MainActor
+@Observable
+final class DiscogsClient {
+    private(set) var limit = 60
+    private(set) var used = 0
+    private(set) var remaining = 60
+    private(set) var lastError: String?
+    var rateText: String { "\(used) / \(limit) per minute" }
+
+    private let base = URL(string: "https://api.discogs.com")!
+    private let userAgent = "VinylCat/0.1 +https://github.com/woodall/vinylcat"
+    private var windowStart = Date()
+    private var windowCount = 0
+
+    struct SearchResult: Decodable, Sendable {
+        var id: Int
+        var type: String?
+        var title: String
+        var year: String?
+        var country: String?
+        var label: [String]?
+        var catno: String?
+        var format: [String]?
+        var barcode: [String]?
+        var thumb: String?
+        var cover_image: String?
+        var master_id: Int?
+    }
+    private struct SearchPage: Decodable { var results: [SearchResult] }
+
+    struct Release: Decodable, Sendable {
+        struct Artist: Decodable, Sendable { var name: String }
+        struct Label: Decodable, Sendable { var name: String; var catno: String? }
+        struct Format: Decodable, Sendable { var name: String; var qty: String?; var descriptions: [String]? }
+        struct Track: Decodable, Sendable { var position: String; var title: String; var duration: String? }
+        struct Image: Decodable, Sendable { var type: String?; var uri: String?; var uri150: String? }
+        var id: Int
+        var title: String
+        var artists: [Artist]?
+        var labels: [Label]?
+        var formats: [Format]?
+        var year: Int?
+        var country: String?
+        var genres: [String]?
+        var styles: [String]?
+        var tracklist: [Track]?
+        var images: [Image]?
+        var master_id: Int?
+        var uri: String?
+        var lowest_price: Double?
+        var num_for_sale: Int?
+        var artistLine: String { (artists ?? []).map { $0.name.replacingOccurrences(of: #" \(\d+\)$"#, with: "", options: .regularExpression) }.joined(separator: ", ") }
+    }
+
+    struct PriceStats: Decodable, Sendable {
+        struct Money: Decodable, Sendable { var value: Double?; var currency: String? }
+        var lowest_price: Money?
+        var num_for_sale: Int?
+        var blocked_from_sale: Bool?
+    }
+
+    struct Identity: Decodable, Sendable { var username: String }
+
+    enum DiscogsError: LocalizedError {
+        case noToken, http(Int, String)
+        var errorDescription: String? {
+            switch self {
+            case .noToken: "No Discogs token — add one in Settings."
+            case .http(let c, let m): "Discogs \(c): \(m.prefix(200))"
+            }
+        }
+    }
+
+    // MARK: - Endpoints
+
+    func search(query: String? = nil, artist: String? = nil, releaseTitle: String? = nil, label: String? = nil,
+                catno: String? = nil, barcode: String? = nil, format: String? = nil, perPage: Int = 15) async throws -> [SearchResult] {
+        var items: [URLQueryItem] = [.init(name: "type", value: "release"), .init(name: "per_page", value: "\(perPage)")]
+        func add(_ k: String, _ v: String?) { if let v, !v.isEmpty { items.append(.init(name: k, value: v)) } }
+        add("q", query); add("artist", artist); add("release_title", releaseTitle); add("label", label)
+        add("catno", catno); add("barcode", barcode); add("format", format)
+        let page: SearchPage = try await get("/database/search", query: items)
+        return page.results
+    }
+
+    func release(_ id: Int) async throws -> Release {
+        try await get("/releases/\(id)", query: [.init(name: "curr_abbr", value: currency)])
+    }
+
+    func priceStats(_ id: Int) async throws -> PriceStats {
+        try await get("/marketplace/stats/\(id)", query: [.init(name: "curr_abbr", value: currency)])
+    }
+
+    func identity() async throws -> Identity { try await get("/oauth/identity", query: []) }
+
+    /// Adds a release to the user's collection (folder 1 = Uncategorized). Returns the instance id.
+    func addToCollection(releaseID: Int, username: String, folder: Int = 1) async throws -> Int {
+        struct Added: Decodable { var instance_id: Int }
+        let a: Added = try await request("POST", "/users/\(username)/collection/folders/\(folder)/releases/\(releaseID)", query: [])
+        return a.instance_id
+    }
+
+    var currency: String { UserDefaults.standard.string(forKey: "currency") ?? "GBP" }
+
+    func selfTest() async -> String {
+        do {
+            let me = try await identity()
+            UserDefaults.standard.set(me.username, forKey: "discogsUsername")
+            let r = try await search(catno: "POSP 113", format: "7\"")
+            return "OK — signed in as \(me.username); POSP 113 → \(r.count) results, first: \(r.first?.title ?? "—") · \(rateText)"
+        } catch { return "Failed: \(error.localizedDescription)" }
+    }
+
+    // MARK: - Transport
+
+    private func get<T: Decodable>(_ path: String, query: [URLQueryItem]) async throws -> T {
+        try await request("GET", path, query: query)
+    }
+
+    private func request<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem]) async throws -> T {
+        guard let token = Keychain.get(.discogsToken), !token.isEmpty else { throw DiscogsError.noToken }
+        await throttle()
+        var comps = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { comps.queryItems = query }
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = method
+        req.setValue("Discogs token=\(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = 20
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        let http = resp as? HTTPURLResponse
+        if let http {
+            if let l = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit"), let v = Int(l) { limit = v }
+            if let u = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Used"), let v = Int(u) { used = v }
+            if let r = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Remaining"), let v = Int(r) { remaining = v }
+        }
+        let code = http?.statusCode ?? 0
+        if code == 429 {
+            // Back off for the rest of the window, then retry once.
+            try await Task.sleep(for: .seconds(max(2, 60 - Date().timeIntervalSince(windowStart))))
+            return try await request(method, path, query: query)
+        }
+        guard (200..<300).contains(code) else {
+            let msg = String(data: data, encoding: .utf8) ?? ""
+            lastError = msg
+            throw DiscogsError.http(code, msg)
+        }
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Keep a little headroom under the limit: never exceed limit-5 requests in any rolling minute.
+    private func throttle() async {
+        let now = Date()
+        if now.timeIntervalSince(windowStart) >= 60 { windowStart = now; windowCount = 0 }
+        windowCount += 1
+        if windowCount > max(10, limit - 5) {
+            let wait = 60 - now.timeIntervalSince(windowStart)
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            windowStart = Date(); windowCount = 1
+        }
+    }
+}

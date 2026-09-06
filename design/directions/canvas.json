@@ -1,0 +1,14 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "A · Dark control-room", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "DirectionB.dc.html", "title": "B · Native macOS", "x": 1560, "y": 0, "w": 1440, "h": 900 },
+    { "file": "DirectionC.dc.html", "title": "C · Editorial record-sleeve", "x": 3120, "y": 0, "w": 1440, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "note-a", "x": 0, "y": -200, "w": 520, "text": "A · Dark control-room\nFor: readable from 2 m while you stand at the shelves — huge condensed type, one green state colour, mono data. Scan-first.\nTrade-off: Library and Settings feel like a console, not a Mac app." },
+    { "id": "note-b", "x": 1560, "y": -200, "w": 520, "text": "B · Native macOS\nFor: feels like Music/Photos — sidebar, segmented tabs, standard controls; Library will be the strongest here.\nTrade-off: the match card is smaller and lighter — hardest to read at distance." },
+    { "id": "note-c", "x": 3120, "y": -200, "w": 520, "text": "C · Editorial record-sleeve\nFor: catalogue-card feel — serif titles, paper tones, each record presented as an entry.\nTrade-off: most character, least glanceable; small caps labels need you close to the screen." },
+    { "id": "note-brief", "x": 0, "y": -340, "w": 900, "text": "Same screen in all three: Scan window, auto mode, a 7\" just matched, app now asking for the B-side. Pick a direction (or mix: e.g. A for Scan, B for Library) and I build the full set — Scan × 7 states, Library, Review queue, Settings." }
+  ],
+  "launch": { "view": "canvas" }
+}

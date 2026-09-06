@@ -1,0 +1,152 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Mockups"
+    },
+    {
+      "id": "page-2",
+      "name": "Directions"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Scan · 1 Armed",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "ScanReading.dc.html",
+      "title": "Scan · 2 Reading",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "ScanMatched.dc.html",
+      "title": "Scan · 3 Matched",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "ScanAmbiguous.dc.html",
+      "title": "Scan · 4 Ambiguous",
+      "x": 0,
+      "y": 1100,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "ScanNeedLabel.dc.html",
+      "title": "Scan · 5 Need label",
+      "x": 1560,
+      "y": 1100,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "ScanAwaitingShot.dc.html",
+      "title": "Scan · 6 Awaiting shot (double album)",
+      "x": 3120,
+      "y": 1100,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "ScanNotFound.dc.html",
+      "title": "Scan · 7 Not found → Review",
+      "x": 0,
+      "y": 2200,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "Library.dc.html",
+      "title": "Library",
+      "x": 1560,
+      "y": 2200,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "Review.dc.html",
+      "title": "Review queue",
+      "x": 3120,
+      "y": 2200,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "Settings.dc.html",
+      "title": "Settings",
+      "x": 0,
+      "y": 3300,
+      "w": 1440,
+      "h": 900,
+      "page": "page-1"
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "title": "B · Native macOS (not chosen)",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-2"
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "title": "C · Editorial (not chosen)",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "page": "page-2"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "flow",
+      "x": 0,
+      "y": -150,
+      "w": 1400,
+      "page": "page-1",
+      "text": "Scan flow, left to right, top to bottom: Armed → Reading → Matched → (Ambiguous | Need label) → Awaiting extra shots → Not found parks to Review. Then Library, Review queue, Settings. Every state is reachable by voice; the bottom bar shows the words that work right now."
+    },
+    {
+      "id": "colours",
+      "x": 1560,
+      "y": -150,
+      "w": 900,
+      "page": "page-1",
+      "text": "State colours: grey armed · amber reading · green matched · orange needs a decision · blue asking for a shot · red parked for review. Same colour drives the chime and the ring."
+    },
+    {
+      "id": "dirs",
+      "x": 0,
+      "y": -150,
+      "w": 700,
+      "page": "page-2",
+      "text": "Unchosen directions kept for reference. A (dark control-room) was picked and became the mockup set on page 1."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

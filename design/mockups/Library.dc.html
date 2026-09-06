@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #0e1012; color: #f2efe8; font-family: 'IBM Plex Mono', Menlo, monospace; }
+    a { color: #7ee2a8; } a:hover { color: #a5f0c4; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; background: #0e1012; display: flex; flex-direction: column; box-sizing: border-box;">
+  
+  <div style="height: 56px; display: flex; align-items: center; gap: 24px; padding: 0 24px; border-bottom: 1px solid #23272b; box-sizing: border-box;">
+    <div style="font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 26px; letter-spacing: 0.06em; color: #f2efe8;">VINYLCAT</div>
+    <div style="display: flex; gap: 4px;"><div style="padding: 6px 12px; font-size: 13px; letter-spacing: 0.12em; color: #8a9096; border-bottom: 2px solid transparent;">SCAN</div><div style="padding: 6px 12px; font-size: 13px; letter-spacing: 0.12em; color: #f2efe8; border-bottom: 2px solid #7ee2a8;">LIBRARY</div><div style="padding: 6px 12px; font-size: 13px; letter-spacing: 0.12em; color: #8a9096; border-bottom: 2px solid transparent;">REVIEW · 3</div><div style="padding: 6px 12px; font-size: 13px; letter-spacing: 0.12em; color: #8a9096; border-bottom: 2px solid transparent;">SETTINGS</div></div>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #8a9096; color: #8a9096; font-size: 13px; letter-spacing: 0.12em;">
+      <div style="width: 8px; height: 8px; background: #8a9096; border-radius: 50%;"></div>
+      <div>PAUSED</div>
+    </div>
+    <div style="font-size: 13px; color: #8a9096;">FORMAT</div>
+    <div style="font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 22px; color: #f2efe8;">—</div>
+    <div style="width: 1px; height: 24px; background: #23272b;"></div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #8a9096;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg><div>MIC OFF</div></div>
+  </div>
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+    <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid #23272b;">
+        <div style="display: flex; align-items: center; gap: 10px; width: 260px; padding: 8px 12px; border: 1px solid #2a2f34; color: #8a9096; font-size: 13px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg><div>Search artist, title, label, cat no…</div></div>
+        <div style="padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; border: 1px solid #7ee2a8; color: #7ee2a8;">ALL · 1,204</div><div style="padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; border: 1px solid #23272b; color: #c9c5bb;">7" · 611</div><div style="padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; border: 1px solid #23272b; color: #c9c5bb;">12" · 143</div><div style="padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; border: 1px solid #23272b; color: #c9c5bb;">LP · 450</div><div style="padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; border: 1px solid #23272b; color: #c9c5bb;">INCOMPLETE · 5</div><div style="padding: 6px 12px; font-size: 12px; letter-spacing: 0.08em; border: 1px solid #23272b; color: #c9c5bb;">REVIEW · 3</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 11px; letter-spacing: 0.12em; color: #8a9096; border-bottom: 1px solid #23272b;">
+        <div>ARTIST</div><div>TITLE</div><div>YEAR</div><div>FMT</div><div>LABEL · CAT NO.</div><div>VALUE</div><div>SHOTS</div><div style="display: flex; align-items: center; gap: 4px;"><div>ADDED</div><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"></path></svg></div>
+      </div>
+      <div style="flex-grow: 1; overflow: hidden;">
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: #12211a; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>The Jam</div><div>Going Underground</div><div style="color: #8a9096;">1980</div><div>7"</div><div style="color: #c9c5bb;">Polydor · POSP 113</div><div>£6</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>The Specials</div><div>Ghost Town</div><div style="color: #8a9096;">1981</div><div>7"</div><div style="color: #c9c5bb;">2 Tone · CHS TT 17</div><div>£8</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Blondie</div><div>Heart Of Glass</div><div style="color: #8a9096;">1979</div><div>7"</div><div style="color: #c9c5bb;">Chrysalis · CHS 2275</div><div>£4</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Dexys Midnight Runners</div><div>Geno</div><div style="color: #8a9096;">1980</div><div>7"</div><div style="color: #c9c5bb;">Late Night Feelings · R 6033</div><div>£3</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>The Clash</div><div>London Calling</div><div style="color: #8a9096;">1979</div><div>2×LP</div><div style="color: #c9c5bb;">CBS · CLASH 3</div><div>£45</div><div style="color: #8a9096;">6/6</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>The Fall</div><div>Hex Enduction Hour</div><div style="color: #8a9096;">1982</div><div>LP</div><div style="color: #c9c5bb;">Kamera · KAM 005</div><div>£60</div><div style="color: #f0b26b;">1/3</div><div style="color: #f0b26b;">INCOMPLETE</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Donovan</div><div>Sunshine Superman</div><div style="color: #8a9096;">1966</div><div>7"</div><div style="color: #c9c5bb;">Pye · —</div><div>—</div><div style="color: #f0b26b;">1/2</div><div style="color: #f06c6c;">REVIEW</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>New Order</div><div>Blue Monday</div><div style="color: #8a9096;">1983</div><div>12"</div><div style="color: #c9c5bb;">Factory · FAC 73</div><div>£25</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Joy Division</div><div>Unknown Pleasures</div><div style="color: #8a9096;">1979</div><div>LP</div><div style="color: #c9c5bb;">Factory · FACT 10</div><div>£120</div><div style="color: #8a9096;">3/3</div><div style="color: #8a9096;">PENDING</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Grace Jones</div><div>Pull Up To The Bumper</div><div style="color: #8a9096;">1981</div><div>12"</div><div style="color: #c9c5bb;">Island · 12WIP 6696</div><div>£12</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Kraftwerk</div><div>The Model</div><div style="color: #8a9096;">1981</div><div>7"</div><div style="color: #c9c5bb;">EMI · EMI 5207</div><div>£5</div><div style="color: #8a9096;">2/2</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr) 50px 50px minmax(0, 1fr) 60px 50px 80px; gap: 12px; padding: 10px 16px; font-size: 13px; background: transparent; border-bottom: 1px solid #23272b; color: #f2efe8;">
+    <div>Talking Heads</div><div>Remain In Light</div><div style="color: #8a9096;">1980</div><div>LP</div><div style="color: #c9c5bb;">Sire · SRK 6095</div><div>£30</div><div style="color: #8a9096;">3/3</div><div style="color: #7ee2a8;">SYNCED</div>
+  </div></div>
+      <div style="display: flex; gap: 28px; align-items: center; padding: 0 24px; height: 44px; border-top: 1px solid #23272b; font-size: 12px; color: #8a9096;">
+        <div>1,204 RECORDS · EST. VALUE £9,840 (DISCOGS MEDIAN)</div>
+        <div style="flex-grow: 1;"></div>
+        <div style="color: #c9c5bb;">EXPORT CSV</div><div style="color: #c9c5bb;">OPEN PHOTOS FOLDER</div>
+      </div>
+    </div>
+    <div style="width: 400px; border-left: 1px solid #23272b; display: flex; flex-direction: column; gap: 18px; padding: 22px 20px; box-sizing: border-box; overflow: hidden;">
+      <div style="display: flex; gap: 8px;">
+        <div style="width: 84px; height: 84px; background: #2a2f34;"></div>
+        <div style="width: 84px; height: 84px; background: #2a2f34;"></div>
+        <div style="width: 84px; height: 84px; background: #2a2f34; opacity: 0.5;"></div>
+        <div style="width: 84px; height: 84px; border: 1px dashed #2a2f34; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #8a9096;">+ SHOT</div>
+      </div>
+      <div style="font-size: 11px; letter-spacing: 0.14em; color: #8a9096;">LABEL A · LABEL B · DISCOGS ART</div>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 40px; line-height: 1; color: #f2efe8;">GOING UNDERGROUND</div>
+        <div style="font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; font-weight: 500; font-size: 30px; line-height: 1.1; color: #c9c5bb;">THE JAM</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 13px;">
+        <div style="color: #8a9096;">Format</div><div>7" · 45 RPM · single</div>
+        <div style="color: #8a9096;">Label</div><div>Polydor · POSP 113</div>
+        <div style="color: #8a9096;">Released</div><div>1980 · UK</div>
+        <div style="color: #8a9096;">Genre</div><div>Rock · Mod, Punk</div>
+        <div style="color: #8a9096;">Value</div><div>£4 – £9 · median £6 · 212 for sale</div>
+        <div style="color: #8a9096;">Discogs</div><div style="color: #7ee2a8;">r2413807 · in collection</div>
+        <div style="color: #8a9096;">Added</div><div>6 Sep 2026 · session 3</div>
+      </div>
+      <div style="font-size: 11px; letter-spacing: 0.14em; color: #8a9096;">TRACKLIST</div>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between;"><div>A · Going Underground</div><div style="color: #8a9096;">2:58</div></div>
+        <div style="display: flex; justify-content: space-between;"><div>B · Dreams Of Children</div><div style="color: #8a9096;">3:04</div></div>
+      </div>
+      <div style="font-size: 11px; letter-spacing: 0.14em; color: #8a9096;">NOTES</div>
+      <div style="font-size: 13px; color: #8a9096; border: 1px dashed #2a2f34; padding: 10px;">Condition, pressing notes, where it came from…</div>
+      <div style="flex-grow: 1;"></div>
+      <div style="display: flex; gap: 16px; font-size: 12px; color: #c9c5bb;"><div>RE-IDENTIFY</div><div>OPEN ON DISCOGS</div><div style="color: #f06c6c;">DELETE</div></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

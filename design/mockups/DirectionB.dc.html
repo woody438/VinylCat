@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #f5f5f7; color: #1d1d1f; font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif; }
+    a { color: #0a66d8; } a:hover { color: #084fa8; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; background: #f5f5f7; display: flex; flex-direction: column; box-sizing: border-box; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.18);">
+  <div style="height: 52px; display: flex; align-items: center; gap: 16px; padding: 0 16px; background: #ececee; border-bottom: 1px solid #d6d6da; box-sizing: border-box;">
+    <div style="display: flex; gap: 8px;">
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57;"></div>
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e;"></div>
+      <div style="width: 12px; height: 12px; border-radius: 50%; background: #28c840;"></div>
+    </div>
+    <div style="display: flex; background: #dcdce0; border-radius: 7px; padding: 2px;">
+      <div style="padding: 4px 14px; font-size: 13px; background: #ffffff; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.12);">Scan</div>
+      <div style="padding: 4px 14px; font-size: 13px; color: #515154;">Library</div>
+      <div style="padding: 4px 14px; font-size: 13px; color: #515154;">Review · 3</div>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #1d1d1f; background: #ffffff; border: 1px solid #d6d6da; border-radius: 6px; padding: 4px 10px;">
+      <div style="width: 8px; height: 8px; border-radius: 50%; background: #28c840;"></div>
+      <div>Auto mode</div>
+    </div>
+    <div style="font-size: 13px; color: #1d1d1f; background: #ffffff; border: 1px solid #d6d6da; border-radius: 6px; padding: 4px 10px;">7" singles ▾</div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #515154;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>
+      <div>Listening</div>
+    </div>
+  </div>
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+    <div style="width: 220px; background: #e8e8ec; border-right: 1px solid #d6d6da; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; box-sizing: border-box;">
+      <div style="font-size: 11px; color: #86868b; padding: 0 8px 6px; font-weight: 600;">Session 3</div>
+      <div style="font-size: 13px; padding: 6px 8px; border-radius: 6px; background: #d3d3d8;">This session · 47</div>
+      <div style="font-size: 13px; padding: 6px 8px; color: #1d1d1f;">Review queue · 3</div>
+      <div style="font-size: 13px; padding: 6px 8px; color: #1d1d1f;">Incomplete · 5</div>
+      <div style="font-size: 11px; color: #86868b; padding: 18px 8px 6px; font-weight: 600;">Library</div>
+      <div style="font-size: 13px; padding: 6px 8px; color: #1d1d1f;">All records · 1,204</div>
+      <div style="font-size: 13px; padding: 6px 8px; color: #1d1d1f;">7" · 611</div>
+      <div style="font-size: 13px; padding: 6px 8px; color: #1d1d1f;">12" · 143</div>
+      <div style="font-size: 13px; padding: 6px 8px; color: #1d1d1f;">LP · 450</div>
+    </div>
+    <div style="flex-grow: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; box-sizing: border-box; min-width: 0;">
+      <div style="flex-grow: 1; background: #d9d9de; border-radius: 10px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+        <div style="width: 380px; height: 380px; border: 3px dashed #a0a0a6; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 130px; height: 130px; border: 3px dashed #a0a0a6; border-radius: 50%;"></div>
+        </div>
+        <div style="position: absolute; top: 16px; right: 16px; width: 56px; height: 56px; border-radius: 50%; border: 5px solid #0a66d8; border-right-color: #ffffff; border-bottom-color: #ffffff;"></div>
+        <div style="position: absolute; left: 16px; right: 16px; bottom: 16px; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.12);">
+          <div style="width: 40px; height: 40px; border-radius: 50%; background: #28c840; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <div style="font-size: 28px; font-weight: 600; line-height: 1.1;">The Jam — Going Underground</div>
+            <div style="font-size: 15px; color: #515154;">1980 · 7" · Polydor POSP 113 · UK · match 0.94</div>
+          </div>
+          <div style="flex-grow: 1;"></div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+            <div style="font-size: 12px; color: #86868b;">Next</div>
+            <div style="font-size: 18px; font-weight: 600; color: #0a66d8;">Show me the B-side</div>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div style="display: flex; gap: 10px; align-items: center; background: #ffffff; border: 1px solid #d6d6da; border-radius: 8px; padding: 8px 10px; flex-grow: 1;"><div style="width: 40px; height: 40px; background: #d9d9de; border-radius: 4px;"></div><div style="font-size: 12px;">The Specials — Ghost Town<br>1981 · 7" · synced</div></div>
+        <div style="display: flex; gap: 10px; align-items: center; background: #ffffff; border: 1px solid #d6d6da; border-radius: 8px; padding: 8px 10px; flex-grow: 1;"><div style="width: 40px; height: 40px; background: #d9d9de; border-radius: 4px;"></div><div style="font-size: 12px;">Blondie — Heart Of Glass<br>1979 · 7" · synced</div></div>
+        <div style="display: flex; gap: 10px; align-items: center; background: #fff7e6; border: 1px solid #f0c98a; border-radius: 8px; padding: 8px 10px; flex-grow: 1;"><div style="width: 40px; height: 40px; background: #d9d9de; border-radius: 4px;"></div><div style="font-size: 12px; color: #9a5b00;">Unknown — label shot<br>Review queue</div></div>
+        <div style="display: flex; gap: 10px; align-items: center; background: #ffffff; border: 1px solid #d6d6da; border-radius: 8px; padding: 8px 10px; flex-grow: 1;"><div style="width: 40px; height: 40px; background: #d9d9de; border-radius: 4px;"></div><div style="font-size: 12px;">Dexys — Geno<br>1980 · 7" · synced</div></div>
+      </div>
+    </div>
+  </div>
+  <div style="height: 32px; display: flex; align-items: center; gap: 20px; padding: 0 16px; background: #ececee; border-top: 1px solid #d6d6da; font-size: 11px; color: #86868b; box-sizing: border-box;">
+    <div>FaceTime HD</div><div>Discogs 14/60</div><div>LLM $0.04</div>
+    <div style="flex-grow: 1;"></div>
+    <div>Say "capture", "flip", "skip", "review", "undo"</div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

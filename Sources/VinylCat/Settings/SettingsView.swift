@@ -1,0 +1,127 @@
+import SwiftUI
+
+struct SettingsView: View {
+    @Environment(AppState.self) private var state
+    @State private var openAIKey = Keychain.get(.openAI) ?? ""
+    @State private var geminiKey = Keychain.get(.gemini) ?? ""
+    @State private var discogsToken = Keychain.get(.discogsToken) ?? ""
+    @AppStorage("discogsUsername") private var discogsUsername = ""
+    @AppStorage("currency") private var currency = "GBP"
+    @AppStorage("discogsSync") private var discogsSync = true
+    @State private var testResult = ""
+
+    var body: some View {
+        @Bindable var identifier = state.identifier
+        @Bindable var speaker = state.scan.speaker
+        HStack(alignment: .top, spacing: 40) {
+            VStack(alignment: .leading, spacing: 32) {
+                Section("IDENTIFICATION") {
+                    Picker("", selection: $identifier.provider) {
+                        ForEach(ReaderProvider.allCases) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.radioGroup)
+                    KeyField(label: "OpenAI API key", text: $openAIKey) { Keychain.set(openAIKey, for: .openAI) }
+                    KeyField(label: "Google AI key", text: $geminiKey) { Keychain.set(geminiKey, for: .gemini) }
+                    Row("Skip model when barcode hits") { Toggle("", isOn: $identifier.skipModelWhenBarcode).labelsHidden().toggleStyle(.switch) }
+                    Row("Spend this session") { Text(String(format: "$%.3f · %d reads", identifier.sessionCostUSD, identifier.reads)).foregroundStyle(Theme.secondary) }
+                }
+                Section("DISCOGS") {
+                    Row("Username") { TextField("", text: $discogsUsername).textFieldStyle(.roundedBorder).frame(width: 220) }
+                    KeyField(label: "Personal token", text: $discogsToken) { Keychain.set(discogsToken, for: .discogsToken) }
+                    Row("Add matches to my Collection") { Toggle("", isOn: $discogsSync).labelsHidden().toggleStyle(.switch) }
+                    Row("Valuation currency") {
+                        Picker("", selection: $currency) { ForEach(["GBP", "USD", "EUR", "CAD"], id: \.self) { Text($0) } }.labelsHidden().frame(width: 100)
+                    }
+                    Row("Rate limit") { Text(state.discogs.rateText).foregroundStyle(Theme.green) }
+                }
+            }
+            VStack(alignment: .leading, spacing: 32) {
+                Section("VOICE") {
+                    Row("Read out results") { Toggle("", isOn: $speaker.enabled).labelsHidden().toggleStyle(.switch) }
+                    Row("Speech rate") { Slider(value: $speaker.rate, in: 0.35...0.65).frame(width: 160) }
+                    Row("Voice") {
+                        Picker("", selection: $speaker.voiceIdentifier) {
+                            Text("Default (en-GB)").tag(String?.none)
+                            ForEach(Speaker.availableVoices, id: \.identifier) { v in
+                                Text("\(v.name) · \(v.language)").tag(Optional(v.identifier))
+                            }
+                        }.labelsHidden().frame(width: 240)
+                    }
+                    Row("Test") { Button("Say something") { state.scan.speaker.say("VinylCat ready. Hold up a record.") } }
+                }
+                Section("CAPTURE") {
+                    Row("Camera") {
+                        @Bindable var camera = state.camera
+                        Picker("", selection: $camera.selectedDeviceID) {
+                            ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
+                        }.labelsHidden().frame(width: 240)
+                    }
+                    Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
+                    Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
+                }
+                Section("TESTS") {
+                    HStack(spacing: 12) {
+                        Button("Test Discogs") { Task { testResult = await state.discogs.selfTest() } }
+                        Button("Test model") { Task { testResult = await testModel() } }
+                    }
+                    Text(testResult).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(3)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 40).padding(.vertical, 28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func testModel() async -> String {
+        guard let still = state.scan.lastStill else { return "Capture a photo on the Scan tab first." }
+        do {
+            let r = try await state.identifier.provider.reader.read(still, hints: .init())
+            return "\(r.provider): \(r.reading.artist ?? "?") — \(r.reading.title ?? "?") · cat \(r.reading.catalogNumber ?? "?") · conf \(r.reading.confidence ?? 0) · $\(String(format: "%.4f", r.usage.costUSD))"
+        } catch { return "Failed: \(error.localizedDescription)" }
+    }
+}
+
+private struct Section<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    init(_ title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(Theme.display(22)).tracking(2).padding(.bottom, 6)
+            content
+        }
+        .frame(width: 520, alignment: .leading)
+    }
+}
+
+private struct Row<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: Content
+    init(_ label: String, @ViewBuilder content: () -> Content) { self.label = label; self.content = content() }
+    var body: some View {
+        HStack {
+            Text(label).font(Theme.mono(13)).foregroundStyle(Theme.muted)
+            Spacer()
+            content.font(Theme.mono(13))
+        }
+        .padding(.vertical, 6)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+    }
+}
+
+private struct KeyField: View {
+    let label: String
+    @Binding var text: String
+    let save: () -> Void
+    @State private var saved = false
+    var body: some View {
+        Row(label) {
+            HStack(spacing: 8) {
+                SecureField("paste key", text: $text).textFieldStyle(.roundedBorder).frame(width: 220)
+                    .onSubmit { save(); saved = true }
+                Button(saved ? "Saved" : "Save") { save(); saved = true }
+            }
+        }
+    }
+}
