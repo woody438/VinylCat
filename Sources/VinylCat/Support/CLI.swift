@@ -10,6 +10,7 @@ import SwiftUI
 ///   VinylCat --make-test-images <dir>   synthetic label/cover photos
 ///   VinylCat --pipeline-test <image>…   local OCR → Discogs → rank (no vision model)
 ///   VinylCat --discogs-test <catno>…    what each catalogue number actually finds on Discogs
+///   VinylCat --export-feedback [dir]    thumbs-up/down verdicts with their evidence → output/vinylcat_feedback_vN_date.jsonl
 @MainActor
 enum CLI {
     static func run(_ args: [String]) -> Int32? {
@@ -22,6 +23,12 @@ enum CLI {
         case "--pipeline-test": return runBlocking { await pipelineTest(paths: rest) }
         case "--scenario": return runBlocking { await scenario(dir: rest.first ?? "test-images") }
         case "--discogs-test": return runBlocking { await discogsTest(terms: rest) }
+        case "--ocr-eval": return runBlocking { await ocrEval(limit: Int(rest.first(where: { Int($0) != nil }) ?? "") ?? 0, model: rest.contains("--model")) }
+        case "--export-feedback":
+            do {
+                let url = try Store.shared.exportFeedback(to: URL(fileURLWithPath: rest.first ?? "output"))
+                print("\(Store.shared.feedbackCount()) verdicts → \(url.path)"); return 0
+            } catch { print("export failed: \(error.localizedDescription)"); return 1 }
         case "--camera-test": return runBlocking { await cameraTest(name: rest.first ?? "iPhone", seconds: Double(rest.dropFirst().first ?? "8") ?? 8, out: rest.dropFirst(2).first ?? "camera-test") }
         case "--model-test": return runBlocking {
             guard let img = SetupWizard.testLabelImage() else { return 1 }
@@ -124,6 +131,26 @@ enum CLI {
         }
         state.tour.hide()
         state.tab = .scan
+        // Rows live in a ScrollView, which ImageRenderer leaves blank; render a few directly.
+        let rows = Array(Store.shared.all().prefix(4))
+        if !rows.isEmpty {
+            let view = VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in LibraryRow(record: r, selected: i == 1) }
+            }
+            .frame(width: 1040).background(Theme.bg).preferredColorScheme(.dark)
+            if render(view, to: out.appendingPathComponent("library-rows.png")) { written += 1 }
+        }
+        // Three separate items: SessionItem's id is fixed at init, so copies would collapse in a ForEach.
+        let thumbs = Store.shared.all().first.map { r -> [SessionItem] in [
+            SessionItem(recordID: r.id, thumbnail: nil, title: "The Jam — Going Underground", meta: "1980 · 7\" · POLYDOR POSP 113 · 1 shot", tone: .normal),
+            SessionItem(recordID: r.id, thumbnail: nil, title: "The Specials — Ghost Town", meta: "1981 · 7\" · 2 TONE CHS TT 17 · 2 shots", tone: .normal, verdict: .up),
+            SessionItem(recordID: r.id, thumbnail: nil, title: "Station C — The Way To Paradise", meta: "wrong record · kept for tuning", tone: .rejected, verdict: .down),
+        ] } ?? []
+        if !thumbs.isEmpty {
+            let view = VStack(alignment: .leading, spacing: 10) { ForEach(thumbs) { SessionRow(item: $0) } }
+                .padding(20).frame(width: 360).background(Theme.bg).environment(state).preferredColorScheme(.dark)
+            if render(view, to: out.appendingPathComponent("session-rows.png")) { written += 1 }
+        }
         print("rendered \(written) screens to \(out.path)")
         return written > 0 ? 0 : 1
     }
@@ -135,6 +162,97 @@ enum CLI {
         let rep = NSBitmapImageRep(cgImage: cg)
         guard let data = rep.representation(using: .png, properties: [:]) else { return false }
         do { try data.write(to: url); return true } catch { print("write failed: \(error)"); return false }
+    }
+
+    // MARK: OCR evaluation
+
+    /// Runs LocalReader over the real photos in the store and scores it against what the record ended
+    /// up as: did the catalogue number (or barcode) come out of the OCR? Prints per-photo misses.
+    /// `--model` also sends each photo (with its close-ups) to the configured vision model and scores
+    /// its catalogNumber / otherNumbers the same way; costs real money, a fraction of a cent a photo.
+    /// Env: VINYLCAT_EVAL_VERBOSE=1 prints the OCR lines for ranked misses too; VINYLCAT_EVAL_DUMP=<dir>
+    /// writes every close-up crop as PNG, for checking what the zoom pass is looking at.
+    static func ocrEval(limit: Int, model useModel: Bool) async -> Int32 {
+        let records = Store.shared.live().filter { $0.discogsReleaseID != nil && !$0.photos.isEmpty && ($0.catalogNumber ?? "").count > 1 }
+        let subset = limit > 0 ? Array(records.prefix(limit)) : records
+        let verbose = ProcessInfo.processInfo.environment["VINYLCAT_EVAL_VERBOSE"] != nil
+        let dump = ProcessInfo.processInfo.environment["VINYLCAT_EVAL_DUMP"].map { URL(fileURLWithPath: $0) }
+        if let dump { try? FileManager.default.createDirectory(at: dump, withIntermediateDirectories: true) }
+        var photosSeen = 0, catnoHits = 0, catnoExact = 0, catnoFirst = 0, barcodeHits = 0, barcodeExpected = 0, lines = 0, unreadable = 0, crops = 0, closeUps = 0
+        var total = 0.0
+        var recordHit = 0
+        var modelSeen = 0, modelFirst = 0, modelAny = 0, modelCost = 0.0, modelTime = 0.0, eitherFirst = 0
+        let reader = useModel ? (ReaderProvider(rawValue: UserDefaults.standard.string(forKey: "readerProvider") ?? "") ?? .luna).reader : nil
+        for r in subset {
+            let want = CatalogueNumber.normalize(r.catalogNumber ?? "")
+            var anyHit = false
+            for p in r.sortedPhotos {
+                guard let img = NSImage(contentsOf: p.url)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
+                photosSeen += 1
+                let t0 = Date()
+                guard let local = try? await LocalReader.read(img) else { continue }
+                total += Date().timeIntervalSince(t0)
+                lines += local.lines.count
+                crops += local.zoomCrops
+                closeUps += local.closeUps.count
+                if local.lines.isEmpty { unreadable += 1 }
+                if let dump {
+                    for (i, c) in local.closeUps.enumerated() {
+                        let rep = NSBitmapImageRep(cgImage: c)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: dump.appendingPathComponent("\(p.fileName.replacingOccurrences(of: ".jpg", with: ""))-\(i + 1).png"))
+                    }
+                }
+                let cands = local.catalogueCandidates
+                let exact = cands.contains { CatalogueNumber.compare($0, want) == .exact }
+                let hit = exact || cands.contains { [.near, .partial].contains(CatalogueNumber.compare($0, want)) }
+                if exact { catnoExact += 1 }
+                if hit { catnoHits += 1; anyHit = true }
+                var localFirst = false
+                if let f = cands.first, CatalogueNumber.compare(f, want) != .none { catnoFirst += 1; localFirst = true }
+                else if hit, let at = cands.firstIndex(where: { CatalogueNumber.compare($0, want) != .none }) {
+                    print("  rank \(at + 1)  want \(want)  ahead: \(cands.prefix(at).joined(separator: ", "))")
+                    if verbose { print("        ocr: \(local.lines.prefix(8).joined(separator: " | ").prefix(200))") }
+                }
+                if let b = r.barcode, b.count >= 8 { barcodeExpected += 1; if local.barcodes.contains(b) { barcodeHits += 1 } }
+                if !hit {
+                    print(String(format: "  miss  %-28@ want %-10@ got %@  · %@", "\(r.artist) — \(r.title)".prefix(28) as NSString, want as NSString,
+                                 local.catalogueCandidates.prefix(4).joined(separator: ", ") as NSString, p.kind.rawValue as NSString))
+                    print("        ocr: \(local.lines.prefix(6).joined(separator: " | ").prefix(150))")
+                }
+                if let reader {
+                    let hints = ReadHints(ocrText: local.text, barcodes: local.barcodes, sessionFormat: ScanController.spoken(format: r.format, discs: r.discCount), expectLabel: p.kind != .coverFront && p.kind != .coverBack, closeUps: local.closeUps)
+                    let t1 = Date()
+                    do {
+                        let res = try await reader.read(img, hints: hints)
+                        modelTime += Date().timeIntervalSince(t1)
+                        modelSeen += 1
+                        modelCost += res.usage.costUSD
+                        let m = res.reading
+                        let first = m.catalogNumber.map { CatalogueNumber.compare($0, want) != .none } ?? false
+                        let any = first || (m.otherNumbers ?? []).contains { CatalogueNumber.compare($0, want) != .none }
+                        if first { modelFirst += 1 }
+                        if any { modelAny += 1 }
+                        if first || localFirst { eitherFirst += 1 }
+                        if !first {
+                            print("  model \(any ? "rank>1" : "miss  ") want \(want)  said \(m.catalogNumber ?? "nil")  others: \((m.otherNumbers ?? []).joined(separator: ", "))  · \(p.kind.rawValue)\(localFirst ? "  (ocr had it)" : "")")
+                        }
+                    } catch {
+                        print("  model error: \(error.localizedDescription)")
+                    }
+                }
+            }
+            if anyHit { recordHit += 1 }
+        }
+        print("\nocr-eval · \(subset.count) records · \(photosSeen) photos")
+        print(String(format: "  catno in candidates  %3d / %3d photos  (%.0f%%)   exact %3d (%.0f%%)   first candidate usable %3d (%.0f%%)", catnoHits, photosSeen, 100.0 * Double(catnoHits) / Double(max(1, photosSeen)), catnoExact, 100.0 * Double(catnoExact) / Double(max(1, photosSeen)), catnoFirst, 100.0 * Double(catnoFirst) / Double(max(1, photosSeen))))
+        print(String(format: "  catno per record     %3d / %3d records (%.0f%%)", recordHit, subset.count, 100.0 * Double(recordHit) / Double(max(1, subset.count))))
+        print(String(format: "  barcode read         %3d / %3d photos with one", barcodeHits, barcodeExpected))
+        print(String(format: "  lines/photo %.1f · unreadable %d · %.2fs per photo · zoom crops/photo %.1f · close-ups/photo %.1f", Double(lines) / Double(max(1, photosSeen)), unreadable, total / Double(max(1, photosSeen)), Double(crops) / Double(max(1, photosSeen)), Double(closeUps) / Double(max(1, photosSeen))))
+        if useModel {
+            print(String(format: "  model catno usable   %3d / %3d photos  (%.0f%%)   in catno+others %3d (%.0f%%)   model or OCR first %3d (%.0f%%)", modelFirst, modelSeen, 100.0 * Double(modelFirst) / Double(max(1, modelSeen)), modelAny, 100.0 * Double(modelAny) / Double(max(1, modelSeen)), eitherFirst, 100.0 * Double(eitherFirst) / Double(max(1, modelSeen))))
+            print(String(format: "  model cost $%.4f total · $%.5f per photo · %.1fs per photo", modelCost, modelCost / Double(max(1, modelSeen)), modelTime / Double(max(1, modelSeen))))
+        }
+        return 0
     }
 
     // MARK: synthetic test images
@@ -311,6 +429,10 @@ extension CLI {
         print("scenario · second single, then manual extra photo")
         await scan.inject(still: specials)
         check(store.all().first?.artist == "The Specials" && scan.current == nil, "matched The Specials, closed (got \(store.all().first?.artist ?? "nil"))")
+        if let sp = store.all().first {
+            let ev = store.evidence(for: sp.id)
+            check(ev?.chosenReleaseID == sp.discogsReleaseID && !(ev?.candidates.isEmpty ?? true) && !(ev?.ocrLines.isEmpty ?? true), "evidence saved with the match: \(ev?.candidates.count ?? 0) candidates, \(ev?.ocrLines.count ?? 0) OCR lines")
+        }
         scan.handle(command: .addPhoto)
         await scan.inject(still: specials)
         check(store.all().first?.photos.count == 2 && store.all().first?.photos.last?.kind == .other, "“add photo” attaches an extra shot to the last record")
@@ -320,8 +442,28 @@ extension CLI {
         state.format = .lp
         await scan.inject(still: clash)
         let clashRec = scan.current
+        print("scenario · thumbs-down on an open record")
+        if let open = clashRec {
+            let before = store.count()
+            scan.handle(command: .wrong)
+            let rej = store.fetch(open.id)
+            check(rej?.status == .rejected && scan.current == nil && store.count() == before - 1, "“wrong record” rejects it, closes it, drops it from the count (\(before) → \(store.count()))")
+            check(scan.items.first?.tone == .rejected && scan.items.first?.verdict == .down, "session row shows the thumbs-down")
+            check(store.live().allSatisfy { $0.id != open.id } && (store.fetch(open.id)?.photos.count ?? 0) == 1, "kept out of the catalogue but photos retained")
+            check(store.feedbackCount() == 1 && store.feedback().first?.evidence != nil, "feedback logged with evidence")
+            scan.verdict(open.id, .up)
+            check(store.fetch(open.id)?.status == .matched && store.fetch(open.id)?.verified == true, "thumbs-up restores it as verified")
+            check(scan.items.first?.verdict == .up, "session row flips to thumbs-up")
+            _ = try? FileManager.default.removeItem(at: tmp.appendingPathComponent("fb"))
+            let fb = try? store.exportFeedback(to: tmp.appendingPathComponent("fb"))
+            check(fb.map { (try? String(contentsOf: $0, encoding: .utf8))?.contains("\"verdict\":\"up\"") ?? false } ?? false, "feedback JSONL exports the latest verdict")
+            await scan.delete(open.id)
+            check(store.fetch(open.id) == nil && !scan.items.contains { $0.recordID == open.id }, "delete removes the record and its session row")
+        }
+        await scan.inject(still: clash)
+        let clashRec2 = scan.current
         print("  info phase after Clash: \(scan.phase) · current \(clashRec?.displayTitle ?? "nil") · last candidates \(scan.lastCandidates.prefix(2).map { "\($0.result.title) \($0.score)" })")
-        check(clashRec?.title == "London Calling" && clashRec?.format == "LP" && (clashRec?.expectedShots.contains(.coverBack) ?? false), "LP profile: \(clashRec?.expectedShots.map(\.rawValue) ?? [])")
+        check(clashRec2?.title == "London Calling" && clashRec2?.format == "LP" && (clashRec2?.expectedShots.contains(.coverBack) ?? false), "LP profile: \(clashRec2?.expectedShots.map(\.rawValue) ?? [])")
         check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "BACK COVER" } else { return false } }(), "asks for the back cover")
         await scan.inject(still: clash)
         check(scan.current?.photos.count == 2, "back cover attached")

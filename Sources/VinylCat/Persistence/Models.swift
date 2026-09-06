@@ -28,8 +28,53 @@ enum ShotKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
-enum RecordStatus: String, Codable, Sendable { case matched, needsReview, manual, duplicate }
+/// `rejected` = the operator gave the match a thumbs-down: kept (with its photos and evidence) for
+/// tuning the reader and ranker, but out of the catalogue, the value total, the export and Discogs.
+enum RecordStatus: String, Codable, Sendable { case matched, needsReview, manual, duplicate, rejected }
 enum SyncState: String, Codable, Sendable { case off, pending, synced, failed }
+
+/// Thumbs up / down on a match.
+enum Verdict: String, Codable, Sendable { case up, down }
+
+/// What the identifier and matcher saw when a record was saved — the training signal behind a verdict.
+struct ScanEvidence: Codable, Sendable {
+    struct CandidateSnapshot: Codable, Sendable {
+        var releaseID: Int
+        var title: String
+        var label: String?
+        var catno: String?
+        var year: String?
+        var country: String?
+        var score: Double
+        var reasons: [String]
+    }
+    var recordID: UUID
+    var provider: String?
+    var ocrLines: [String] = []
+    var barcodes: [String] = []
+    var catalogueCandidates: [String] = []
+    var modelReading: SleeveReading?
+    var mergedReading: SleeveReading
+    var candidates: [CandidateSnapshot] = []
+    var chosenReleaseID: Int?
+    var createdAt = Date()
+}
+
+/// One thumbs-up / thumbs-down, as exported to feedback JSONL.
+struct FeedbackEntry: Codable, Sendable {
+    var recordID: UUID
+    var verdict: Verdict
+    var createdAt: Date
+    var artist: String
+    var title: String
+    var format: String
+    var label: String?
+    var catalogNumber: String?
+    var discogsReleaseID: Int?
+    var confidence: Double
+    var photos: [String]
+    var evidence: ScanEvidence?
+}
 
 struct Track: Codable, Sendable, Equatable { var position: String; var title: String; var duration: String? }
 
@@ -75,6 +120,8 @@ struct VinylRecord: Identifiable, Sendable, Equatable {
     var valuedAt: Date?
     var sync: SyncState = .off
     var discogsInstanceID: Int?
+    /// Thumbs-up from the operator.
+    var verified = false
     var notes = ""
     /// What the local OCR / model read, kept for the review queue.
     var readText = ""
@@ -88,6 +135,8 @@ struct VinylRecord: Identifiable, Sendable, Equatable {
     var isComplete: Bool { missingShots.isEmpty }
     var sortedPhotos: [ScanPhoto] { photos.sorted { $0.order < $1.order } }
     var displayTitle: String { "\(artist) — \(title)" }
+    /// In the catalogue (not thumbed down).
+    var isLive: Bool { status != .rejected }
 }
 
 /// Which shots to ask for per format. Discogs metadata (2×LP, gatefold) extends the list.

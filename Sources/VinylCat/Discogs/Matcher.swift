@@ -26,10 +26,17 @@ struct Matcher {
         var catnos = ([reading.catalogNumber].compactMap { $0 } + catalogueAlternates).filter { !$0.isEmpty }
         catnos = catnos.reduce(into: []) { acc, c in if !acc.contains(c) { acc.append(c) } }
         var matchedCatno: String?
-        for c in catnos {
+        // Format-filtered first, across the best few tokens: dropping the filter too early is how the
+        // album number printed on a single's label ("from the LP AFL1-3962") wins over the single's own.
+        for c in catnos.prefix(5) {
             pool += try await discogs.search(label: reading.label, catno: c, format: fmt)
-            if pool.isEmpty { pool += try await discogs.search(catno: c) }
             if !pool.isEmpty { matchedCatno = c; break }
+        }
+        if pool.isEmpty {
+            for c in catnos.prefix(3) {
+                pool += try await discogs.search(catno: c)
+                if !pool.isEmpty { matchedCatno = c; break }
+            }
         }
         // catno= wants the number exactly as catalogued, and none of the tokens matched one. Free text
         // is looser and does find these — "ZS8 3592-3" carries a side suffix that catno= rejects — so

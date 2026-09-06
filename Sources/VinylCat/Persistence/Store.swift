@@ -43,6 +43,24 @@ final class Store {
         );
         CREATE INDEX IF NOT EXISTS photos_record ON photos(record_id);
         """)
+        // No FK cascade on these two: `insert` is INSERT OR REPLACE, which deletes the record row first
+        // and would take its evidence and verdicts with it on every update. `delete` clears them by hand.
+        for t in ["evidence", "feedback"] where (sqlSchema(t) ?? "").contains("REFERENCES") && rowCount(t) == 0 { exec("DROP TABLE \(t)") }
+        exec("""
+        CREATE TABLE IF NOT EXISTS evidence (record_id TEXT PRIMARY KEY, json TEXT NOT NULL, created_at REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, record_id TEXT NOT NULL, verdict TEXT NOT NULL, created_at REAL NOT NULL);
+        CREATE INDEX IF NOT EXISTS feedback_record ON feedback(record_id);
+        """)
+        if !columns("records").contains("verified") { exec("ALTER TABLE records ADD COLUMN verified INTEGER NOT NULL DEFAULT 0") }
+    }
+
+    private func sqlSchema(_ table: String) -> String? {
+        query("SELECT sql FROM sqlite_master WHERE name = ?", [.text(table)]).first?["sql"] as? String
+    }
+    private func rowCount(_ table: String) -> Int { (query("SELECT COUNT(*) AS n FROM \(table)", []).first?["n"] as? Int) ?? 0 }
+
+    private func columns(_ table: String) -> Set<String> {
+        Set(query("PRAGMA table_info(\(table))", []).compactMap { $0["name"] as? String })
     }
 
     // MARK: - Public API
@@ -52,8 +70,8 @@ final class Store {
         INSERT OR REPLACE INTO records (id, discogs_release_id, discogs_master_id, discogs_uri, artist, title, label, catalog_number, barcode,
           format, format_descriptors, disc_count, year, country, genres, styles, tracks, cover_art_url, status, confidence,
           value_low, value_median, value_high, num_for_sale, currency, valued_at, sync, discogs_instance_id, notes, read_text,
-          created_at, session_id, expected_shots)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          created_at, session_id, expected_shots, verified)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, binds(r))
         for p in r.photos { insertPhoto(p, bump: false) }
         revision += 1
@@ -64,6 +82,8 @@ final class Store {
     func delete(_ id: UUID) {
         if let r = fetch(id) { for p in r.photos { try? FileManager.default.removeItem(at: p.url) } }
         run("DELETE FROM records WHERE id = ?", [.text(id.uuidString)])
+        run("DELETE FROM evidence WHERE record_id = ?", [.text(id.uuidString)])
+        run("DELETE FROM feedback WHERE record_id = ?", [.text(id.uuidString)])
         revision += 1
     }
 
@@ -87,24 +107,75 @@ final class Store {
     }
 
     func existing(discogsReleaseID id: Int) -> VinylRecord? {
-        query("SELECT * FROM records WHERE discogs_release_id = ? LIMIT 1", [.int(id)]).compactMap(record(from:)).first
+        query("SELECT * FROM records WHERE discogs_release_id = ? AND status != 'rejected' LIMIT 1", [.int(id)]).compactMap(record(from:)).first
     }
 
     func all() -> [VinylRecord] {
         query("SELECT * FROM records ORDER BY created_at DESC", []).compactMap(record(from:))
     }
 
-    func count() -> Int { (query("SELECT COUNT(*) AS n FROM records", []).first?["n"] as? Int) ?? 0 }
+    /// Catalogue records only (rejected ones excluded).
+    func live() -> [VinylRecord] { all().filter(\.isLive) }
+
+    func count() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status != 'rejected'", []).first?["n"] as? Int) ?? 0 }
     func reviewCount() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status = 'needsReview'", []).first?["n"] as? Int) ?? 0 }
 
-    /// Writes output/vinylcat_export_vN_YYYY-MM-DD.csv (next free N) and returns the URL.
-    func exportCSV(to folder: URL) throws -> URL {
-        let records = all().reversed()
+    // MARK: - Evidence & feedback
+
+    func saveEvidence(_ e: ScanEvidence) {
+        run("INSERT OR REPLACE INTO evidence (record_id, json, created_at) VALUES (?,?,?)",
+            [.text(e.recordID.uuidString), .text(json(e)), .double(e.createdAt.timeIntervalSince1970)])
+    }
+
+    func evidence(for id: UUID) -> ScanEvidence? {
+        decode(query("SELECT json FROM evidence WHERE record_id = ?", [.text(id.uuidString)]).first?["json"])
+    }
+
+    /// Records the verdict. The record itself is updated by the caller (status / verified flag).
+    func logFeedback(_ id: UUID, _ v: Verdict) {
+        run("INSERT INTO feedback (id, record_id, verdict, created_at) VALUES (?,?,?,?)",
+            [.text(UUID().uuidString), .text(id.uuidString), .text(v.rawValue), .double(Date().timeIntervalSince1970)])
+        revision += 1
+    }
+
+    func feedbackCount() -> Int { (query("SELECT COUNT(*) AS n FROM feedback", []).first?["n"] as? Int) ?? 0 }
+
+    /// Latest verdict per record, oldest first.
+    func feedback() -> [FeedbackEntry] {
+        query("SELECT record_id, verdict, MAX(created_at) AS at FROM feedback GROUP BY record_id ORDER BY at", []).compactMap { row in
+            guard let id = UUID(uuidString: row["record_id"] as? String ?? ""), let r = fetch(id),
+                  let v = Verdict(rawValue: row["verdict"] as? String ?? "") else { return nil }
+            return FeedbackEntry(recordID: id, verdict: v, createdAt: Date(timeIntervalSince1970: row["at"] as? Double ?? 0),
+                                 artist: r.artist, title: r.title, format: r.format, label: r.label, catalogNumber: r.catalogNumber,
+                                 discogsReleaseID: r.discogsReleaseID, confidence: r.confidence,
+                                 photos: r.sortedPhotos.map(\.fileName), evidence: evidence(for: id))
+        }
+    }
+
+    /// Writes output/vinylcat_feedback_vN_YYYY-MM-DD.jsonl — one verdict per line with the photos, OCR,
+    /// model reading and ranked Discogs candidates behind it.
+    func exportFeedback(to folder: URL) throws -> URL {
+        let url = try nextVersioned(in: folder, base: "vinylcat_feedback", ext: "jsonl")
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let lines = try feedback().map { String(decoding: try enc.encode($0), as: UTF8.self) }
+        try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private func nextVersioned(in folder: URL, base: String, ext: String) throws -> URL {
         let date = ISO8601DateFormatter().string(from: Date()).prefix(10)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var n = 1
         var url: URL
-        repeat { url = folder.appendingPathComponent("vinylcat_export_v\(n)_\(date).csv"); n += 1 } while FileManager.default.fileExists(atPath: url.path)
+        repeat { url = folder.appendingPathComponent("\(base)_v\(n)_\(date).\(ext)"); n += 1 } while FileManager.default.fileExists(atPath: url.path)
+        return url
+    }
+
+    /// Writes output/vinylcat_export_vN_YYYY-MM-DD.csv (next free N) and returns the URL.
+    /// Rejected records are left out: they are not in the collection.
+    func exportCSV(to folder: URL) throws -> URL {
+        let records = live().reversed()
+        let url = try nextVersioned(in: folder, base: "vinylcat_export", ext: "csv")
         func q(_ s: String?) -> String { "\"" + (s ?? "").replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
         var lines = ["artist,title,year,format,label,catalogue_number,barcode,country,genres,styles,discs,value_low,value_median,value_high,currency,status,discogs_release_id,discogs_url,photos,notes,added"]
         let df = ISO8601DateFormatter()
@@ -130,7 +201,8 @@ final class Store {
          .text(json(r.genres)), .text(json(r.styles)), .text(json(r.tracks)), .optText(r.coverArtURL), .text(r.status.rawValue), .double(r.confidence),
          .optDouble(r.valueLow), .optDouble(r.valueMedian), .optDouble(r.valueHigh), .optInt(r.numForSale), .optText(r.currency),
          .optDouble(r.valuedAt?.timeIntervalSince1970), .text(r.sync.rawValue), .optInt(r.discogsInstanceID), .text(r.notes), .text(r.readText),
-         .double(r.createdAt.timeIntervalSince1970), .text(r.sessionID.uuidString), .text(json(r.expectedShots.map(\.rawValue)))]
+         .double(r.createdAt.timeIntervalSince1970), .text(r.sessionID.uuidString), .text(json(r.expectedShots.map(\.rawValue))),
+         .int(r.verified ? 1 : 0)]
     }
 
     private func record(from row: [String: Any]) -> VinylRecord? {
@@ -161,6 +233,7 @@ final class Store {
         r.valuedAt = (row["valued_at"] as? Double).map { Date(timeIntervalSince1970: $0) }
         r.sync = SyncState(rawValue: row["sync"] as? String ?? "") ?? .off
         r.discogsInstanceID = row["discogs_instance_id"] as? Int
+        r.verified = (row["verified"] as? Int ?? 0) != 0
         r.notes = row["notes"] as? String ?? ""
         r.readText = row["read_text"] as? String ?? ""
         r.createdAt = Date(timeIntervalSince1970: row["created_at"] as? Double ?? 0)

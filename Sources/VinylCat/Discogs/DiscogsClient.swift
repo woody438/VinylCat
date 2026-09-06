@@ -104,6 +104,13 @@ final class DiscogsClient {
         return a.instance_id
     }
 
+    /// Removes one collection instance (what `addToCollection` returned). 404 counts as gone.
+    func removeFromCollection(releaseID: Int, instanceID: Int, username: String, folder: Int = 1) async throws {
+        do {
+            _ = try await send("DELETE", "/users/\(username)/collection/folders/\(folder)/releases/\(releaseID)/instances/\(instanceID)", query: [])
+        } catch DiscogsError.http(404, _) {}
+    }
+
     var currency: String { UserDefaults.standard.string(forKey: "currency") ?? "GBP" }
 
     func selfTest() async -> String {
@@ -122,6 +129,11 @@ final class DiscogsClient {
     }
 
     private func request<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem]) async throws -> T {
+        try JSONDecoder().decode(T.self, from: try await send(method, path, query: query))
+    }
+
+    /// Raw call; the body comes back as data (empty for 204s).
+    private func send(_ method: String, _ path: String, query: [URLQueryItem]) async throws -> Data {
         let token = Keychain.get(.discogsToken)?.nilIfEmpty
         if token == nil, method != "GET" || path.hasPrefix("/oauth") { throw DiscogsError.noToken }
         if token == nil { limit = min(limit, 25) }
@@ -146,14 +158,14 @@ final class DiscogsClient {
         if code == 429 {
             // Back off for the rest of the window, then retry once.
             try await Task.sleep(for: .seconds(max(2, 60 - Date().timeIntervalSince(windowStart))))
-            return try await request(method, path, query: query)
+            return try await send(method, path, query: query)
         }
         guard (200..<300).contains(code) else {
             let msg = String(data: data, encoding: .utf8) ?? ""
             lastError = msg
             throw DiscogsError.http(code, msg)
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 
     /// Keep a little headroom under the limit: never exceed limit-5 requests in any rolling minute.

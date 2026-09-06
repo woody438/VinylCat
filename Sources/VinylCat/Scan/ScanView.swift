@@ -288,9 +288,11 @@ struct RightRail: View {
 }
 
 struct SessionRow: View {
+    @Environment(AppState.self) private var state
     let item: SessionItem
+    @State private var hovering = false
     var body: some View {
-        let color: Color = switch item.tone { case .normal: Theme.text; case .review: Theme.red; case .incomplete: Theme.amber }
+        let color: Color = switch item.tone { case .normal: Theme.text; case .review: Theme.red; case .incomplete: Theme.amber; case .rejected: Theme.red }
         HStack(spacing: 12) {
             Group {
                 if let cg = item.thumbnail {
@@ -299,12 +301,34 @@ struct SessionRow: View {
                     Theme.raised
                 }
             }
-            .frame(width: 52, height: 52).clipped()
+            .frame(width: 52, height: 52).clipped().opacity(item.tone == .rejected ? 0.45 : 1)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).font(Theme.mono(13)).foregroundStyle(color).lineLimit(1)
+                Text(item.title).font(Theme.mono(13)).foregroundStyle(color).lineLimit(1).strikethrough(item.tone == .rejected, color: Theme.red)
                 Text(item.meta).font(Theme.mono(11)).foregroundStyle(item.tone == .normal ? Theme.muted : color).lineLimit(1)
             }
+            Spacer(minLength: 0)
+            if let id = item.recordID {
+                // Thumbs: the chosen one stays lit; the other shows on hover.
+                HStack(spacing: 4) {
+                    thumb("hand.thumbsup", lit: item.verdict == .up, color: Theme.green, help: "Correct match") { state.scan.verdict(id, .up) }
+                    thumb("hand.thumbsdown", lit: item.verdict == .down, color: Theme.red, help: "Wrong record — keep out of Discogs, log for tuning") { state.scan.verdict(id, .down) }
+                }
+            }
         }
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
+
+    private func thumb(_ symbol: String, lit: Bool, color: Color, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: lit ? symbol + ".fill" : symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(lit ? color : Theme.muted.opacity(hovering ? 0.9 : 0.35))
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
 
@@ -334,7 +358,7 @@ struct BottomBar: View {
                 }
                 .labelsHidden().pickerStyle(.menu).fixedSize()
             }
-            Text((state.voice.status == .listening ? "VOICE" : "VOICE OFF · click VOICE in the top bar, then") + " · “capture” · “flip” · “skip” · “review” · “forty-fives” · “albums” · “undo”")
+            Text((state.voice.status == .listening ? "VOICE" : "VOICE OFF · click VOICE in the top bar, then") + " · “capture” · “flip” · “skip” · “review” · “wrong record” · “forty-fives” · “albums” · “undo”")
             Spacer()
             Text("SESSION · \(state.scan.items.count) SHOTS")
         }

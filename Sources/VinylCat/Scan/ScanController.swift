@@ -33,7 +33,8 @@ struct SessionItem: Identifiable, Sendable {
     var title: String
     var meta: String
     var tone: Tone
-    enum Tone: Sendable { case normal, review, incomplete }
+    var verdict: Verdict?
+    enum Tone: Sendable { case normal, review, incomplete, rejected }
 }
 
 /// Drives the whole scan loop: capture → identify → match → extra shots → save, plus voice commands.
@@ -278,6 +279,7 @@ final class ScanController {
             if !rec.expectedShots.contains(firstKind) { rec.expectedShots.insert(firstKind, at: 0) }
             rec.sync = syncToCollection && (UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true) ? .pending : .off
             store.insert(rec)
+            store.saveEvidence(Self.evidence(for: rec, outcome: outcome, candidates: lastCandidates, chosen: c))
             current = rec
             pending = rec.missingShots
             expectLabel = false
@@ -373,10 +375,91 @@ final class ScanController {
                     rec.discogsInstanceID = inst; rec.sync = .synced
                 } else { rec.sync = .failed }
             }
-            if let fresh = store.fetch(id) { rec.photos = fresh.photos }   // photos may have arrived meanwhile
+            guard let fresh = store.fetch(id) else { return }            // deleted meanwhile
+            rec.photos = fresh.photos                                       // photos may have arrived meanwhile
+            if fresh.status == .rejected {                                  // thumbed down while we were adding it
+                rec.status = .rejected; rec.verified = false
+                await unsync(&rec)
+            }
             store.update(rec)
             if current?.id == id { current = rec }
         }
+    }
+
+    // MARK: - Verdicts
+
+    /// Thumbs up / down on a saved match. Down keeps the record (photos, OCR, candidates) as a
+    /// rejected example for tuning, pulls it from the Discogs collection, and closes it if open.
+    func verdict(_ id: UUID, _ v: Verdict) {
+        guard var rec = store.fetch(id) else { speaker.say("Nothing to mark"); return }
+        store.logFeedback(id, v)
+        if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].verdict = v }
+        switch v {
+        case .up:
+            rec.verified = true
+            if rec.status == .rejected { rec.status = .matched; if rec.sync == .off, syncToCollection, UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true { rec.sync = .pending } }
+            store.update(rec)
+            if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = rec.isComplete ? .normal : .incomplete }
+            if current?.id == id { current = rec }
+            if rec.sync == .pending { enrich(id) }
+            speaker.say("Marked correct")
+        case .down:
+            rec.status = .rejected; rec.verified = false
+            store.update(rec)                                    // status lands first so an in-flight enrich sees it
+            if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = .rejected; items[i].meta = "wrong record · kept for tuning" }
+            if current?.id == id {
+                current = nil; pending = []; manualKind = nil
+                phase = .armed(reason: "wrong record")
+                Task { await engine.setHold(false); await engine.rearm(); await engine.setMode(.identify) }
+            }
+            if lastClosedRecordID == id { lastClosedRecordID = nil }
+            speaker.say("Wrong record. Noted, and off Discogs.")
+            Task { var r = rec; await unsync(&r); store.update(r) }
+        }
+        appState?.reviewCount = store.reviewCount()
+    }
+
+    /// "Wrong record" by voice: the open record, else the newest one in this session that isn't already rejected.
+    func rejectLatest() {
+        let target = current?.id ?? items.first(where: { $0.recordID != nil && $0.verdict != .down })?.recordID
+        guard let target else { speaker.say("Nothing to reject"); return }
+        verdict(target, .down)
+    }
+
+    /// Takes a record out of the Discogs collection if it was added. Sync ends up `.off` either way
+    /// (or `.failed` if Discogs said no, so the Library shows it still needs doing).
+    func unsync(_ rec: inout VinylRecord) async {
+        defer { rec.discogsInstanceID = nil }
+        guard let app = appState, let rid = rec.discogsReleaseID, let inst = rec.discogsInstanceID else { rec.sync = .off; return }
+        let u = UserDefaults.standard.string(forKey: "discogsUsername") ?? ""
+        guard !u.isEmpty else { rec.sync = .failed; return }
+        do { try await app.discogs.removeFromCollection(releaseID: rid, instanceID: inst, username: u); rec.sync = .off }
+        catch { Log.discogs.error("remove r\(rid) instance \(inst) failed: \(error.localizedDescription)"); rec.sync = .failed; rec.discogsInstanceID = inst }
+    }
+
+    /// Library delete: pull it from Discogs first, then drop the row and its photos.
+    func delete(_ id: UUID) async {
+        if var rec = store.fetch(id), rec.discogsInstanceID != nil { await unsync(&rec) }
+        store.delete(id)
+        items.removeAll { $0.recordID == id }
+        if current?.id == id { current = nil; pending = [] }
+        if lastClosedRecordID == id { lastClosedRecordID = nil }
+        appState?.reviewCount = store.reviewCount()
+    }
+
+    static func evidence(for rec: VinylRecord, outcome: Identifier.Outcome, candidates: [Candidate], chosen: Candidate) -> ScanEvidence {
+        var e = ScanEvidence(recordID: rec.id, mergedReading: outcome.reading)
+        e.provider = outcome.provider
+        e.ocrLines = outcome.local.lines
+        e.barcodes = outcome.local.barcodes
+        e.catalogueCandidates = outcome.local.catalogueCandidates
+        e.modelReading = outcome.model
+        e.candidates = candidates.prefix(12).map {
+            .init(releaseID: $0.result.id, title: $0.result.title, label: $0.result.label?.first, catno: $0.result.catno,
+                  year: $0.result.year, country: $0.result.country, score: $0.score, reasons: $0.reasons)
+        }
+        e.chosenReleaseID = chosen.result.id
+        return e
     }
 
     // MARK: - Voice commands
@@ -439,6 +522,7 @@ final class ScanController {
         case .resume: app.autoMode = true; setAuto(true); phase = .armed(reason: "resumed"); speaker.say("Ready")
         case .autoMode: app.autoCapture = true; speaker.say("Auto capture on")
         case .manualMode: app.autoCapture = false; speaker.say("Manual. Say capture or press space")
+        case .wrong: rejectLatest()
         case .yes, .no: break
         }
     }

@@ -7,17 +7,19 @@ struct LibraryView: View {
     @State private var filter: Filter = .all
     @State private var selected: UUID?
     @State private var exportMessage = ""
+    @State private var pendingDelete: VinylRecord?
     private let store = Store.shared
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "ALL", seven = "7\"", twelve = "12\"", lp = "LP", incomplete = "INCOMPLETE", review = "REVIEW"
+        case all = "ALL", seven = "7\"", twelve = "12\"", lp = "LP", incomplete = "INCOMPLETE", review = "REVIEW", rejected = "REJECTED"
         var id: String { rawValue }
     }
 
     var body: some View {
         let _ = store.revision
-        let all = store.all()
-        let rows = filtered(all)
+        let everything = store.all()
+        let all = everything.filter(\.isLive)     // the catalogue: counts, value and export ignore rejected scans
+        let rows = filtered(everything)
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
@@ -27,7 +29,7 @@ struct LibraryView: View {
                     }
                     .padding(.horizontal, 8).frame(width: 300, height: 30).overlay(Rectangle().stroke(Theme.raised, lineWidth: 1))
                     ForEach(Filter.allCases) { f in
-                        let n = count(f, in: all)
+                        let n = count(f, in: everything)
                         // One line, one height: "INCOMPLETE · 0" was wrapping and making its chip
                         // taller than the rest of the row.
                         Text("\(f.rawValue) · \(n)").font(Theme.mono(12)).tracking(1)
@@ -46,7 +48,8 @@ struct LibraryView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(rows) { r in
-                            LibraryRow(record: r, selected: selected == r.id).onTapGesture { selected = r.id }
+                            LibraryRow(record: r, selected: selected == r.id, onDelete: { pendingDelete = r })
+                                .onTapGesture { selected = r.id }
                         }
                     }
                 }
@@ -56,14 +59,43 @@ struct LibraryView: View {
                     Text(exportMessage).foregroundStyle(Theme.green)
                     Spacer()
                     Button("EXPORT CSV") { export() }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
+                    if store.feedbackCount() > 0 {
+                        Button("EXPORT FEEDBACK") { exportFeedback() }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
+                    }
                     Button("OPEN PHOTOS FOLDER") { NSWorkspace.shared.open(PhotoStore.shared.root) }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
                 }
                 .font(Theme.mono(12)).foregroundStyle(Theme.muted).padding(.horizontal, 24).frame(height: 44)
             }
             Rectangle().fill(Theme.line).frame(width: 1)
-            RecordDetail(record: rows.first { $0.id == selected } ?? all.first { $0.id == selected })
+            RecordDetail(record: everything.first { $0.id == selected }, onDelete: { r in pendingDelete = r })
                 .frame(width: 400)
         }
+        .confirmationDialog(
+            "Delete \u{201C}\(pendingDelete?.title ?? "")\u{201D} by \(pendingDelete?.artist ?? "")?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { r in
+            Button("Delete Record", role: .destructive) { delete(r) }
+            Button("Cancel", role: .cancel) {}
+        } message: { r in
+            Text(r.photos.isEmpty ? "This can't be undone." : "Its \(r.photos.count) photo\(r.photos.count == 1 ? "" : "s") will be removed too. This can't be undone."
+                 + (r.discogsInstanceID != nil ? " It will also be removed from your Discogs collection." : ""))
+        }
+    }
+
+    private func delete(_ r: VinylRecord) {
+        if selected == r.id { selected = nil }
+        pendingDelete = nil
+        Task { await state.scan.delete(r.id) }   // removes the Discogs collection entry first when there is one
+    }
+
+    private func exportFeedback() {
+        do {
+            let url = try store.exportFeedback(to: URL(fileURLWithPath: "/Users/ianwoodall/Documents/VinylCat/output"))
+            exportMessage = "SAVED \(url.lastPathComponent)"
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch { exportMessage = "EXPORT FAILED: \(error.localizedDescription)" }
     }
 
     private var header: some View {
@@ -76,6 +108,7 @@ struct LibraryView: View {
             Text("VALUE").frame(width: 70, alignment: .leading)
             Text("SHOTS").frame(width: 50, alignment: .leading)
             Text("DISCOGS").frame(width: 80, alignment: .leading)
+            Color.clear.frame(width: 24)
         }
         .font(Theme.mono(11)).tracking(1.5).foregroundStyle(Theme.muted)
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -83,32 +116,25 @@ struct LibraryView: View {
 
     private func filtered(_ all: [VinylRecord]) -> [VinylRecord] {
         let q = search.lowercased().trimmingCharacters(in: .whitespaces)
-        return all.filter { r in
-            switch filter {
-            case .all: true
-            case .seven: r.format == "7\""
-            case .twelve: r.format == "12\""
-            case .lp: r.format == "LP"
-            case .incomplete: !r.isComplete && r.status != .needsReview
-            case .review: r.status == .needsReview
-            }
-        }.filter { r in
+        return all.filter { matches(filter, $0) }.filter { r in
             q.isEmpty || [r.artist, r.title, r.label ?? "", r.catalogNumber ?? "", r.year.map(String.init) ?? "", r.notes]
                 .contains { $0.lowercased().contains(q) }
         }
     }
 
-    private func count(_ f: Filter, in all: [VinylRecord]) -> Int {
-        return all.filter { r in
-            switch f {
-            case .all: true
-            case .seven: r.format == "7\""
-            case .twelve: r.format == "12\""
-            case .lp: r.format == "LP"
-            case .incomplete: !r.isComplete && r.status != .needsReview
-            case .review: r.status == .needsReview
-            }
-        }.count
+    private func count(_ f: Filter, in all: [VinylRecord]) -> Int { all.filter { matches(f, $0) }.count }
+
+    private func matches(_ f: Filter, _ r: VinylRecord) -> Bool {
+        if f == .rejected { return r.status == .rejected }
+        guard r.isLive else { return false }
+        switch f {
+        case .all, .rejected: return true
+        case .seven: return r.format == "7\""
+        case .twelve: return r.format == "12\""
+        case .lp: return r.format == "LP"
+        case .incomplete: return !r.isComplete && r.status != .needsReview
+        case .review: return r.status == .needsReview
+        }
     }
 
     private func estValue(_ all: [VinylRecord]) -> String {
@@ -129,34 +155,48 @@ struct LibraryView: View {
 struct LibraryRow: View {
     let record: VinylRecord
     let selected: Bool
+    var onDelete: () -> Void = {}
+    @State private var hovering = false
     var body: some View {
         let r = record
         let sync: (String, Color) = switch r.status {
         case .needsReview: ("REVIEW", Theme.red)
         case .duplicate: ("DUP", Theme.amber)
-        default: r.sync == .synced ? ("SYNCED", Theme.green) : r.sync == .failed ? ("FAILED", Theme.red) : r.sync == .pending ? ("PENDING", Theme.muted) : ("—", Theme.muted)
+        case .rejected: ("WRONG", Theme.red)
+        default: r.sync == .synced ? (r.verified ? "SYNCED ✓" : "SYNCED", Theme.green) : r.sync == .failed ? ("FAILED", Theme.red) : r.sync == .pending ? ("PENDING", Theme.muted) : (r.verified ? "✓" : "—", Theme.muted)
         }
         HStack(spacing: 12) {
-            Text(r.artist).frame(width: 170, alignment: .leading).lineLimit(1)
-            Text(r.title).frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
+            Text(r.artist).frame(width: 170, alignment: .leading).lineLimit(1).strikethrough(r.status == .rejected, color: Theme.red)
+            Text(r.title).frame(maxWidth: .infinity, alignment: .leading).lineLimit(1).strikethrough(r.status == .rejected, color: Theme.red)
             Text(r.year.map(String.init) ?? "—").foregroundStyle(Theme.muted).frame(width: 50, alignment: .leading)
             Text(r.discCount > 1 ? "\(r.discCount)×\(r.format)" : r.format).frame(width: 50, alignment: .leading)
             Text([r.label, r.catalogNumber].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(Theme.secondary).frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
             Text(r.valueLow.map { "\($0 < 10 ? String(format: "%.2f", $0) : String(Int($0)))" } ?? "—").frame(width: 70, alignment: .leading)
             Text("\(r.photos.count)/\(max(r.expectedShots.count, r.photos.count))").foregroundStyle(r.isComplete ? Theme.muted : Theme.amber).frame(width: 50, alignment: .leading)
             Text(sync.0).foregroundStyle(sync.1).frame(width: 80, alignment: .leading)
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+                    .foregroundStyle(hovering || selected ? Theme.red : Theme.muted.opacity(0.5))
+                    .frame(width: 24, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Delete this record")
         }
         .font(Theme.mono(13)).foregroundStyle(Theme.text)
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(selected ? Theme.greenBg : .clear)
+        .background(selected ? Theme.greenBg : hovering ? Theme.raised.opacity(0.35) : .clear)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }
 
 struct RecordDetail: View {
     @Environment(AppState.self) private var state
     let record: VinylRecord?
+    var onDelete: (VinylRecord) -> Void = { _ in }
     @State private var notes = ""
 
     var body: some View {
@@ -175,7 +215,8 @@ struct RecordDetail: View {
                         row("Genre", (r.genres + r.styles).joined(separator: ", "))
                         row("Value", r.valueLow.map { "from \(r.currency ?? "") \(String(format: "%.2f", $0)) · \(r.numForSale ?? 0) for sale" } ?? "—")
                         row("Discogs", r.discogsReleaseID.map { "r\($0) · \(r.sync.rawValue)" } ?? "—")
-                        row("Status", "\(r.status.rawValue) · \(r.photos.count)/\(r.expectedShots.count) shots" + (r.isComplete ? "" : " · missing \(r.missingShots.map(\.title).joined(separator: ", "))"))
+                        row("Status", (r.status == .rejected ? "REJECTED — wrong record, kept for tuning" : r.verified ? "\(r.status.rawValue) · verified" : r.status.rawValue)
+                            + " · \(r.photos.count)/\(r.expectedShots.count) shots" + (r.isComplete ? "" : " · missing \(r.missingShots.map(\.title).joined(separator: ", "))"))
                         row("Added", r.createdAt.formatted(date: .abbreviated, time: .shortened))
                         row("Confidence", String(format: "%.2f", r.confidence))
                     }
@@ -196,8 +237,14 @@ struct RecordDetail: View {
                         .onChange(of: notes) { _, v in var u = r; u.notes = v; if u.notes != r.notes { Store.shared.update(u) } }
                     HStack(spacing: 16) {
                         if let u = r.discogsURI, let url = URL(string: u) { Button("OPEN ON DISCOGS") { NSWorkspace.shared.open(url) } }
-                        Button("RE-VALUE") { state.scan.enrich(r.id) }
-                        Button("DELETE") { Store.shared.delete(r.id); state.reviewCount = Store.shared.reviewCount() }.foregroundStyle(Theme.red)
+                        if r.status == .rejected {
+                            Button("RESTORE") { state.scan.verdict(r.id, .up) }.foregroundStyle(Theme.green)
+                        } else if r.discogsReleaseID != nil {
+                            Button("RE-VALUE") { state.scan.enrich(r.id) }
+                            Button(r.verified ? "VERIFIED ✓" : "CORRECT") { state.scan.verdict(r.id, .up) }.foregroundStyle(r.verified ? Theme.green : Theme.secondary).disabled(r.verified)
+                            Button("WRONG RECORD") { state.scan.verdict(r.id, .down) }.foregroundStyle(Theme.amber)
+                        }
+                        Button("DELETE") { onDelete(r) }.foregroundStyle(Theme.red)
                     }
                     .buttonStyle(.plain).font(Theme.mono(12)).foregroundStyle(Theme.secondary)
                 }

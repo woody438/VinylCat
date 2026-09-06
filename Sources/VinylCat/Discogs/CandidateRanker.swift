@@ -52,9 +52,12 @@ enum CandidateRanker {
             var why: [String] = []
 
             if let cat = reading.catalogNumber, let rc = r.catno, !rc.isEmpty {
-                let a = CatalogueNumber.normalize(cat), b = CatalogueNumber.normalize(rc)
-                if a == b { score += 0.5; why.append("catno") }
-                else if a.count >= 4 && (a.hasSuffix(b) || b.hasSuffix(a) || a.contains(b) || b.contains(a)) { score += 0.3; why.append("catno≈") }
+                switch CatalogueNumber.compare(cat, rc) {
+                case .exact: score += 0.5; why.append("catno")
+                case .near: score += 0.42; why.append("catno~")      // one worn digit apart (OS 13001 vs OS 13061)
+                case .partial: score += 0.3; why.append("catno≈")
+                case .none: break
+                }
             }
             if let bc = reading.barcode, let rb = r.barcode, rb.contains(where: { $0.filter(\.isNumber) == bc.filter(\.isNumber) }) {
                 score += 0.5; why.append("barcode")

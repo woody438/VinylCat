@@ -259,6 +259,7 @@ enum SelfTest {
         check(VoiceCommand.match(trailing: "forty fives") == .sevens, "format switch")
         check(VoiceCommand.match(trailing: "capturing") == nil, "no partial-word matches")
         check(VoiceCommand.match(trailing: "back cover") == .backCover && VoiceCommand.match(trailing: "back") == .backCover, "back cover")
+        check(VoiceCommand.match(trailing: "that's the wrong record") == .wrong && VoiceCommand.match(trailing: "not that one") == .wrong && VoiceCommand.match(trailing: "no") == .no, "wrong record")
 
         print("matcher — variant collapsing")
         let twins = [

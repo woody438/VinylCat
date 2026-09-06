@@ -14,9 +14,21 @@ $B --diagnose                      # permissions, cameras, keys, Discogs reachab
 $B --render-ui <dir>               # every screen/state → PNG (AppKit controls show as placeholders; no ScrollView in views you want to check)
 $B --make-test-images <dir>        # synthetic label/cover photos
 $B --pipeline-test <dir>/*.png     # OCR → Discogs → rank, no model
-$B --scenario <dir>                # end-to-end ScanController run in a temp store (match, B-side, duplicate, skip, LP, undo, review)
+$B --scenario <dir>                # end-to-end ScanController run in a temp store (match, B-side, duplicate, skip, LP, undo, thumbs-down, review)
+$B --ocr-eval [n] [--model]        # LocalReader over the real photos in the live store, scored against each record's catno (see below);
+                                   #   --model also scores the vision model (~$0.001/photo). Env: VINYLCAT_EVAL_VERBOSE=1 prints OCR lines
+                                   #   for ranked misses, VINYLCAT_EVAL_DUMP=<dir> writes the zoom close-ups, VINYLCAT_MODEL_PLAIN=1 sends
+                                   #   the model the old single 1024px frame (A/B for the close-ups)
+$B --export-feedback [dir]         # thumbs-up/down verdicts + evidence → output/vinylcat_feedback_vN_date.jsonl
 ```
 Run `--self-test` and `--scenario` after any change to Scan/, Readers/, Discogs/ or Persistence/.
+Run `--ocr-eval` before and after any change to `LocalReader` / `CatalogueNumber` / `Matcher` and quote the
+numbers. 2026-09-06, after the zoom pass (92 photos): catno-in-candidates 91% (was 84%, 75% before that), exact 86%,
+first candidate usable 49% (was 39%), 0.65s/photo (was 0.36s; the zoom pass adds ~3.6 magnified crops per photo).
+With `--model`: the model's catalogue number is usable first time on 88% of photos (90% counting `otherNumbers`),
+$0.0009/photo, 4.3s/photo. The eval prints `rank N … ahead: …` for every photo where the right token isn't first —
+that list is where to look next. What's left there: album numbers quoted on singles when "album" is on another OCR
+line, RCA/Capitol LP references, misread digits on worn print, and two label photos with nothing legible.
 
 Consequences of CLT-only: no SwiftData macros (→ hand-rolled SQLite store), no XCTest (→ `Support/SelfTest.swift`),
 no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barlow Condensed / IBM Plex Mono.
@@ -25,21 +37,33 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 
 - `Capture/` — `CameraSession` (AVFoundation, Continuity Camera included), `CaptureEngine` (actor: sharpness/motion/scene-delta/phash
   state machine, modes `.identify` vs `.shot`), `FrameAnalysis`, `PhotoStore` (JPEGs in `~/Library/Application Support/VinylCat/Photos`).
-- `Readers/` — `LocalReader` (Vision barcode + OCR, catalogue-number regex), `SleeveReader` protocol + `LunaReader` (OpenAI Responses,
+- `Readers/` — `LocalReader` (Vision barcode + OCR in three orientations, then a zoom pass: the smallest print cropped, magnified 2–4× and
+  read again; `closeUps` are those crops, sent to the model), `CatalogueNumber` (regex + shape scoring; the `--ocr-eval` rank list drives
+  every rule in `shapeScore`), `SleeveReader` protocol + `LunaReader` (OpenAI Responses,
   gpt-5.6-luna) + `GeminiReader` (gemini-3.8-flash), `Identifier` (local pass first, model second, cost meter).
 - `Discogs/` — `DiscogsClient` (token auth, 60/min limiter from headers), `CandidateRanker` (catno/barcode/label/title/format/year),
   `Matcher` (search strategy + thresholds 0.85 / 0.60).
 - `Scan/` — `ScanController` (the loop: capture → identify → match → extra shots → save; voice command handling), `ScanView` (HUD).
 - `Voice/` — `SpeechCommands` (on-device SFSpeechRecognizer, phrase table in `VoiceCommand.phrases`), `Speaker` (TTS, mutes recogniser), `Chimes`.
-- `Persistence/` — `Models` (structs), `Store` (SQLite, `revision` drives view refresh, CSV export), `Keychain` (API keys).
+- `Persistence/` — `Models` (structs), `Store` (SQLite, `revision` drives view refresh, CSV + feedback JSONL export), `Keychain` (API keys).
+  `Store.insert` is `INSERT OR REPLACE`, which deletes the row first: never give a records-keyed table an `ON DELETE CASCADE`
+  (the `evidence` and `feedback` tables are cleaned up by hand in `Store.delete`).
 - `Library/`, `Review/`, `Settings/` — the other three tabs.
 - `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
   `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
   `--render-ui` writes every step as `tour-NN-<anchor>.png`.
 
+## Verdicts (thumbs up / down)
+
+- Every match saves `ScanEvidence` (OCR lines, model reading, ranked Discogs candidates, chosen release) next to the record.
+- Thumbs-down (session row, Library detail "WRONG RECORD", or voice "wrong record") sets `status = .rejected`: the record
+  and photos stay for tuning, it leaves the Discogs collection (`DiscogsClient.removeFromCollection`), and it drops out of
+  the Library counts, value, CSV and the duplicate check. Thumbs-up / "RESTORE" flips it back and marks it `verified`.
+- Library delete also removes the Discogs collection instance when there is one (`ScanController.delete`).
+
 ## Conventions
 
 - Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`, `askForBSide`, `askForLabelsOnLP`,
   `voiceOnLaunch` — default off: the speech recogniser only runs once VOICE is clicked, `setupCompleted`, `tourCompleted`).
-- Exports go to `output/` as `vinylcat_export_vN_YYYY-MM-DD.csv`. Reference docs go in `input/`.
+- Exports go to `output/` as `vinylcat_export_vN_YYYY-MM-DD.csv` and `vinylcat_feedback_vN_YYYY-MM-DD.jsonl`. Reference docs go in `input/`.
 - Keep `design/mockups/build.mjs` as the single source for mockup changes; re-seed and republish the same canvas.
