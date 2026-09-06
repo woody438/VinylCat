@@ -14,7 +14,7 @@ struct VinylCatApp: App {
         WindowGroup("VinylCat") {
             RootView()
                 .environment(state)
-                .frame(minWidth: 1200, minHeight: 760)
+                .frame(minWidth: 1280, minHeight: 820)
                 .background(Theme.bg)
                 .preferredColorScheme(.dark)
                 .task {
