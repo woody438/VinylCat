@@ -85,6 +85,10 @@ final class SpeechCommands {
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    /// Bumped every time a session ends. A recognition callback carrying an older number belongs to
+    /// a session we already tore down, and is dropped — see `handle(transcript:error:generation:)`.
+    private var generation = 0
+    private var configObserver: NSObjectProtocol?
     private var handledUpTo: TimeInterval = 0
     private var restartTimer: Task<Void, Never>?
     private var wantListening = false
@@ -124,6 +128,7 @@ final class SpeechCommands {
 
     private func beginSession() {
         endSession()
+        let gen = generation
         guard let recognizer, recognizer.isAvailable else { status = .error("Speech recogniser unavailable"); return }
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
@@ -151,6 +156,17 @@ final class SpeechCommands {
         }
         audioEngine.prepare()
         do { try audioEngine.start() } catch { status = .error(error.localizedDescription); return }
+        // The input device changing under a running engine (a Continuity iPhone's microphone arriving
+        // or leaving, AirPods connecting) stops the engine silently. Restart on the new device.
+        if configObserver == nil {
+            configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: audioEngine, queue: nil) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.wantListening, Date().timeIntervalSince(self.sessionStart) > 1 else { return }
+                    Log.voice.info("audio configuration changed — restarting")
+                    self.beginSession()
+                }
+            }
+        }
 
         task = recognizer.recognitionTask(with: req) { @Sendable [weak self] result, error in
             // Reduce the result to plain data before hopping to the main actor.
@@ -159,7 +175,7 @@ final class SpeechCommands {
                            segments: r.bestTranscription.segments.map { Segment(word: $0.substring, timestamp: $0.timestamp, duration: $0.duration) })
             }
             let message = error?.localizedDescription
-            Task { @MainActor in self?.handle(transcript: snapshot, error: message) }
+            Task { @MainActor in self?.handle(transcript: snapshot, error: message, generation: gen) }
         }
         status = .listening
 
@@ -172,7 +188,17 @@ final class SpeechCommands {
         }
     }
 
+    private func scheduleRestart(after delay: Double) {
+        restartTimer?.cancel()
+        restartTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, self.wantListening else { return }
+            self.beginSession()
+        }
+    }
+
     private func endSession() {
+        generation += 1
         task?.cancel(); task = nil
         request?.endAudio(); request = nil
         if audioEngine.isRunning { audioEngine.stop() }
@@ -182,19 +208,26 @@ final class SpeechCommands {
     struct Segment: Sendable { var word: String; var timestamp: TimeInterval; var duration: TimeInterval }
     struct Transcript: Sendable { var text: String; var segments: [Segment] }
 
-    private func handle(transcript: Transcript?, error: String?) {
+    private func handle(transcript: Transcript?, error: String?, generation gen: Int) {
+        // Cancelling a task makes it report an error ("canceled", or "No speech detected" if it had
+        // heard only silence) a few milliseconds later — after the replacement session has already
+        // started. Treating that as the new session failing restarted it again, which killed it
+        // again, and so on until the give-up counter tripped and VOICE went dark for good.
+        guard gen == generation else { return }
         if let error {
-            // Session roll-overs produce an error too; retry with backoff, give up after a few in a row.
+            let lived = Date().timeIntervalSince(sessionStart)
+            let benign = error.localizedCaseInsensitiveContains("cancel") || error.localizedCaseInsensitiveContains("no speech")
+            if benign, lived > 1, wantListening {
+                // The recogniser closes a session on its own after a stretch of silence. Not a fault:
+                // open the next one and keep the switch showing ON.
+                Log.voice.debug("session ended after \(Int(lived)) s (\(error)) — reopening")
+                scheduleRestart(after: 0.2)
+                return
+            }
             consecutiveFailures += 1
             status = .error(error)
             guard wantListening, consecutiveFailures <= 5 else { endSession(); return }
-            let delay = min(10, Double(consecutiveFailures) * 2)
-            restartTimer?.cancel()
-            restartTimer = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled, let self, self.wantListening else { return }
-                self.beginSession()
-            }
+            scheduleRestart(after: min(10, Double(consecutiveFailures) * 2))
             return
         }
         consecutiveFailures = 0

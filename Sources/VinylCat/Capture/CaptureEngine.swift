@@ -6,12 +6,16 @@ import Observation
 /// Tunables surfaced in Settings later.
 struct CaptureTuning: Sendable {
     var sharpnessMin: Double = 60
-    var motionMax: Double = 4
+    /// Frame-to-frame mean abs difference (0–255) a hold tolerates. A record on a table under a fixed
+    /// webcam sits at 1–3; a hand-held Continuity iPhone hovers at 4–6 even when the operator is
+    /// trying, so 4 made the ring refuse to fill until a lucky quiet second came along.
+    var motionMax: Double = 6
     var sceneDeltaMin: Double = 14
     var steadySeconds: Double = 1.0
     /// How far the picture may drift (mean abs difference, 0–255) during the steady window before it
-    /// counts as a different item and the window restarts.
-    var contentDriftMax: Double = 11
+    /// counts as a different item and the window restarts. A hand-held phone drifts 10–15 over a
+    /// second on a busy label; a different record reads 30+.
+    var contentDriftMax: Double = 18
     /// Hamming distance below which a new steady frame is "the same item we just shot".
     var sameItemHash: Int = 10
     /// Scene must drop back near the baseline (or change this much from the last shot) before re-arming.
@@ -163,7 +167,8 @@ actor CaptureEngine {
         if holding { emit(m, 0, false, "waiting for your answer"); return }
 
         if needMotion {
-            if m.motion > tuning.motionMax * 3 { needMotion = false } else { emit(m, 0, false, "flip it"); return }
+            // A flip is a burst of 20+; anything much lower is the phone being held, not the record moving.
+            if m.motion > tuning.motionMax * 2 { needMotion = false } else { emit(m, 0, false, "flip it"); return }
         }
 
         if cooldown {
