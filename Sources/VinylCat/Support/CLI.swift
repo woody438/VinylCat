@@ -9,6 +9,7 @@ import SwiftUI
 ///   VinylCat --render-ui <dir>          renders every screen/state to PNG
 ///   VinylCat --make-test-images <dir>   synthetic label/cover photos
 ///   VinylCat --pipeline-test <image>…   local OCR → Discogs → rank (no vision model)
+///   VinylCat --discogs-test <catno>…    what each catalogue number actually finds on Discogs
 @MainActor
 enum CLI {
     static func run(_ args: [String]) -> Int32? {
@@ -20,6 +21,7 @@ enum CLI {
         case "--make-test-images": return makeTestImages(dir: rest.first ?? "test-images")
         case "--pipeline-test": return runBlocking { await pipelineTest(paths: rest) }
         case "--scenario": return runBlocking { await scenario(dir: rest.first ?? "test-images") }
+        case "--discogs-test": return runBlocking { await discogsTest(terms: rest) }
         case "--camera-test": return runBlocking { await cameraTest(name: rest.first ?? "iPhone", seconds: Double(rest.dropFirst().first ?? "8") ?? 8, out: rest.dropFirst(2).first ?? "camera-test") }
         case "--model-test": return runBlocking {
             guard let img = SetupWizard.testLabelImage() else { return 1 }
@@ -189,7 +191,7 @@ enum CLI {
                 reading.title = words.dropFirst().first ?? words.first; reading.artist = words.dropFirst(2).first ?? words.first
                 let fmt: VinylFormat? = p.contains("cover") ? .lp : p.contains("fac73") ? .twelve : .seven
                 let t1 = Date()
-                let (verdict, ranked) = try await Matcher(discogs: dc).find(reading: reading, sessionFormat: fmt)
+                let (verdict, ranked) = try await Matcher(discogs: dc).find(reading: reading, sessionFormat: fmt, catalogueAlternates: local.catalogueCandidates)
                 print("  discogs \(String(format: "%.2fs", Date().timeIntervalSince(t1))) · \(ranked.count) candidates · \(dc.rateText)")
                 for c in ranked.prefix(3) { print(String(format: "    %.2f  %@  [%@]  %@", c.score, c.result.title, c.reasons.joined(separator: " "), c.summary)) }
                 switch verdict {
@@ -204,6 +206,22 @@ enum CLI {
 }
 
 extension CLI {
+    /// Reports what Discogs returns for each catalogue number, as catno= and as a plain query.
+    static func discogsTest(terms: [String]) async -> Int32 {
+        let dc = DiscogsClient()
+        for term in terms {
+            for (label, run) in [("catno=", { try await dc.search(catno: term) }),
+                                 ("q=", { try await dc.search(query: term) })] as [(String, () async throws -> [DiscogsClient.SearchResult])] {
+                do {
+                    let hits = try await run()
+                    print("\(label)\(term)  → \(hits.count) hits")
+                    for h in hits.prefix(3) { print("     \(h.title) · \(h.catno ?? "—") · \(h.year ?? "—") · \(h.format?.joined(separator: "/") ?? "—")") }
+                } catch { print("\(label)\(term)  → FAILED \(error.localizedDescription)") }
+            }
+        }
+        return 0
+    }
+
     /// Opens a camera by (partial) name, reports its state, streams for a few seconds and saves a frame.
     static func cameraTest(name: String, seconds: Double, out: String) async -> Int32 {
         let d = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .continuityCamera, .external], mediaType: .video, position: .unspecified)
