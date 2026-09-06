@@ -8,6 +8,17 @@ struct LunaReader: SleeveReader {
     /// $ per 1M tokens (input, output) — verified 2026-09.
     var pricing = (input: 0.20, output: 1.20)
 
+    private func post(_ body: [String: Any], key: String) async throws -> (Data, Int) {
+        var req = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.timeoutInterval = 45
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        return (data, (resp as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
     func read(_ image: CGImage, hints: ReadHints) async throws -> ReaderResult {
         guard let key = Keychain.get(.openAI) else { throw ReaderError.missingKey(name) }
         guard let jpeg = image.jpegData() else { throw ReaderError.badResponse("could not encode image") }
@@ -27,14 +38,16 @@ struct LunaReader: SleeveReader {
             "reasoning": ["effort": "low"],
             "max_output_tokens": 600,
         ]
-        var req = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-        req.httpMethod = "POST"
-        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        req.timeoutInterval = 45
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        var (data, code) = try await post(body, key: key)
+        if code == 400, let msg = String(data: data, encoding: .utf8), msg.contains("reasoning") || msg.contains("detail") {
+            // Older/newer parameter surface — drop the optional knobs and try once more.
+            var slim = body
+            slim["reasoning"] = nil
+            if var input = slim["input"] as? [[String: Any]], var content = input[0]["content"] as? [[String: Any]], content.count > 1 {
+                content[1]["detail"] = nil; input[0]["content"] = content; slim["input"] = input
+            }
+            (data, code) = try await post(slim, key: key)
+        }
         guard (200..<300).contains(code) else { throw ReaderError.http(code, String(data: data, encoding: .utf8) ?? "") }
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ReaderError.badResponse("not JSON") }
 

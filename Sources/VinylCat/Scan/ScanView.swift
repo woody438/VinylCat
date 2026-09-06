@@ -109,7 +109,7 @@ struct HUDLook {
     var ringLabel = "READY"
 
     init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil) {
-        let metrics = signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta) } ?? ""
+        let metrics = signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta) } ?? "camera starting"
         switch phase {
         case .learning:
             state = "LEARNING"; meta = "keep the camera view empty for a second"

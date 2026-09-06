@@ -145,6 +145,17 @@ final class ScanController {
             phase = .searching
             let (verdict, ranked) = try await Matcher(discogs: app.discogs).find(reading: outcome.reading, sessionFormat: app.format)
             lastCandidates = ranked
+            // Second look at the same record (e.g. flipped to the B-side while ambiguous)? Keep what both shots agree on.
+            if let amb = ambiguity {
+                let previous = Set(amb.candidates.map(\.id))
+                let agreed = ranked.filter { previous.contains($0.id) }
+                if agreed.count == 1, let only = agreed.first {
+                    ambiguity = nil
+                    await finalize(candidate: only, outcome: outcome, photo: fileName, thumb: thumb, allowDuplicate: false)
+                    if var rec = current { rec.photos.append(ScanPhoto(recordID: rec.id, fileName: amb.photo, kind: .labelA, order: 0)); rec.photos[rec.photos.count - 2].kind = .labelB; store.update(rec); current = rec }
+                    return
+                }
+            }
             switch verdict {
             case .match(let c):
                 await finalize(candidate: c, outcome: outcome, photo: fileName, thumb: thumb, allowDuplicate: false)
