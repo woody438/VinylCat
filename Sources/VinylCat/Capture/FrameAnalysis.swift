@@ -21,6 +21,12 @@ final class FrameAnalyzer {
     private var previous: [UInt8]?
     private var baseline: [UInt8]?
     private var lastHash: UInt64?
+    /// Last three raw readings of each metric — thresholds run on the median, which kills the
+    /// single-frame spikes (auto-exposure hunting, sensor noise, a hand flicking past) that
+    /// otherwise made the HUD flip between steady and moving several times a second.
+    private var recentSharpness: [Double] = []
+    private var recentMotion: [Double] = []
+    private var recentScene: [Double] = []
 
     func resetBaseline() { baseline = nil }
     func hasBaseline() -> Bool { baseline != nil }
@@ -71,7 +77,24 @@ final class FrameAnalyzer {
         let hash = averageHash(grey)
         previous = grey
         lastHash = hash
-        return FrameMetrics(sharpness: sharp, motion: motion, sceneDelta: scene, hash: hash)
+        // A big frame-to-frame change is real (the record arrived, or was taken away), not noise:
+        // drop the history so the filtered values follow the new picture immediately instead of
+        // reporting the old one for another frame or two.
+        if motion > 20 { recentSharpness.removeAll(); recentMotion.removeAll(); recentScene.removeAll() }
+        return FrameMetrics(sharpness: median(&recentSharpness, sharp),
+                            motion: median(&recentMotion, motion),
+                            sceneDelta: median(&recentScene, scene),
+                            hash: hash)
+    }
+
+    /// Mean absolute difference between two thumbnails — used to tell "the same thing is still
+    /// being held up" from "that is a different picture now".
+    func drift(_ a: [UInt8], _ b: [UInt8]) -> Double { meanAbsDiff(a, b) }
+
+    private func median(_ window: inout [Double], _ value: Double) -> Double {
+        window.append(value)
+        if window.count > 3 { window.removeFirst() }
+        return window.sorted()[window.count / 2]
     }
 
     private func laplacianVariance(_ g: [UInt8]) -> Double {

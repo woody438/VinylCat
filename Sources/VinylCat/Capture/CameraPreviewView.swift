@@ -3,11 +3,12 @@ import SwiftUI
 
 /// Live camera preview backed by AVCaptureVideoPreviewLayer.
 struct CameraPreviewView: NSViewRepresentable {
-    let box: CaptureBox
+    let camera: CameraSession
 
     func makeNSView(context: Context) -> PreviewNSView {
         let v = PreviewNSView()
-        v.previewLayer.session = box.session
+        // The session hooks the layer up and drives its rotation from the device's orientation.
+        camera.attachPreview(v.previewLayer)
         return v
     }
 

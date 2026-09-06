@@ -9,6 +9,7 @@ struct ReviewView: View {
     @State private var candidates: [Candidate] = []
     @State private var status = ""
     @State private var busy = false
+    @State private var hovered: UUID?
     private let store = Store.shared
 
     var body: some View {
@@ -37,19 +38,31 @@ struct ReviewView: View {
     }
 
     private func queueRow(_ r: VinylRecord, active: Bool, meta: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             AsyncImage(url: r.sortedPhotos.first?.url) { $0.resizable().aspectRatio(contentMode: .fill) } placeholder: { Theme.raised }
                 .frame(width: 48, height: 48).clipped()
             VStack(alignment: .leading, spacing: 2) {
                 Text(r.displayTitle == " — " ? "Unknown" : r.displayTitle).font(Theme.mono(13)).lineLimit(1)
                 Text(meta).font(Theme.mono(11)).foregroundStyle(Theme.muted).lineLimit(1)
             }
+            Spacer(minLength: 8)
+            // Throwing away a mis-fire (a hand, the room, a blurry nothing) is the commonest thing
+            // to do in here, so it lives on the row rather than behind a selection.
+            Button { discard(r) } label: {
+                Image(systemName: "trash").font(.system(size: 13))
+                    .foregroundStyle(hovered == r.id ? Theme.red : Theme.muted)
+                    .frame(width: 24, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Delete this scan and its photos")
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(active ? Theme.redBg : .clear)
+        .background(active ? Theme.redBg : (hovered == r.id ? Theme.raised.opacity(0.5) : .clear))
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
+        .onHover { hovered = $0 ? r.id : (hovered == r.id ? nil : hovered) }
         .onTapGesture { selected = r.id; candidates = []; extra = ""; status = "" }
     }
 
@@ -96,14 +109,17 @@ struct ReviewView: View {
                 }
                 if !status.isEmpty { Text(status).font(Theme.mono(12)).foregroundStyle(Theme.amber) }
                 Spacer()
-                HStack(spacing: 16) {
-                    Button("SAVE AS MANUAL ENTRY") { saveManual(r) }
-                    Button("DELETE") { store.delete(r.id); state.reviewCount = store.reviewCount(); selected = nil }.foregroundStyle(Theme.red)
-                }
-                .buttonStyle(.plain).font(Theme.mono(12)).foregroundStyle(Theme.secondary)
+                Button("SAVE AS MANUAL ENTRY") { saveManual(r) }
+                    .buttonStyle(.plain).font(Theme.mono(12)).foregroundStyle(Theme.secondary)
             }
         }
         .padding(24)
+    }
+
+    private func discard(_ r: VinylRecord) {
+        store.delete(r.id)
+        state.reviewCount = store.reviewCount()
+        if selected == r.id { selected = nil; candidates = []; extra = ""; status = "" }
     }
 
     private func research(_ r: VinylRecord) async {

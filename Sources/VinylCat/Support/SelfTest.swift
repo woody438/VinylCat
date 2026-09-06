@@ -64,6 +64,48 @@ enum SelfTest {
         return (captures - before, doubleFire, capturesDuringEmpty == capturesAfterA)
     }
 
+    /// Holds a record steady, then throws in one bad frame. The ring should dent, not reset —
+    /// that flicker was what made lining a record up feel so jumpy.
+    private static func runSteadinessScenario() -> (rose: Bool, heldThroughWobble: Bool, lowest: Double) {
+        var tuning = CaptureTuning(); tuning.steadySeconds = 2   // long enough that it never fires
+        let engine = CaptureEngine(tuning: tuning)
+        var cont: AsyncStream<Frame>.Continuation!
+        let stream = AsyncStream<Frame>(bufferingPolicy: .unbounded) { cont = $0 }
+        let runTask = Task { await engine.run(frames: stream) }
+        var series: [Double] = []
+        let watcher = Task { for await s in engine.signals { series.append(s.steadyProgress) } }
+
+        func frame(_ pattern: Int, shift: Int = 0) -> Frame {
+            var pb: CVPixelBuffer?
+            CVPixelBufferCreate(nil, 320, 240, kCVPixelFormatType_32BGRA, nil, &pb)
+            CVPixelBufferLockBaseAddress(pb!, [])
+            let base = CVPixelBufferGetBaseAddress(pb!)!.assumingMemoryBound(to: UInt8.self)
+            let stride = CVPixelBufferGetBytesPerRow(pb!)
+            for y in 0..<240 { for x in 0..<320 {
+                let p = base + y * stride + x * 4
+                var v: UInt8 = 90
+                if pattern == 1 { v = (((x + shift) / 8 + y / 8) % 2 == 0) ? 240 : 20 }
+                p[0] = v; p[1] = v; p[2] = v; p[3] = 255
+            } }
+            CVPixelBufferUnlockBaseAddress(pb!, [])
+            return Frame(pixelBuffer: pb!, timestamp: .zero)
+        }
+        // Pump between frames so the signal watcher sees each one (the stream keeps only the newest).
+        func feed(_ pattern: Int, shift: Int = 0, frames n: Int) {
+            for _ in 0..<n { cont.yield(frame(pattern, shift: shift)); RunLoop.main.run(until: Date().addingTimeInterval(0.035)) }
+        }
+
+        feed(0, frames: 10)                       // learn the empty scene
+        feed(1, frames: 12)                       // hold a record: the ring fills
+        let beforeWobble = series.last ?? 0
+        feed(1, shift: 4, frames: 1)              // one jolted frame
+        let afterWobble = series.last ?? 0
+        feed(1, frames: 6)                        // back to holding it
+        let recovered = series.last ?? 0
+        cont.finish(); runTask.cancel(); watcher.cancel()
+        return (beforeWobble > 0.1, afterWobble > 0 && recovered > beforeWobble, afterWobble)
+    }
+
     static func run() -> Int32 {
         print("VinylCat self-test")
 
@@ -154,6 +196,9 @@ enum SelfTest {
         check(engineOK.captures == 2, "two distinct records → two captures (got \(engineOK.captures))")
         check(engineOK.doubleFire == false, "same record held still does not re-fire")
         check(engineOK.emptyNoFire, "empty scene never fires")
+        let steady = runSteadinessScenario()
+        check(steady.rose, "the ring fills while a record is held")
+        check(steady.heldThroughWobble, "one bad frame dents the ring (\(String(format: "%.2f", steady.lowest))) instead of resetting it")
 
         print("\(passed) passed, \(failures) failed")
         return failures == 0 ? 0 : 1

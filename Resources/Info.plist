@@ -4,7 +4,9 @@
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleExecutable</key><string>VinylCat</string>
-    <key>CFBundleIdentifier</key><string>com.woodall.vinylcat</string>
+    <key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key><string>com.woodall.vinylcat</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleName</key><string>VinylCat</string>
     <key>CFBundleDisplayName</key><string>VinylCat</string>

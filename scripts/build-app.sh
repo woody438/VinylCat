@@ -18,6 +18,8 @@ BUNDLE_DIR="$(dirname "$BIN")/VinylCat_VinylCat.bundle"
 [[ -d "$BUNDLE_DIR" ]] && cp -R "$BUNDLE_DIR" "$APP/Contents/Resources/"
 [[ -d Resources/Sounds ]] && cp -R Resources/Sounds "$APP/Contents/Resources/"
 [[ -d Resources/Fonts ]] && cp -R Resources/Fonts "$APP/Contents/Resources/"
+# App icon (regenerate with: swift scripts/make-icon.swift).
+[[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 # Sign with the local "VinylCat Local Signing" certificate when present so Camera/Mic/Speech permissions survive rebuilds;
 # ad-hoc otherwise (works, but macOS re-asks after every build).
 IDENTITY="$(security find-certificate -c "VinylCat Local Signing" -Z ~/Library/Keychains/login.keychain-db 2>/dev/null | awk '/SHA-1/{print $NF}')"

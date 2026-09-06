@@ -35,19 +35,32 @@ final class AppState {
         if let f = UserDefaults.standard.string(forKey: "defaultFormat"), let v = VinylFormat(rawValue: f) { format = v }
     }
 
-    /// Whenever the camera changes, grab a diagnostic frame a moment later.
+    /// Once the camera delivers, sample its brightness so a running-but-black stream is reported
+    /// rather than shown as a blank preview. The camera session itself handles "no frames at all".
     private var lastCameraStatus = ""
+    private var brightnessTask: Task<Void, Never>?
     func noteCameraStatus() {
         let s = String(describing: camera.status)
-        if s != lastCameraStatus {
-            lastCameraStatus = s
-            if case .running = camera.status {
-                Task {
-                    let mean = await scan.debugFrame()
-                    // Black or silent stream (typical of a Continuity Camera that hasn't started) → try the next configuration.
-                    if mean < 3, camera.escalate() { lastCameraStatus = "" }
-                }
+        guard s != lastCameraStatus else { return }
+        lastCameraStatus = s
+        switch camera.status {
+        case .running, .dark: startBrightnessMonitor()
+        default: brightnessTask?.cancel(); brightnessTask = nil
+        }
+    }
+
+    private func startBrightnessMonitor() {
+        guard brightnessTask == nil else { return }
+        brightnessTask = Task { [weak self] in
+            // Keep sampling while the picture is black so it clears itself the moment the camera wakes up.
+            while !Task.isCancelled {
+                guard let self else { return }
+                let mean = await scan.debugFrame()
+                camera.reportBrightness(mean)
+                if mean >= 3 { break }
+                try? await Task.sleep(for: .seconds(3))
             }
+            self?.brightnessTask = nil
         }
     }
 

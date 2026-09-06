@@ -52,7 +52,7 @@ enum CLI {
         let sp = SFSpeechRecognizer.authorizationStatus()
         print("speech      \(["notDetermined", "denied", "restricted", "authorized"][Int(sp.rawValue)])")
         let d = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .continuityCamera, .external], mediaType: .video, position: .unspecified)
-        print("cameras     \(d.devices.map { "\($0.localizedName) [\($0.deviceType.rawValue)]" })")
+        print("cameras     \(d.devices.map { "\($0.localizedName) [\($0.deviceType.rawValue)] \($0.uniqueID)" }.joined(separator: "\n            "))")
         let rec = SFSpeechRecognizer(locale: Locale(identifier: "en-GB"))
         print("recogniser  available=\(rec?.isAvailable ?? false) onDevice=\(rec?.supportsOnDeviceRecognition ?? false)")
         print("mics        \(AudioInputs.list().map(\.name))")
@@ -80,6 +80,7 @@ enum CLI {
         UserDefaults.standard.set(true, forKey: "setupCompleted")
         let state = AppState()
         state.scan.appState = state
+        state.reviewCount = Store.shared.reviewCount()   // so the REVIEW tab badge renders
         let phases: [(String, ScanPhase)] = [
             ("scan-1-armed", .armed(reason: "empty")),
             ("scan-2-reading", .reading(step: "GPT-5.6 Luna reading")),

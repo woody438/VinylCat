@@ -9,12 +9,19 @@ struct CaptureTuning: Sendable {
     var motionMax: Double = 4
     var sceneDeltaMin: Double = 14
     var steadySeconds: Double = 1.0
-    /// Hamming distance the frame may drift during the steady window before the timer restarts.
-    var steadyHashDrift: Int = 6
+    /// How far the picture may drift (mean abs difference, 0–255) during the steady window before it
+    /// counts as a different item and the window restarts.
+    var contentDriftMax: Double = 11
     /// Hamming distance below which a new steady frame is "the same item we just shot".
     var sameItemHash: Int = 10
     /// Scene must drop back near the baseline (or change this much from the last shot) before re-arming.
     var rearmDelta: Double = 12
+    /// Once the hold has started, thresholds relax by this fraction — a record that was good enough a
+    /// moment ago stays good enough through a wobble, instead of flipping in and out on every frame.
+    var slack: Double = 0.35
+    /// The steady window drains this many times slower than it fills, so a brief blur dents the ring
+    /// rather than resetting it. 1.0 would make it symmetrical.
+    var decayRate: Double = 0.7
 }
 
 /// What the engine reports to the HUD every frame.
@@ -45,8 +52,15 @@ actor CaptureEngine {
     private let analyzer = FrameAnalyzer()
     private let ciContext = CIContext(options: [.cacheIntermediates: false])
     private var tuning: CaptureTuning
-    private var steadySince: Date?
-    private var steadyHash: UInt64?
+    /// Seconds of accumulated hold, 0…steadySeconds. Fills while the shot is good, drains while it
+    /// is not — the ring is this over steadySeconds, which is why it now moves instead of snapping.
+    private var steadyCredit: Double = 0
+    /// The thumbnail the current hold started from, to notice the item itself changing.
+    private var steadyReference: [UInt8]?
+    private var driftFrames = 0
+    /// Consecutive qualifying frames — a hold has to be seen, not just timed.
+    private var goodFrames = 0
+    private var lastTick: Double?
     /// false = manual mode: keep analysing (ring, hints) but never fire on our own; "capture"/space still works.
     private var autoCapture = true
     private var lastCaptureHash: UInt64?
@@ -87,16 +101,16 @@ actor CaptureEngine {
         stillCont = stc
     }
 
-    func setEnabled(_ on: Bool) { enabled = on; if !on { steadySince = nil } }
-    func setAutoCapture(_ on: Bool) { autoCapture = on; steadySince = nil }
+    func setEnabled(_ on: Bool) { enabled = on; if !on { resetHold() } }
+    func setAutoCapture(_ on: Bool) { autoCapture = on; resetHold() }
     func setTuning(_ t: CaptureTuning) { tuning = t }
     /// Voice "capture": take the next sharp frame regardless of the steady timer.
     func forceCapture() { forceNext = true }
     /// Re-arm immediately (e.g. after "again" / "undo"), ignoring cooldown.
-    func rearm() { cooldown = false; steadySince = nil; needMotion = false }
+    func rearm() { cooldown = false; resetHold(); needMotion = false }
     func setMode(_ m: Mode) {
         mode = m
-        if m == .shot { cooldown = false; needMotion = true; steadySince = nil }
+        if m == .shot { cooldown = false; needMotion = true; resetHold() }
     }
     /// Forget the empty-scene reference; the next few quiet frames become the new one.
     func relearnBaseline() { analyzer.resetBaseline(); baselineFrames = 0 }
@@ -154,21 +168,46 @@ actor CaptureEngine {
             }
         }
 
-        let present = m.sceneDelta >= tuning.sceneDeltaMin
-        let still = m.motion <= tuning.motionMax
-        let sharp = m.sharpness >= tuning.sharpnessMin
-        guard present else { steadySince = nil; emit(m, 0, true, "empty"); return }
-        guard still else { steadySince = nil; emit(m, 0, true, "moving"); return }
-        guard sharp else { steadySince = nil; emit(m, 0, true, "blurry"); return }
+        let dt = tick()
+        // Once the hold has started the bars are lower: a shot that qualified a moment ago keeps
+        // qualifying through a wobble. Without this the frame-to-frame noise alone crossed the
+        // thresholds constantly and the HUD strobed between ARMED and STEADY.
+        let holding = steadyCredit > 0
+        let ease = holding ? tuning.slack : 0
+        let present = m.sceneDelta >= tuning.sceneDeltaMin * (1 - ease)
+        let still = m.motion <= tuning.motionMax * (1 + ease * 2)
+        let sharp = m.sharpness >= tuning.sharpnessMin * (1 - ease)
 
-        let now = Date()
-        // The steady window restarts if the content itself changes (a record sliding through looks "still" frame-to-frame).
-        if steadySince == nil || steadyHash.map({ FrameAnalyzer.hammingDistance($0, m.hash) > tuning.steadyHashDrift }) ?? true {
-            steadySince = now; steadyHash = m.hash
+        // Nothing in front of the camera is a real reset — everything else only drains the hold.
+        guard present else { resetHold(); emit(m, 0, true, "empty"); return }
+
+        // A record sliding through looks "still" frame-to-frame, so compare against the picture the
+        // hold started from, and only believe a change that lasts more than one frame.
+        if let ref = steadyReference, holding {
+            if analyzer.drift(ref, grey) > tuning.contentDriftMax {
+                driftFrames += 1
+                if driftFrames >= 3 { resetHold() }
+            } else {
+                driftFrames = 0
+            }
         }
-        let progress = min(1, now.timeIntervalSince(steadySince!) / tuning.steadySeconds)
+        if steadyCredit == 0 { steadyReference = grey; driftFrames = 0 }
+
+        guard still && sharp else {
+            goodFrames = 0
+            steadyCredit = max(0, steadyCredit - dt * tuning.decayRate)
+            let progress = steadyCredit / tuning.steadySeconds
+            // While there is credit left the HUD keeps saying "steady" — the ring dipping is the
+            // feedback, not a change of state.
+            emit(m, progress, true, progress > 0 ? "steady" : (still ? "blurry" : "moving"))
+            return
+        }
+
+        goodFrames += 1
+        steadyCredit = min(tuning.steadySeconds, steadyCredit + dt)
+        let progress = steadyCredit / tuning.steadySeconds
         guard autoCapture else { emit(m, progress, true, progress >= 1 ? "ready — say capture" : "steady"); return }
-        if progress >= 1 {
+        if progress >= 1 && goodFrames >= 3 {
             if mode == .identify, let h = lastCaptureHash, FrameAnalyzer.hammingDistance(h, m.hash) <= tuning.sameItemHash {
                 emit(m, 1, false, "same item"); return
             }
@@ -178,8 +217,26 @@ actor CaptureEngine {
         }
     }
 
+    /// Seconds since the previous frame, clamped so a stalled camera or a debugger pause can't
+    /// dump a whole second of credit into the ring at once.
+    private func tick() -> Double {
+        let now = ProcessInfo.processInfo.systemUptime
+        defer { lastTick = now }
+        guard let last = lastTick else { return 1.0 / 30 }
+        // Capped at a frame-and-a-bit: a stalled stream or a resumed app must not hand the ring a
+        // whole hold's worth of credit in one frame.
+        return min(1.0 / 15, max(0, now - last))
+    }
+
+    private func resetHold() {
+        steadyCredit = 0
+        goodFrames = 0
+        steadyReference = nil
+        driftFrames = 0
+    }
+
     private func capture(_ frame: Frame, _ m: FrameMetrics, forced: Bool) {
-        steadySince = nil
+        resetHold()
         cooldown = mode == .identify
         needMotion = mode == .shot
         lastCaptureHash = m.hash

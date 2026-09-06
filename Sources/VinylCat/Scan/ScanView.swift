@@ -25,7 +25,14 @@ struct PreviewPane: View {
             let _ = state.noteCameraStatus()
             switch state.camera.status {
             case .running:
-                CameraPreviewView(box: state.camera.box)
+                CameraPreviewView(camera: state.camera)
+            case .warmingUp(let name):
+                ZStack {
+                    CameraPreviewView(camera: state.camera)
+                    Caption("WAKING \(name.uppercased())…")
+                }
+            case .dark:
+                CameraMessage(title: "NO PICTURE FROM THE CAMERA", body: state.camera.darkStreamAdvice)
             case .idle:
                 Caption("STARTING CAMERA…")
             case .unauthorized:
@@ -63,7 +70,7 @@ struct HUDOverlay: View {
         let scan = state.scan
         let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey, voiceProblem: state.voice.problem, manual: !state.autoCapture)
         ZStack {
-            AlignmentGuide(color: look.color, progress: look.ring)
+            AlignmentGuide(color: look.color, progress: look.ring, videoAspect: state.camera.videoAspect)
             hudChrome(look)
         }
     }
@@ -101,6 +108,7 @@ struct HUDOverlay: View {
 
     private var cameraTag: String {
         if case .running(let name) = state.camera.status { return name.uppercased() + " · LIVE" }
+        if case .dark(let name) = state.camera.status { return name.uppercased() + " · NO PICTURE" }
         return "CAMERA"
     }
 }
@@ -118,7 +126,11 @@ struct HUDLook {
     var ringLabel = "READY"
 
     init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil, manual: Bool = false) {
-        let metrics = signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta) } ?? "camera starting"
+        // Coarse buckets: the exact numbers change every frame and made the hint line shimmer.
+        let metrics = signal.map { String(format: "sharp %.0f · motion %.0f · scene %.0f",
+                                          ($0.metrics.sharpness / 10).rounded() * 10,
+                                          $0.metrics.motion.rounded(),
+                                          ($0.metrics.sceneDelta / 5).rounded() * 5) } ?? "camera starting"
         switch phase {
         case .learning:
             state = "LEARNING"; meta = "keep the camera view empty for a second"
@@ -180,6 +192,10 @@ struct StabilityRing: View {
             Text(label).font(Theme.mono(11)).tracking(1).foregroundStyle(color)
         }
         .frame(width: 84, height: 84)
+        // The engine already smooths its own numbers; this just stops the last few pixels of the
+        // ring from stepping, so filling and dipping read as one movement.
+        .animation(.easeOut(duration: 0.2), value: progress)
+        .animation(.easeOut(duration: 0.25), value: color)
     }
 }
 
@@ -303,10 +319,14 @@ struct BottomBar: View {
 struct AlignmentGuide: View {
     let color: Color
     let progress: Double
+    /// Set when the picture is letterboxed (a portrait phone in a landscape panel) so the guide
+    /// stays over the video instead of over the black bars. nil when the video fills the panel.
+    var videoAspect: CGFloat?
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let rect = CGRect(x: w * 0.18, y: h * 0.08, width: w * 0.64, height: h * 0.62)
+            let video = Self.videoRect(in: geo.size, aspect: videoAspect)
+            let w = video.width, h = video.height
+            let rect = CGRect(x: video.minX + w * 0.18, y: video.minY + h * 0.08, width: w * 0.64, height: h * 0.62)
             let side = min(rect.width, rect.height)
             let disc = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
             ZStack {
@@ -325,7 +345,20 @@ struct AlignmentGuide: View {
                 Text("LINE UP THE SLEEVE OR LABEL HERE").font(Theme.mono(11)).tracking(2).foregroundStyle(color.opacity(0.8))
                     .position(x: rect.midX, y: rect.minY - 14)
             }
+            .animation(.easeOut(duration: 0.25), value: color)
+            .animation(.easeOut(duration: 0.2), value: progress)
         }
         .allowsHitTesting(false)
+    }
+
+    /// The part of the panel the picture actually covers.
+    static func videoRect(in size: CGSize, aspect: CGFloat?) -> CGRect {
+        guard let aspect, aspect > 0, size.width > 0, size.height > 0 else { return CGRect(origin: .zero, size: size) }
+        if aspect > size.width / size.height {
+            let vh = size.width / aspect
+            return CGRect(x: 0, y: (size.height - vh) / 2, width: size.width, height: vh)
+        }
+        let vw = size.height * aspect
+        return CGRect(x: (size.width - vw) / 2, y: 0, width: vw, height: size.height)
     }
 }

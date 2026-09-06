@@ -69,6 +69,15 @@ struct SettingsView: View {
                             ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
                         }.labelsHidden().frame(width: 240)
                     }
+                    Row("Camera rotation") {
+                        @Bindable var camera = state.camera
+                        Picker("", selection: $camera.rotationOverride) {
+                            Text("Auto").tag(Int?.none)
+                            ForEach([0, 90, 180, 270], id: \.self) { Text("\($0)°").tag(Optional($0)) }
+                        }.labelsHidden().frame(width: 240)
+                    }
+                    Text("An iPhone on Continuity Camera sends a landscape picture whichever way it is held. If the label comes out on its side, set 90° or 270°. Saved per camera.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
                     Row("Steady for") { HStack { Slider(value: $steadySeconds, in: 0.3...1.5).frame(width: 140); Text(String(format: "%.1f s", steadySeconds)).frame(width: 44) } }
                     Row("Sharpness needed") { HStack { Slider(value: $sharpnessMin, in: 20...200).frame(width: 140); Text("\(Int(sharpnessMin))").frame(width: 44) } }
