@@ -52,10 +52,13 @@ final class CameraSession {
     var selectedDeviceID: String? {
         didSet {
             guard oldValue != selectedDeviceID else { return }
-            if let id = selectedDeviceID { UserDefaults.standard.set(id, forKey: Self.deviceIDKey) }
+            // Only a deliberate choice is remembered. Falling back because the preferred camera is
+            // napping — a Continuity iPhone drops off the list constantly — must not overwrite it.
+            if !isFallback, let id = selectedDeviceID { UserDefaults.standard.set(id, forKey: Self.deviceIDKey) }
             if oldValue != nil { restart() }
         }
     }
+    private var isFallback = false
     static let deviceIDKey = "cameraDeviceID"
 
     let box = CaptureBox()
@@ -76,8 +79,8 @@ final class CameraSession {
     /// usually held portrait, and without this its video arrives on its side.
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var rotationObservations: [NSKeyValueObservation] = []
-    /// Display aspect (w/h) when the video does not fill the panel, so the alignment guide can follow
-    /// the letterboxed picture instead of the whole view. nil while the video fills the panel.
+    /// Display aspect (w/h) of the picture as shown, so the alignment guide can sit on the video
+    /// rather than on the whole view.
     private(set) var videoAspect: CGFloat?
 
     /// Fixed rotation for the current camera, in degrees, or nil to follow the device automatically.
@@ -112,6 +115,11 @@ final class CameraSession {
         var cont: AsyncStream<Frame>.Continuation!
         frames = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
         sink = FrameSink(continuation: cont)
+        for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.devicesChanged() }
+            }
+        }
         NotificationCenter.default.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: box.session, queue: .main) { note in
             let err = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
             Log.camera.error("session runtime error \(err?.localizedDescription ?? "?") (\(err?.code ?? 0))")
@@ -128,7 +136,10 @@ final class CameraSession {
         refreshDevices()
         Log.camera.info("devices \(self.devices.map { "\($0.localizedName) [\($0.uniqueID)]" })")
         guard let device = currentDevice() else { status = .noCamera; return }
+        isFallback = true
         selectedDeviceID = device.uniqueID
+        isFallback = false
+        startDeviceWatch()
         configure(device: device)
     }
 
@@ -138,6 +149,44 @@ final class CameraSession {
         discovery = d
         devices = d.devices
     }
+
+    /// A Continuity iPhone comes and goes as it wakes and naps. Keep the list live, fall off a camera
+    /// that disappears, and go back to the one that was actually chosen as soon as it returns.
+    private func devicesChanged() {
+        let before = devices.map(\.uniqueID)
+        refreshDevices()
+        guard before != devices.map(\.uniqueID) else { return }
+        Log.camera.info("devices now \(self.devices.map(\.localizedName))")
+        let preferred = UserDefaults.standard.string(forKey: Self.deviceIDKey)
+        if let preferred, preferred != selectedDeviceID, devices.contains(where: { $0.uniqueID == preferred }) {
+            Log.camera.info("preferred camera is back — switching to it")
+            selectedDeviceID = preferred
+            return
+        }
+        if let id = selectedDeviceID, !devices.contains(where: { $0.uniqueID == id }) {
+            guard let fallback = devices.first else { status = .noCamera; return }
+            Log.camera.info("selected camera went away — falling back to \(fallback.localizedName)")
+            isFallback = true
+            selectedDeviceID = fallback.uniqueID
+            isFallback = false
+        }
+    }
+
+    /// Backstop: a Continuity Camera does not always announce itself, so while the chosen camera is
+    /// missing, keep looking for it.
+    private func startDeviceWatch() {
+        guard deviceWatch == nil else { return }
+        deviceWatch = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard let self else { return }
+                let preferred = UserDefaults.standard.string(forKey: Self.deviceIDKey)
+                let missing = preferred.map { id in !devices.contains { $0.uniqueID == id } } ?? false
+                if missing || devices.isEmpty { devicesChanged() }
+            }
+        }
+    }
+    private var deviceWatch: Task<Void, Never>?
 
     private func currentDevice() -> AVCaptureDevice? {
         if let id = selectedDeviceID, let d = devices.first(where: { $0.uniqueID == id }) { return d }
@@ -270,8 +319,9 @@ final class CameraSession {
         applyRotation()
     }
 
-    /// Rotates preview and frames so the picture is upright however the phone is held, and lets a
-    /// portrait picture show whole rather than being cropped to a strip by aspect-fill.
+    /// Rotates preview and frames so the picture is upright however the phone is held. The preview
+    /// fits rather than fills: the analyser crops its region from the buffer, so anything cropped off
+    /// the panel would be judged but never seen, and the guide would sit somewhere else entirely.
     private func applyRotation() {
         guard let coordinator = rotationCoordinator else { return }
         // A fixed override wins: Continuity Camera does not always report which way the phone is held.
@@ -282,8 +332,8 @@ final class CameraSession {
         let native = restartDevice?.activeFormat.formatDescription.dimensions
         let w = CGFloat(native?.width ?? 16), h = CGFloat(native?.height ?? 9)
         let shown = quarterTurned ? h / w : w / h
-        previewLayer?.videoGravity = shown < 1 ? .resizeAspect : .resizeAspectFill
-        videoAspect = shown < 1 ? shown : nil
+        previewLayer?.videoGravity = .resizeAspect
+        videoAspect = shown
         if lastRotation?.preview != preview || lastRotation?.capture != capture {
             lastRotation = (preview: preview, capture: capture)
             Log.camera.info("rotation preview \(Int(preview))° capture \(Int(capture))° (\(manual == nil ? "auto" : "manual")) · showing \(String(format: "%.2f", shown)):1")
@@ -330,6 +380,7 @@ final class CameraSession {
     func stop() {
         let box = self.box
         generation &+= 1
+        deviceWatch?.cancel(); deviceWatch = nil
         rotationObservations.removeAll()
         rotationCoordinator = nil
         box.queue.async { if box.session.isRunning { box.session.stopRunning() } }
