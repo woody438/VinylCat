@@ -26,7 +26,9 @@ Run `--ocr-eval` before and after any change to `LocalReader` / `CatalogueNumber
 numbers. 2026-09-06, after the zoom pass (92 photos): catno-in-candidates 91% (was 84%, 75% before that), exact 86%,
 first candidate usable 49% (was 39%), 0.65s/photo (was 0.36s; the zoom pass adds ~3.6 magnified crops per photo).
 With `--model`: the model's catalogue number is usable first time on 88% of photos (90% counting `otherNumbers`),
-$0.0009/photo, 4.3s/photo. The eval prints `rank N … ahead: …` for every photo where the right token isn't first —
+$0.0009/photo, 4.3s/photo. A/B with VINYLCAT_MODEL_PLAIN=1 (single 1024px frame, no close-ups): 89% / 92%, $0.0006 —
+the close-ups do not help the model, which reads the small print fine already; they only help Vision. The model is the
+stronger path for the catalogue number (88% vs OCR's 49% first-time), so when OCR and model disagree, trust the model. The eval prints `rank N … ahead: …` for every photo where the right token isn't first —
 that list is where to look next. What's left there: album numbers quoted on singles when "album" is on another OCR
 line, RCA/Capitol LP references, misread digits on worn print, and two label photos with nothing legible.
 
