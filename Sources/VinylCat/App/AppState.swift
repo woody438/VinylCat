@@ -35,6 +35,22 @@ final class AppState {
         if let f = UserDefaults.standard.string(forKey: "defaultFormat"), let v = VinylFormat(rawValue: f) { format = v }
     }
 
+    /// Whenever the camera changes, grab a diagnostic frame a moment later.
+    private var lastCameraStatus = ""
+    func noteCameraStatus() {
+        let s = String(describing: camera.status)
+        if s != lastCameraStatus {
+            lastCameraStatus = s
+            if case .running = camera.status {
+                Task {
+                    let mean = await scan.debugFrame()
+                    // Black or silent stream (typical of a Continuity Camera that hasn't started) → try the next configuration.
+                    if mean < 3, camera.escalate() { lastCameraStatus = "" }
+                }
+            }
+        }
+    }
+
     /// Camera, capture engine and voice. Idempotent; the wizard calls it when setup finishes.
     func startServices() {
         guard !servicesStarted else { return }

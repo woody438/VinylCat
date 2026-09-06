@@ -22,6 +22,7 @@ struct PreviewPane: View {
     var body: some View {
         ZStack {
             Theme.panel
+            let _ = state.noteCameraStatus()
             switch state.camera.status {
             case .running:
                 CameraPreviewView(box: state.camera.box)

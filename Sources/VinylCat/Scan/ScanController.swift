@@ -87,6 +87,8 @@ final class ScanController {
 
     func forceCapture() { Task { await engine.forceCapture() } }
     func setAutoCapture(_ on: Bool) { Task { await engine.setAutoCapture(on) } }
+    /// Camera diagnostics: log what the next frames look like and keep one as a JPEG.
+    func debugFrame() async -> Int { await engine.saveDebugFrame() }
 
     /// Reads the capture tunables from UserDefaults (Settings sliders) and pushes them to the engine.
     func applyTuning() {

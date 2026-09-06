@@ -54,6 +54,22 @@ actor CaptureEngine {
     private var enabled = true
     private var forceNext = false
     private var latestFrame: Frame?
+    private var debugSaveAt: Int?
+    private var frameCount = 0
+    private var debugCont: CheckedContinuation<Int, Never>?
+    /// Saves the frame that arrives `frames` from now as a JPEG and returns its mean brightness (0 = black).
+    /// Returns -1 if no frame arrives within 4 s (the device is not delivering at all).
+    func saveDebugFrame(after frames: Int = 20) async -> Int {
+        debugSaveAt = frameCount + frames
+        return await withCheckedContinuation { cont in
+            debugCont = cont
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                await self?.timeoutDebug()
+            }
+        }
+    }
+    private func timeoutDebug() { if let c = debugCont { debugCont = nil; debugSaveAt = nil; c.resume(returning: -1); Log.capture.info("debug frame: no frames arrived in 4 s") } }
     private var baselineFrames = 0
 
     private let signalCont: AsyncStream<CaptureSignal>.Continuation
@@ -94,8 +110,19 @@ actor CaptureEngine {
     }
 
     private func process(_ frame: Frame) {
+        frameCount += 1
         let grey = analyzer.greyscale(frame.pixelBuffer)
         let m = analyzer.analyze(grey)
+        if let at = debugSaveAt, frameCount >= at {
+            debugSaveAt = nil
+            let mean = grey.reduce(0) { $0 + Int($1) } / max(1, grey.count)
+            let ci = CIImage(cvPixelBuffer: frame.pixelBuffer)
+            if let cg = ciContext.createCGImage(ci, from: ci.extent) {
+                let url = try? PhotoStore(root: PhotoStore.shared.root.deletingLastPathComponent()).save(cg, name: "debug-frame", maxSide: 800)
+                Log.capture.info("debug frame \(CVPixelBufferGetWidth(frame.pixelBuffer))x\(CVPixelBufferGetHeight(frame.pixelBuffer)) mean \(mean) sharp \(Int(m.sharpness)) → \(url?.lastPathComponent ?? "not saved")")
+            }
+            if let c = debugCont { debugCont = nil; c.resume(returning: mean) }
+        }
 
         // Learn the empty scene from the first ~1 s of still frames after start / relearn.
         if !analyzer.hasBaseline() {

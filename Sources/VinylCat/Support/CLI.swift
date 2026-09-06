@@ -20,6 +20,7 @@ enum CLI {
         case "--make-test-images": return makeTestImages(dir: rest.first ?? "test-images")
         case "--pipeline-test": return runBlocking { await pipelineTest(paths: rest) }
         case "--scenario": return runBlocking { await scenario(dir: rest.first ?? "test-images") }
+        case "--camera-test": return runBlocking { await cameraTest(name: rest.first ?? "iPhone", seconds: Double(rest.dropFirst().first ?? "8") ?? 8, out: rest.dropFirst(2).first ?? "camera-test") }
         case "--model-test": return runBlocking {
             guard let img = SetupWizard.testLabelImage() else { return 1 }
             let provider = Identifier().provider
@@ -202,6 +203,38 @@ enum CLI {
 }
 
 extension CLI {
+    /// Opens a camera by (partial) name, reports its state, streams for a few seconds and saves a frame.
+    static func cameraTest(name: String, seconds: Double, out: String) async -> Int32 {
+        let d = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .continuityCamera, .external], mediaType: .video, position: .unspecified)
+        guard let dev = d.devices.first(where: { $0.localizedName.localizedCaseInsensitiveContains(name) }) else {
+            print("no camera matching “\(name)”: \(d.devices.map(\.localizedName))"); return 1
+        }
+        print("device      \(dev.localizedName) · type \(dev.deviceType.rawValue) · connected \(dev.isConnected) · suspended \(dev.isSuspended) · inUse \(dev.isInUseByAnotherApplication)")
+        print("format      \(dev.activeFormat.formatDescription) · \(dev.formats.count) formats · fps \(dev.activeVideoMinFrameDuration.timescale)/\(dev.activeVideoMinFrameDuration.value)")
+        let cam = CameraSession()
+        cam.selectedDeviceID = dev.uniqueID
+        await cam.start()
+        let engine = FrameAnalyzer()
+        var n = 0, saved = false
+        let deadline = Date().addingTimeInterval(seconds)
+        let outURL = URL(fileURLWithPath: out)
+        try? FileManager.default.createDirectory(at: outURL, withIntermediateDirectories: true)
+        for await frame in cam.frames {
+            n += 1
+            let g = engine.greyscale(frame.pixelBuffer)
+            let m = engine.analyze(g)
+            let mean = g.reduce(0) { $0 + Int($1) } / max(1, g.count)
+            if n % 10 == 1 { print(String(format: "frame %3d  %dx%d  mean %3d  sharp %.0f  motion %.1f", n, CVPixelBufferGetWidth(frame.pixelBuffer), CVPixelBufferGetHeight(frame.pixelBuffer), mean, m.sharpness, m.motion)) }
+            if !saved, n >= 20, let ci = Optional(CIImage(cvPixelBuffer: frame.pixelBuffer)), let cg = CIContext().createCGImage(ci, from: ci.extent) {
+                if let u = try? PhotoStore(root: outURL).save(cg, name: dev.localizedName.replacingOccurrences(of: " ", with: "-"), maxSide: 800) { print("saved       \(u.path)"); saved = true }
+            }
+            if Date() > deadline { break }
+        }
+        print("status      \(cam.status) · \(n) frames in \(Int(seconds)) s")
+        cam.stop()
+        return n > 0 ? 0 : 1
+    }
+
     /// End-to-end run of the real ScanController against a temp store with synthetic stills (live Discogs, no model).
     static func scenario(dir: String) async -> Int32 {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-scenario-\(UUID().uuidString)")

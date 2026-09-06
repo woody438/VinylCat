@@ -48,6 +48,19 @@ final class CameraSession {
     private let sink: FrameSink
     private let output = AVCaptureVideoDataOutput()
     private var discovery: AVCaptureDevice.DiscoverySession?
+    /// Configuration attempt for the current device: 0 = default, 1 = explicit 1080p format + no pixel-format request,
+    /// 2 = preview only (no data output). Escalated automatically when the stream is black.
+    private(set) var attempt = 0
+    private var restartDevice: AVCaptureDevice?
+
+    /// Called when the frames after a switch are black; tries the next configuration.
+    func escalate() -> Bool {
+        guard attempt < 2, let device = restartDevice else { return false }
+        attempt += 1
+        Log.camera.info("black stream → retry attempt \(self.attempt)")
+        configure(device: device)
+        return true
+    }
 
     init() {
         var cont: AsyncStream<Frame>.Continuation!
@@ -84,6 +97,7 @@ final class CameraSession {
     private func restart() {
         refreshDevices()
         guard let device = currentDevice() else { status = .noCamera; return }
+        attempt = 0
         configure(device: device)
     }
 
@@ -92,23 +106,41 @@ final class CameraSession {
         let output = self.output
         let sink = self.sink
         let name = device.localizedName
+        restartDevice = device
+        let attempt = self.attempt
+        Log.camera.info("switching to \(name) · type \(device.deviceType.rawValue) · connected \(device.isConnected) · suspended \(device.isSuspended) · inUseElsewhere \(device.isInUseByAnotherApplication) · format \(device.activeFormat.formatDescription.dimensions.width)x\(device.activeFormat.formatDescription.dimensions.height) · \(device.formats.count) formats")
         box.queue.async { [weak self] in
             let session = box.session
             if session.isRunning { session.stopRunning() }
             session.beginConfiguration()
             for input in session.inputs { session.removeInput(input) }
             for out in session.outputs { session.removeOutput(out) }
-            if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
             var failure: Error?
             do {
                 let input = try AVCaptureDeviceInput(device: device)
                 guard session.canAddInput(input) else { throw CameraError.cannotAddInput }
+                if attempt == 0 {
+                    if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
+                } else {
+                    // Explicit format: pick the largest ≤1080p format the device offers and lock it in.
+                    if session.canSetSessionPreset(.hd1920x1080) { session.sessionPreset = .hd1920x1080 }
+                    let candidates = device.formats.filter { $0.formatDescription.dimensions.height <= 1080 }
+                    if let best = candidates.max(by: { $0.formatDescription.dimensions.width < $1.formatDescription.dimensions.width }) {
+                        try device.lockForConfiguration()
+                        device.activeFormat = best
+                        if let r = best.videoSupportedFrameRateRanges.first { device.activeVideoMinFrameDuration = r.minFrameDuration; device.activeVideoMaxFrameDuration = r.minFrameDuration }
+                        device.unlockForConfiguration()
+                        Log.camera.info("attempt \(attempt): format \(best.formatDescription.dimensions.width)x\(best.formatDescription.dimensions.height) \(best.formatDescription.mediaSubType)")
+                    }
+                }
                 session.addInput(input)
-                output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-                output.alwaysDiscardsLateVideoFrames = true
-                output.setSampleBufferDelegate(sink, queue: box.queue)
-                guard session.canAddOutput(output) else { throw CameraError.cannotAddOutput }
-                session.addOutput(output)
+                if attempt < 2 {
+                    output.videoSettings = attempt == 0 ? [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA] : nil
+                    output.alwaysDiscardsLateVideoFrames = true
+                    output.setSampleBufferDelegate(sink, queue: box.queue)
+                    guard session.canAddOutput(output) else { throw CameraError.cannotAddOutput }
+                    session.addOutput(output)
+                }
             } catch { failure = error }
             // Commit BEFORE starting: startRunning() inside begin/commit throws an ObjC exception.
             session.commitConfiguration()
