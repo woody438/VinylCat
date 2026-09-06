@@ -75,6 +75,8 @@ struct Placeholder: View {
 
 struct TopBar: View {
     @Environment(AppState.self) private var state
+    /// Clicking VOICE when it can't start used to look like a dead control; this says why.
+    @State private var showVoiceProblem = false
 
     var body: some View {
         @Bindable var state = state
@@ -97,38 +99,54 @@ struct TopBar: View {
             }
             Spacer()
             // The three top-bar controls share one shape so they read as one set.
-            SwitchChip(title: "CAPTURE", state: state.autoCapture ? "AUTO" : "MANUAL", stateWidth: 62,
-                       isOn: state.autoCapture, tint: state.autoCapture ? Theme.green : Theme.amber,
-                       help: state.autoCapture ? "Auto-capture: fires when the record is held steady. Space bar still forces a shot."
-                                               : "Manual: nothing fires on its own — say “capture” or press space.") {
-                state.autoCapture.toggle()
+            // Fixed size: the cluster must never compress into itself — overlapping controls were
+            // eating the clicks meant for the voice switch.
+            HStack(spacing: 12) {
+                SwitchChip(title: "CAPTURE", state: state.autoCapture ? "AUTO" : "MANUAL", stateWidth: 74,
+                           isOn: state.autoCapture, tint: state.autoCapture ? Theme.green : Theme.amber,
+                           help: state.autoCapture ? "Auto-capture: fires when the record is held steady. Space bar still forces a shot."
+                                                   : "Manual: nothing fires on its own — say “capture” or press space.") {
+                    state.autoCapture.toggle()
+                }
+                SwitchChip(title: "VOICE", state: state.voice.status == .listening ? "ON" : "OFF", stateWidth: 40,
+                           isOn: state.voice.status == .listening,
+                           tint: state.voice.status == .listening ? Theme.green : (state.voice.problem == nil ? Theme.muted : Theme.amber),
+                           warning: state.voice.status != .listening && state.voice.problem != nil,
+                           help: state.voice.problem ?? (state.voice.status == .listening ? "Listening — click to mute. Last heard: \(state.voice.lastHeard)" : "Click to start listening")) {
+                    if state.voice.status == .listening {
+                        state.voice.stop()
+                    } else {
+                        Task {
+                            await state.voice.retry()
+                            showVoiceProblem = state.voice.status != .listening && state.voice.problem != nil
+                        }
+                    }
+                }
+                .popover(isPresented: $showVoiceProblem, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("VOICE WON'T START").font(Theme.mono(11)).tracking(1.5).foregroundStyle(Theme.amber)
+                        Text(state.voice.problem ?? "").font(Theme.mono(12)).foregroundStyle(Theme.text)
+                            .frame(maxWidth: 320, alignment: .leading)
+                    }
+                    .padding(14).background(Theme.panel)
+                }
+                // A real Picker rather than a styled Menu: AppKit draws its own indicator over a
+                // custom menu label and drops the selected value, which is what went wrong here.
+                HStack(spacing: 8) {
+                    Text("FORMAT").font(Theme.mono(11)).tracking(1.5).foregroundStyle(Theme.muted)
+                    Picker("", selection: $state.format) {
+                        ForEach(VinylFormat.allCases) { Text($0.rawValue).font(Theme.mono(12)).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).fixedSize()
+                    .font(Theme.mono(12)).tint(Theme.text)
+                }
+                .padding(.leading, 12).padding(.trailing, 6).frame(height: 30)
+                .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+                .help("What you are cataloguing — narrows the Discogs search")
             }
+            .fixedSize()
             // Space bar = capture, from anywhere in the window.
             Button("") { state.scan.forceCapture() }.keyboardShortcut(.space, modifiers: []).hidden().frame(width: 0, height: 0)
-
-            SwitchChip(title: "VOICE", state: state.voice.status == .listening ? "ON" : "OFF", stateWidth: 34,
-                       isOn: state.voice.status == .listening,
-                       tint: state.voice.status == .listening ? Theme.green : (state.voice.problem == nil ? Theme.muted : Theme.amber),
-                       warning: state.voice.status != .listening && state.voice.problem != nil,
-                       help: state.voice.problem ?? (state.voice.status == .listening ? "Listening — click to mute. Last heard: \(state.voice.lastHeard)" : "Click to start listening")) {
-                if state.voice.status == .listening { state.voice.stop() } else { Task { await state.voice.retry() } }
-            }
-
-            Menu {
-                ForEach(VinylFormat.allCases) { f in Button(f.rawValue) { state.format = f } }
-            } label: {
-                HStack(spacing: 10) {
-                    Text("FORMAT").font(Theme.mono(11)).tracking(1.5).foregroundStyle(Theme.muted)
-                    Text(state.format.rawValue).font(Theme.mono(12)).tracking(1.5).foregroundStyle(Theme.text)
-                        .frame(width: 96, alignment: .leading)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.muted)
-                }
-                .padding(.horizontal, 12).frame(height: 30)
-                .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
-                .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).buttonStyle(.plain).fixedSize()
-            .help("What you are cataloguing — narrows the Discogs search")
         }
         .padding(.horizontal, 24)
         .frame(height: 56)
@@ -170,13 +188,12 @@ struct SwitchChip: View {
                     .overlay(alignment: isOn ? .trailing : .leading) {
                         Circle().fill(isOn ? tint : Theme.muted).frame(width: 14, height: 14).padding(2)
                     }
-                HStack(spacing: 4) {
-                    Text(state).font(Theme.mono(12)).tracking(1.5).foregroundStyle(tint)
-                    if warning { Image(systemName: "exclamationmark.circle").font(.system(size: 10)).foregroundStyle(Theme.amber) }
-                }
-                .frame(width: stateWidth, alignment: .leading)
+                Text(state).font(Theme.mono(12)).tracking(1.5).foregroundStyle(tint)
+                    .lineLimit(1).fixedSize()
+                    .frame(width: stateWidth, alignment: .leading)
+                if warning { Image(systemName: "exclamationmark.circle").font(.system(size: 11)).foregroundStyle(Theme.amber) }
             }
-            .padding(.horizontal, 12).frame(height: 30)
+            .padding(.horizontal, 12).frame(height: 30).fixedSize()
             .overlay(Rectangle().stroke(isOn ? tint.opacity(0.6) : Theme.line, lineWidth: 1))
             .contentShape(Rectangle())
             .animation(.easeOut(duration: 0.15), value: isOn)
