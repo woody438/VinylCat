@@ -201,11 +201,19 @@ actor CaptureEngine {
         absentFrames = 0
 
         // A record sliding through looks "still" frame-to-frame, so compare against the picture the
-        // hold started from, and only believe a change that lasts more than one frame.
+        // hold started from, and only believe a change that lasts more than one frame. Drifting
+        // costs half the ring and moves the reference on, not a restart: a hand-held phone easing
+        // a sleeve into place used to dump the whole hold every few frames (covers took 8–14 s and
+        // most were forced), while a record that keeps sliding still never fills it. Only a change
+        // big enough to be a different record starts over.
         if let ref = steadyReference, holding {
-            if analyzer.drift(ref, grey) > tuning.contentDriftMax {
+            let d = analyzer.drift(ref, grey)
+            if d > tuning.contentDriftMax {
                 driftFrames += 1
-                if driftFrames >= 3 { resetHold() }
+                if driftFrames >= 3 {
+                    if d > tuning.contentDriftMax * 2 { resetHold() }
+                    else { steadyCredit /= 2; goodFrames = 0; steadyReference = grey; driftFrames = 0 }
+                }
             } else {
                 driftFrames = 0
             }

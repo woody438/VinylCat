@@ -87,9 +87,20 @@ final class FrameAnalyzer {
                             hash: hash)
     }
 
-    /// Mean absolute difference between two thumbnails — used to tell "the same thing is still
-    /// being held up" from "that is a different picture now".
-    func drift(_ a: [UInt8], _ b: [UInt8]) -> Double { meanAbsDiff(a, b) }
+    /// How far the picture has moved on from `a`, ignoring overall brightness — used to tell "the
+    /// same thing is still being held up" from "that is a different picture now". A phone's
+    /// auto-exposure settling on a bright sleeve shifts every pixel together over the first second;
+    /// that is not the record moving, so the two means are equalised before comparing.
+    func drift(_ a: [UInt8], _ b: [UInt8]) -> Double {
+        let n = min(a.count, b.count)
+        guard n > 0 else { return 0 }
+        var sa = 0, sb = 0
+        for i in 0..<n { sa += Int(a[i]); sb += Int(b[i]) }
+        let offset = Double(sb - sa) / Double(n)
+        var total = 0.0
+        for i in 0..<n { total += abs(Double(Int(b[i]) - Int(a[i])) - offset) }
+        return total / Double(n)
+    }
 
     private func median(_ window: inout [Double], _ value: Double) -> Double {
         window.append(value)

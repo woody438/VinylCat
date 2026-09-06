@@ -90,7 +90,7 @@ enum SelfTest {
         var series: [Double] = []
         let watcher = Task { for await s in engine.signals { series.append(s.steadyProgress) } }
 
-        func frame(_ pattern: Int, shift: Int = 0) -> Frame {
+        func frame(_ pattern: Int, shift: Int = 0, gain: Int = 0) -> Frame {
             var pb: CVPixelBuffer?
             CVPixelBufferCreate(nil, 320, 240, kCVPixelFormatType_32BGRA, nil, &pb)
             CVPixelBufferLockBaseAddress(pb!, [])
@@ -98,16 +98,19 @@ enum SelfTest {
             let stride = CVPixelBufferGetBytesPerRow(pb!)
             for y in 0..<240 { for x in 0..<320 {
                 let p = base + y * stride + x * 4
-                var v: UInt8 = 90
+                var v = 90
                 if pattern == 1 { v = (((x + shift) / 8 + y / 8) % 2 == 0) ? 240 : 20 }
-                p[0] = v; p[1] = v; p[2] = v; p[3] = 255
+                // A softer "sleeve": broad stripes, so a slow slide reads as still frame-to-frame.
+                if pattern == 2 { v = 120 + (((x + shift) / 40 + y / 30) % 2 == 0 ? 60 : -60) }
+                let u = UInt8(clamping: v + gain)
+                p[0] = u; p[1] = u; p[2] = u; p[3] = 255
             } }
             CVPixelBufferUnlockBaseAddress(pb!, [])
             return Frame(pixelBuffer: pb!, timestamp: .zero)
         }
         // Pump between frames so the signal watcher sees each one (the stream keeps only the newest).
-        func feed(_ pattern: Int, shift: Int = 0, frames n: Int) {
-            for _ in 0..<n { cont.yield(frame(pattern, shift: shift)); RunLoop.main.run(until: Date().addingTimeInterval(0.035)) }
+        func feed(_ pattern: Int, shift: Int = 0, gain: Int = 0, frames n: Int) {
+            for _ in 0..<n { cont.yield(frame(pattern, shift: shift, gain: gain)); RunLoop.main.run(until: Date().addingTimeInterval(0.035)) }
         }
 
         feed(0, frames: 10)                       // learn the empty scene
@@ -119,6 +122,68 @@ enum SelfTest {
         let recovered = series.last ?? 0
         cont.finish(); runTask.cancel(); watcher.cancel()
         return (beforeWobble > 0.1, afterWobble > 0 && recovered > beforeWobble, afterWobble)
+    }
+
+    /// The hold compares against the picture it started from. Easing a sleeve into place, or the
+    /// phone's exposure settling on it, must dent the ring rather than restart it; a record that
+    /// keeps sliding through must never fill it.
+    private static func runDriftScenario() -> (exposureHeld: Bool, exposureDip: Double, nudgeDented: Bool, nudgeBefore: Double, nudgeLow: Double, slideNeverFired: Bool) {
+        var tuning = CaptureTuning(); tuning.steadySeconds = 1.5   // long enough that nothing fires mid-test
+        let engine = CaptureEngine(tuning: tuning)
+        var cont: AsyncStream<Frame>.Continuation!
+        let stream = AsyncStream<Frame>(bufferingPolicy: .unbounded) { cont = $0 }
+        let runTask = Task { await engine.run(frames: stream) }
+        var series: [Double] = []
+        var captures = 0
+        let watcher = Task { for await s in engine.signals { series.append(s.steadyProgress) } }
+        let collector = Task { for await _ in engine.stills { captures += 1 } }
+
+        func frame(_ pattern: Int, shift: Int = 0, gain: Int = 0) -> Frame {
+            var pb: CVPixelBuffer?
+            CVPixelBufferCreate(nil, 320, 240, kCVPixelFormatType_32BGRA, nil, &pb)
+            CVPixelBufferLockBaseAddress(pb!, [])
+            let base = CVPixelBufferGetBaseAddress(pb!)!.assumingMemoryBound(to: UInt8.self)
+            let stride = CVPixelBufferGetBytesPerRow(pb!)
+            for y in 0..<240 { for x in 0..<320 {
+                let p = base + y * stride + x * 4
+                var v = 90
+                if pattern == 1 { v = (((x + shift) / 8 + y / 8) % 2 == 0) ? 240 : 20 }
+                if pattern == 2 { v = 120 + (((x + shift) / 40 + y / 30) % 2 == 0 ? 60 : -60) }
+                let u = UInt8(clamping: v + gain)
+                p[0] = u; p[1] = u; p[2] = u; p[3] = 255
+            } }
+            CVPixelBufferUnlockBaseAddress(pb!, [])
+            return Frame(pixelBuffer: pb!, timestamp: .zero)
+        }
+        func feed(_ pattern: Int, shift: Int = 0, gain: Int = 0, frames n: Int) {
+            for _ in 0..<n { cont.yield(frame(pattern, shift: shift, gain: gain)); RunLoop.main.run(until: Date().addingTimeInterval(0.035)) }
+        }
+        func settle() { Task { await engine.setHold(true) }; RunLoop.main.run(until: Date().addingTimeInterval(0.1)); Task { await engine.setHold(false) }; RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+
+        feed(0, frames: 10)                                            // learn the empty scene
+        // 1. Exposure settling: the same sleeve, every pixel brightening together by ~70 levels
+        //    over a second. The ring must keep climbing — the biggest frame-to-frame drop tells.
+        var ramp: [Double] = []
+        for i in 0..<24 { feed(2, gain: i * 3, frames: 1); ramp.append(series.last ?? 0) }
+        let dip = zip(ramp, ramp.dropFirst()).map { $1 - $0 }.min() ?? 0
+        let exposureHeld = (ramp.max() ?? 0) > 0.5 && dip > -0.15
+        settle(); captures = 0; series.removeAll()
+
+        // 2. A nudge: held, then eased 6 px sideways and held there. Half a ring, not none.
+        feed(0, frames: 6); feed(2, frames: 12)
+        let beforeNudge = series.last ?? 0
+        feed(2, shift: 6, frames: 5)
+        let low = series.suffix(5).min() ?? 0
+        let nudgeDented = beforeNudge > 0.3 && low > beforeNudge * 0.4
+        settle(); captures = 0; series.removeAll()
+
+        // 3. Sliding through: never steady enough to fire, however long it goes on.
+        feed(0, frames: 6)
+        for i in 0..<45 { feed(2, shift: i * 3, frames: 1) }
+        let slideNeverFired = captures == 0
+
+        cont.finish(); runTask.cancel(); watcher.cancel(); collector.cancel()
+        return (exposureHeld, dip, nudgeDented, beforeNudge, low, slideNeverFired)
     }
 
     static func run() -> Int32 {
@@ -219,6 +284,10 @@ enum SelfTest {
         let steady = runSteadinessScenario()
         check(steady.rose, "the ring fills while a record is held")
         check(steady.heldThroughWobble, "one bad frame dents the ring (\(String(format: "%.2f", steady.lowest))) instead of resetting it")
+        let drift = runDriftScenario()
+        check(drift.exposureHeld, "exposure settling on a sleeve does not restart the hold (worst dip \(String(format: "%.2f", drift.exposureDip)))")
+        check(drift.nudgeDented, "easing the sleeve sideways costs half the ring, not all of it (\(String(format: "%.2f → %.2f", drift.nudgeBefore, drift.nudgeLow)))")
+        check(drift.slideNeverFired, "a record sliding through never fires")
 
         print("\(passed) passed, \(failures) failed")
         return failures == 0 ? 0 : 1
