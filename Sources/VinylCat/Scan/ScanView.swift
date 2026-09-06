@@ -111,7 +111,10 @@ struct HUDOverlay: View {
                         ForEach(Array(cands.enumerated()), id: \.offset) { i, c in
                             HStack(alignment: .firstTextBaseline, spacing: 18) {
                                 Text("\(i + 1)").font(Theme.display(44)).foregroundStyle(Theme.orange).frame(width: 40, alignment: .leading)
-                                Text(c).font(Theme.display(30)).lineLimit(1).minimumScaleFactor(0.6)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(c.title).font(Theme.display(30)).lineLimit(1).minimumScaleFactor(0.6)
+                                    Text(c.detail).font(Theme.mono(14)).foregroundStyle(Theme.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                                }
                             }
                         }
                     }

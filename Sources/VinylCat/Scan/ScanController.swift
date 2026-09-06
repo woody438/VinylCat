@@ -12,12 +12,18 @@ enum ScanPhase: Equatable {
     case reading(step: String)
     case searching
     case matched(title: String, detail: String, meta: String)
-    case ambiguous(candidates: [String])
+    case ambiguous(candidates: [ScanChoice])
     case needLabel(guess: String)
     case retry(guess: String, detail: String)
     case awaitingShot(kind: String, index: Int, total: Int, header: String)
     case notFound(guess: String, detail: String)
     case duplicate(title: String)
+}
+
+/// One row of the "N MATCHES" list: who/what it is, then the pressing details that tell the rows apart.
+struct ScanChoice: Equatable, Sendable {
+    var title: String
+    var detail: String
 }
 
 struct SessionItem: Identifiable, Sendable {
@@ -202,7 +208,7 @@ final class ScanController {
                 await finalize(candidate: c, outcome: outcome, photo: fileName, thumb: thumb, allowDuplicate: false)
             case .ambiguous(let cands):
                 ambiguity = (outcome, cands, fileName, thumb)
-                phase = .ambiguous(candidates: cands.map(\.summary))
+                phase = .ambiguous(candidates: cands.map { ScanChoice(title: $0.headline, detail: $0.summary) })
                 // Nothing else gets scanned until this is answered: the list used to vanish the
                 // moment the next frame armed, taking the shot with it.
                 await engine.setHold(true)

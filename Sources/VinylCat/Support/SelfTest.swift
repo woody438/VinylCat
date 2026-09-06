@@ -136,6 +136,8 @@ enum SelfTest {
         check(ranked.first?.id == 2, "exact catno ranks first")
         check((ranked.first?.score ?? 0) >= 0.85, "exact catno + title + format auto-accepts (\(ranked.first?.score ?? 0))")
         check(ranked.last?.id == 3, "wrong format ranks last")
+        check(ranked.first?.headline == "THE JAM — GOING UNDERGROUND", "headline is artist — title (\(ranked.first?.headline ?? ""))")
+        check(Candidate(result: hit(9, "New Order (2) - Blue Monday", catno: "FAC 73"), score: 0, reasons: []).headline == "NEW ORDER — BLUE MONDAY", "headline drops Discogs disambiguation numbers")
         check(CandidateRanker.similarity("The Jam - Going Underground", "the jam – going underground") > 0.95, "similarity ignores case/punctuation")
         check(CandidateRanker.similarity("Blondie", "Kraftwerk") < 0.6, "dissimilar strings score low")
 

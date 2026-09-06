@@ -12,6 +12,12 @@ struct Candidate: Identifiable, Sendable {
         [result.label?.first, result.catno, result.country, result.year].map { ($0 ?? "").uppercased() }.joined(separator: "|")
     }
     var sameMaster: (Candidate) -> Bool { { other in self.result.master_id != nil && self.result.master_id == other.result.master_id } }
+    /// "NEW ORDER — BLUE MONDAY", from Discogs' "New Order (2) - Blue Monday" search title.
+    var headline: String {
+        let t = result.title.replacingOccurrences(of: #" \(\d+\)"#, with: "", options: .regularExpression)
+        let parts = t.components(separatedBy: " - ").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return parts.joined(separator: " — ").uppercased()
+    }
     /// "POLYDOR POSP 113 · UK · 1980 · 7\""
     var summary: String {
         var parts: [String] = []

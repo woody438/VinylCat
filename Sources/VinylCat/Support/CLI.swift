@@ -87,7 +87,11 @@ enum CLI {
             ("scan-1-armed", .armed(reason: "empty")),
             ("scan-2-reading", .reading(step: "GPT-5.6 Luna reading")),
             ("scan-3-matched", .matched(title: "THE JAM — GOING UNDERGROUND", detail: "1980 · 7\" · POLYDOR POSP 113 · UK", meta: "0.94 · r2413807 · catno title format")),
-            ("scan-4-ambiguous", .ambiguous(candidates: ["POLYDOR POSP 113 · UK · 1980 · 7\"", "POLYDOR 2059 227 · GERMANY · 1980 · 7\"", "POLYDOR POSPX 113 · UK · 1980 · 12\""])),
+            ("scan-4-ambiguous", .ambiguous(candidates: [
+                ScanChoice(title: "THE JAM — GOING UNDERGROUND", detail: "POLYDOR POSP 113 · UK · 1980 · 7\""),
+                ScanChoice(title: "THE JAM — GOING UNDERGROUND", detail: "POLYDOR 2059 227 · GERMANY · 1980 · 7\""),
+                ScanChoice(title: "THE JAM — GOING UNDERGROUND / DREAMS OF CHILDREN", detail: "POLYDOR POSPX 113 · UK · 1980 · 12\""),
+            ])),
             ("scan-5-needlabel", .needLabel(guess: "THE FALL — ?")),
             ("scan-5b-retry", .retry(guess: "THE FALL — ?", detail: "Read: ROUGH TRADE · RT 0?? · TOTALE'S TURNS")),
             ("scan-6-awaiting", .awaitingShot(kind: "DISC 2 · SIDE C", index: 5, total: 6, header: "The Clash — London Calling · 2×LP")),
