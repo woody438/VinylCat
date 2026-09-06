@@ -14,7 +14,7 @@ enum VoiceCommand: String, CaseIterable, Sendable {
         (.label, ["label", "show label", "the label"]),
         (.skip, ["skip", "skip it", "next"]),
         (.done, ["done", "finished", "that's it"]),
-        (.undo, ["undo", "retake", "delete that"]),
+        (.undo, ["undo", "undo it", "undo that", "retake", "delete that", "go back", "scrap that"]),
         (.review, ["review", "review later", "park it", "later"]),
         (.again, ["again", "try again", "retry"]),
         (.one, ["one", "number one", "first", "1"]),
@@ -58,8 +58,13 @@ final class SpeechCommands {
     private(set) var status: Status = .idle { didSet { Log.voice.info("status \(String(describing: self.status))") } }
     private(set) var lastHeard = ""
     var onCommand: ((VoiceCommand) -> Void)?
-    /// While true (TTS speaking), transcripts are ignored so the app doesn't hear itself.
-    var muted = false
+    /// While true (TTS speaking), transcripts are ignored so the app doesn't hear itself. Words spoken during the mute
+    /// can arrive from the recogniser *after* it ends, so both edges also discard everything up to "now".
+    var muted = false {
+        didSet { handledUpTo = max(handledUpTo, Date().timeIntervalSince(sessionStart)) }
+    }
+    private var sessionStart = Date()
+    private var lastCommand: (VoiceCommand, Date)?
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-GB"))
     private let audioEngine = AVAudioEngine()
@@ -69,6 +74,7 @@ final class SpeechCommands {
     private var restartTimer: Task<Void, Never>?
     private var wantListening = false
     private var consecutiveFailures = 0
+    private var lastLoggedLength = 0
     /// Human hint for the top bar when listening isn't possible.
     var problem: String? {
         if case .error(let e) = status {
@@ -110,6 +116,8 @@ final class SpeechCommands {
         req.taskHint = .search
         request = req
         handledUpTo = 0
+        sessionStart = Date()
+        lastLoggedLength = 0
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -177,8 +185,14 @@ final class SpeechCommands {
         let tail = fresh.suffix(4).map(\.word).joined(separator: " ")
         if let cmd = VoiceCommand.match(trailing: tail) {
             handledUpTo = last.timestamp + last.duration + 0.01
+            // The same word twice within 1.5 s is an echo or a stutter, not two commands.
+            if let (prev, at) = lastCommand, prev == cmd, Date().timeIntervalSince(at) < 1.5 { return }
+            lastCommand = (cmd, Date())
             Log.voice.info("command \(cmd.rawValue) from “\(tail)”")
             onCommand?(cmd)
+        } else if result.text.count > lastLoggedLength {
+            lastLoggedLength = result.text.count
+            Log.voice.debug("heard “\(tail)”")
         }
     }
 }

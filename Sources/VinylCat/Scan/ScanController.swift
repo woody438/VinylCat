@@ -64,6 +64,7 @@ final class ScanController {
     private var expectLabel = false
     private var manualKind: ShotKind?
     private var ambiguity: (outcome: Identifier.Outcome, candidates: [Candidate], photo: String, thumb: CGImage?)?
+    private var lastCaptured: (photo: String, thumb: CGImage?)?
     private var duplicate: (candidate: Candidate, outcome: Identifier.Outcome, photo: String, thumb: CGImage?)?
 
     // MARK: - Lifecycle
@@ -146,6 +147,7 @@ final class ScanController {
             return
         }
 
+        lastCaptured = (fileName, thumb)
         await identify(still: still, fileName: fileName, thumb: thumb)
     }
 
@@ -344,7 +346,7 @@ final class ScanController {
         case .addPhoto: manualShot(.other, say: "Show me the extra photo")
         case .skip:
             if !pending.isEmpty { pending.removeFirst(); nextPrompt() }
-            else if case .needLabel = phase, let o = lastOutcome, let f = current?.photos.first?.fileName ?? lastPhotoName { park(outcome: o, photo: f, thumb: lastThumb, guess: [o.reading.artist, o.reading.title].compactMap { $0 }.joined(separator: " — ")) }
+            else if case .needLabel = phase, let o = lastOutcome, let f = lastPhotoName { park(outcome: o, photo: f, thumb: lastThumb, guess: [o.reading.artist, o.reading.title].compactMap { $0 }.joined(separator: " — ")) }
             else { speaker.say("Nothing to skip") }
         case .done:
             if current != nil { pending = []; finishRecord(announce: true) } else { speaker.say("Nothing open") }
@@ -404,8 +406,8 @@ final class ScanController {
         Task { await engine.setMode(.shot) }
     }
 
-    private var lastPhotoName: String? { ambiguity?.photo ?? duplicate?.photo }
-    private var lastThumb: CGImage? { ambiguity?.thumb ?? duplicate?.thumb }
+    private var lastPhotoName: String? { ambiguity?.photo ?? duplicate?.photo ?? lastCaptured?.photo }
+    private var lastThumb: CGImage? { ambiguity?.thumb ?? duplicate?.thumb ?? lastCaptured?.thumb }
 
     // MARK: - Helpers
 
