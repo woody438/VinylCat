@@ -19,7 +19,7 @@ enum SelfTest {
     }
 
     /// Drives the engine with synthetic BGRA frames: empty → record A (steady) → still A → empty → record B.
-    private static func runEngineScenario() -> (captures: Int, doubleFire: Bool, emptyNoFire: Bool) {
+    private static func runEngineScenario() -> (captures: Int, doubleFire: Bool, emptyNoFire: Bool, heldNoFire: Bool, forcedWhileHeld: Bool, resumed: Bool) {
         var tuning = CaptureTuning(); tuning.steadySeconds = 0.1
         let engine = CaptureEngine(tuning: tuning)
         var cont: AsyncStream<Frame>.Continuation!
@@ -39,6 +39,7 @@ enum SelfTest {
                 var v: UInt8 = 90
                 if pattern == 1 { v = ((x / 8 + y / 8) % 2 == 0) ? 240 : 20 }            // checkerboard "record"
                 if pattern == 2 { v = ((x / 5) % 3 == 0 || (y / 7) % 2 == 0) ? 230 : 30 }  // different record
+                if pattern == 3 { v = ((x / 11) % 2 == 0 && (y / 4) % 3 != 0) ? 245 : 25 }  // a third record
                 p[0] = v; p[1] = v; p[2] = v; p[3] = 255
             } }
             CVPixelBufferUnlockBaseAddress(pb!, [])
@@ -60,8 +61,22 @@ enum SelfTest {
         feed(0, frames: 8); pump(0.2)                         // removed → cooldown clears
         capturesDuringEmpty = captures
         feed(2, frames: 12); pump(0.3)                        // record B → capture
+        let afterB = captures
+
+        // Waiting for an answer (an ambiguous match on screen): nothing fires on its own, but
+        // "capture" / space still does, and releasing the hold puts it back to normal.
+        Task { await engine.setHold(true) }; pump(0.2)
+        feed(0, frames: 6); feed(3, frames: 14); pump(0.3)
+        let heldNoFire = captures == afterB
+        Task { await engine.forceCapture() }; pump(0.2)
+        feed(3, frames: 4); pump(0.3)
+        let forcedWhileHeld = captures == afterB + 1
+        Task { await engine.setHold(false) }; pump(0.2)
+        feed(0, frames: 8); feed(1, frames: 14); pump(0.3)
+        let resumed = captures == afterB + 2
+
         cont.finish(); runTask.cancel(); collector.cancel()
-        return (captures - before, doubleFire, capturesDuringEmpty == capturesAfterA)
+        return (afterB - before, doubleFire, capturesDuringEmpty == capturesAfterA, heldNoFire, forcedWhileHeld, resumed)
     }
 
     /// Holds a record steady, then throws in one bad frame. The ring should dent, not reset —
@@ -196,6 +211,9 @@ enum SelfTest {
         check(engineOK.captures == 2, "two distinct records → two captures (got \(engineOK.captures))")
         check(engineOK.doubleFire == false, "same record held still does not re-fire")
         check(engineOK.emptyNoFire, "empty scene never fires")
+        check(engineOK.heldNoFire, "waiting for an answer → a new record does not fire on its own")
+        check(engineOK.forcedWhileHeld, "“capture” still forces a shot while waiting")
+        check(engineOK.resumed, "releasing the hold scans again")
         let steady = runSteadinessScenario()
         check(steady.rose, "the ring fills while a record is held")
         check(steady.heldThroughWobble, "one bad frame dents the ring (\(String(format: "%.2f", steady.lowest))) instead of resetting it")

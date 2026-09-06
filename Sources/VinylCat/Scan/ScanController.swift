@@ -117,7 +117,7 @@ final class ScanController {
         switch phase {
         case .learning, .paused, .armed, .steady, .captured: break
         case .reading, .searching: return
-        case .awaitingShot, .needLabel, .retry:
+        case .awaitingShot, .needLabel, .retry, .ambiguous:
             // Keep the prompt on screen; the ring shows steadiness via `signal`.
             return
         default:
@@ -176,6 +176,7 @@ final class ScanController {
 
     private func identify(still: CapturedStill, fileName: String, thumb: CGImage?) async {
         guard let app = appState else { return }
+        await engine.setHold(false)
         phase = .reading(step: "starting")
         do {
             let outcome = try await app.identifier.identify(still.image, sessionFormat: app.format.spoken, expectLabel: expectLabel) { [weak self] step in
@@ -202,7 +203,9 @@ final class ScanController {
             case .ambiguous(let cands):
                 ambiguity = (outcome, cands, fileName, thumb)
                 phase = .ambiguous(candidates: cands.map(\.summary))
-                await engine.setMode(.shot)
+                // Nothing else gets scanned until this is answered: the list used to vanish the
+                // moment the next frame armed, taking the shot with it.
+                await engine.setHold(true)
                 Chime.ambiguous.play()
                 speaker.say("\(cands.count) possible matches on screen. Pick a number, or say none.")
             case .none:
@@ -240,6 +243,7 @@ final class ScanController {
     /// Save a record for a confirmed Discogs release, then ask for the remaining shots.
     private func finalize(candidate c: Candidate, outcome: Identifier.Outcome, photo: String, thumb: CGImage?, allowDuplicate: Bool) async {
         guard let app = appState else { return }
+        await engine.setHold(false)
         if !allowDuplicate, let dup = store.existing(discogsReleaseID: c.result.id) {
             duplicate = (c, outcome, photo, thumb)
             phase = .duplicate(title: dup.displayTitle.uppercased())
@@ -333,7 +337,7 @@ final class ScanController {
         Chime.notFound.play()
         speaker.say("Not found. Added to the review queue.")
         items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: guess.isEmpty ? "Unknown" : guess, meta: "REVIEW QUEUE", tone: .review), at: 0)
-        Task { await engine.setMode(.identify) }
+        Task { await engine.setHold(false); await engine.setMode(.identify) }
     }
 
     private func trimItems() { if items.count > 12 { items.removeLast(items.count - 12) } }
@@ -406,7 +410,7 @@ final class ScanController {
         case .again:
             expectLabel = false; retried = false; ambiguity = nil
             speaker.say("Go again"); phase = .armed(reason: "again")
-            Task { await engine.rearm(); await engine.setMode(.identify) }
+            Task { await engine.setHold(false); await engine.rearm(); await engine.setMode(.identify) }
         case .one, .two, .three:
             choose(command == .one ? 0 : command == .two ? 1 : 2)
         case .none:
@@ -441,6 +445,11 @@ final class ScanController {
     }
 
     private func manualShot(_ kind: ShotKind, say: String) {
+        if ambiguity != nil {
+            speaker.say(say)
+            Task { await engine.setHold(false); await engine.setMode(.shot) }
+            return
+        }
         if current == nil, let id = lastClosedRecordID, let rec = store.fetch(id) { current = rec; pending = [] }
         guard current != nil else {
             if kind == .labelB || kind == .labelA { expectLabel = true; speaker.say("Show me the label"); Task { await engine.setMode(.shot) } }

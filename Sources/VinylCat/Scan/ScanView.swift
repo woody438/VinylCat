@@ -182,7 +182,7 @@ struct HUDLook {
         case .ambiguous(let cands):
             color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "press 1–\(cands.count) · or say the number, or NONE"
             headline = ""
-            ring = 1; ringLabel = "\(cands.count)"; hint = "Or flip it — the B-side label usually settles it · say “review” to park it"
+            ring = 1; ringLabel = "\(cands.count)"; hint = "Scanning is paused until you answer · or flip it and press space — the B-side label usually settles it · say “review” to park it"
         case .needLabel(let guess):
             color = Theme.blue; state = "SHOW ME THE LABEL"; meta = "no confident match from the cover"
             headline = guess; headlineSize = 56; ring = signal?.steadyProgress ?? 0; ringLabel = "LABEL"

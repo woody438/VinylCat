@@ -67,6 +67,9 @@ actor CaptureEngine {
     private var lastCaptureHash: UInt64?
     private var cooldown = false
     private var enabled = true
+    /// While true the engine analyses but never fires on its own: the HUD is waiting for the
+    /// operator to answer something. "capture" / space still force a shot.
+    private var holding = false
     private var forceNext = false
     private var latestFrame: Frame?
     private var debugSaveAt: Int?
@@ -103,6 +106,8 @@ actor CaptureEngine {
     }
 
     func setEnabled(_ on: Bool) { enabled = on; if !on { resetHold() } }
+    /// Stop (or resume) firing on our own while a question is on screen.
+    func setHold(_ on: Bool) { holding = on; resetHold(); if !on { cooldown = false; needMotion = false } }
     func setAutoCapture(_ on: Bool) { autoCapture = on; resetHold() }
     func setTuning(_ t: CaptureTuning) { tuning = t }
     /// Voice "capture": take the next sharp frame regardless of the steady timer.
@@ -154,6 +159,8 @@ actor CaptureEngine {
             capture(frame, m, forced: true)
             return
         }
+
+        if holding { emit(m, 0, false, "waiting for your answer"); return }
 
         if needMotion {
             if m.motion > tuning.motionMax * 3 { needMotion = false } else { emit(m, 0, false, "flip it"); return }
