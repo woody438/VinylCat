@@ -19,7 +19,8 @@ final class Store {
     }
 
     private func open() {
-        guard sqlite3_open(url.path, &db) == SQLITE_OK else { print("sqlite open failed"); return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard sqlite3_open(url.path, &db) == SQLITE_OK else { print("sqlite open failed: \(url.path)"); return }
         exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
         exec("""
         CREATE TABLE IF NOT EXISTS records (

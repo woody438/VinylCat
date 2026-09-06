@@ -19,6 +19,7 @@ enum CLI {
         case "--render-ui": return renderUI(dir: rest.first ?? "ui-renders")
         case "--make-test-images": return makeTestImages(dir: rest.first ?? "test-images")
         case "--pipeline-test": return runBlocking { await pipelineTest(paths: rest) }
+        case "--scenario": return runBlocking { await scenario(dir: rest.first ?? "test-images") }
         default: return nil
         }
     }
@@ -180,6 +181,98 @@ enum CLI {
                 }
             } catch { print("  FAILED \(error.localizedDescription)"); failures += 1 }
         }
+        return failures == 0 ? 0 : 1
+    }
+}
+
+extension CLI {
+    /// End-to-end run of the real ScanController against a temp store with synthetic stills (live Discogs, no model).
+    static func scenario(dir: String) async -> Int32 {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-scenario-\(UUID().uuidString)")
+        let store = Store(url: tmp.appendingPathComponent("db.sqlite"))
+        let photos = PhotoStore(root: tmp.appendingPathComponent("photos"))
+        let state = AppState(store: store, photos: photos)
+        state.scan.appState = state
+        state.scan.speaker.enabled = false
+        var failures = 0
+        func check(_ c: Bool, _ label: String) { print("  \(c ? "ok  " : "FAIL") \(label)"); if !c { failures += 1 } }
+        func still(_ name: String) -> CapturedStill? {
+            let p = URL(fileURLWithPath: dir).appendingPathComponent("\(name).png").path
+            guard let img = NSImage(contentsOfFile: p)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { print("missing \(p)"); return nil }
+            return CapturedStill(image: img, capturedAt: Date(), metrics: FrameMetrics(sharpness: 200, motion: 0, sceneDelta: 50, hash: 0), forced: false)
+        }
+        func phaseName(_ p: ScanPhase) -> String { "\(p)".components(separatedBy: "(").first ?? "\(p)" }
+        let scan = state.scan
+        print("scenario · 7\" single: match → B-side → done")
+        state.format = .seven
+        guard let jam = still("label-jam-posp113"), let specials = still("label-specials-chstt17"), let clash = still("cover-clash-clash3") else { return 1 }
+        await scan.inject(still: jam)
+        check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "B-SIDE LABEL" } else { return false } }(), "after side A: asks for B-side (phase \(phaseName(scan.phase)))")
+        check(scan.current?.discogsReleaseID != nil && store.count() == 1, "record saved with Discogs id \(scan.current?.discogsReleaseID ?? 0)")
+        await scan.inject(still: jam)
+        check(scan.current == nil, "after B-side: record closed (phase \(phaseName(scan.phase)))")
+        let r1 = store.all().first
+        check(r1?.photos.count == 2 && r1?.isComplete == true && r1?.photos.map(\.kind) == [.labelA, .labelB], "2 photos tagged A/B, complete")
+        check(r1?.artist == "The Jam" && r1?.format == "7\"" && r1?.catalogNumber?.uppercased() == "POSP 113", "fields: \(r1?.artist ?? "") · \(r1?.format ?? "") · \(r1?.catalogNumber ?? "")")
+
+        print("scenario · duplicate → add anyway")
+        await scan.inject(still: jam)
+        check({ if case .duplicate = scan.phase { return true } else { return false } }(), "same record again → duplicate (phase \(phaseName(scan.phase)))")
+        scan.handle(command: .addAnyway)
+        for _ in 0..<40 where scan.current == nil { try? await Task.sleep(for: .milliseconds(250)) }
+        check(store.count() == 2 && scan.current != nil, "add anyway creates a second copy (count \(store.count()))")
+        scan.handle(command: .done)
+        check(scan.current == nil, "done closes it")
+
+        print("scenario · skip a shot")
+        await scan.inject(still: specials)
+        check(scan.current?.artist == "The Specials", "matched The Specials (got \(scan.current?.artist ?? "nil"))")
+        let pendingBefore = scan.pending.count
+        check(pendingBefore == 1 && scan.pending.first == .labelB, "single label shot → only the B-side is pending (\(scan.pending.map(\.rawValue)))")
+        scan.handle(command: .skip)
+        let newest = store.all().first
+        check(scan.current == nil && newest?.isComplete == false, "skip closes record as incomplete (current \(scan.current?.artist ?? "nil") · newest \(newest?.artist ?? "nil") \(newest?.photos.map(\.kind.rawValue) ?? []) of \(newest?.expectedShots.map(\.rawValue) ?? []) · phase \(phaseName(scan.phase)))")
+
+        print("scenario · album → front/back/label → undo → done")
+        state.format = .lp
+        await scan.inject(still: clash)
+        let clashRec = scan.current
+        print("  info phase after Clash: \(scan.phase) · current \(clashRec?.displayTitle ?? "nil") · last candidates \(scan.lastCandidates.prefix(2).map { "\($0.result.title) \($0.score)" })")
+        check(clashRec?.title == "London Calling" && clashRec?.format == "LP" && (clashRec?.expectedShots.contains(.coverBack) ?? false), "LP profile: \(clashRec?.expectedShots.map(\.rawValue) ?? [])")
+        check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "BACK COVER" } else { return false } }(), "asks for the back cover")
+        await scan.inject(still: clash)
+        check(scan.current?.photos.count == 2, "back cover attached")
+        scan.handle(command: .undo)
+        check(scan.current?.photos.count == 1, "undo removes it and re-asks")
+        scan.handle(command: .done)
+        check(scan.current == nil, "done")
+
+        print("scenario · unreadable → label → review")
+        state.format = .seven
+        let blank = CapturedStill(image: photos.downscale(jam.image, maxSide: 8)!, capturedAt: Date(), metrics: jam.metrics, forced: false)
+        await scan.inject(still: blank)
+        check({ if case .needLabel = scan.phase { return true } else { return false } }(), "nothing readable on a cover → asks for label (phase \(phaseName(scan.phase)))")
+        await scan.inject(still: blank)
+        check({ if case .notFound = scan.phase { return true } else { return false } }() && store.reviewCount() == 1, "still nothing → parked for review (review \(store.reviewCount()))")
+
+        print("scenario · ambiguity by voice")
+        // Force an ambiguous verdict: Blue Monday has many FAC 73 variants; pick with "one".
+        state.format = .twelve
+        if let no = still("label-neworder-fac73") {
+            await scan.inject(still: no)
+            print("  info phase after New Order: \(phaseName(scan.phase))")
+            if case .ambiguous = scan.phase { scan.handle(command: .one); for _ in 0..<40 where scan.current == nil { try? await Task.sleep(for: .milliseconds(250)) }; check(scan.current?.artist == "New Order", "one → chosen") }
+            else { check(scan.current?.artist == "New Order" || store.all().contains { $0.artist == "New Order" }, "New Order saved") }
+            scan.handle(command: .done)
+        }
+
+        print("scenario · export")
+        let csv = try? store.exportCSV(to: tmp)
+        check(csv != nil, "csv written: \(csv?.lastPathComponent ?? "-")")
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: photos.root.path))?.count ?? 0
+        check(files >= 7, "photos on disk: \(files)")
+        print("records: \(store.count()) · review: \(store.reviewCount()) · discogs \(state.discogs.rateText)")
+        try? FileManager.default.removeItem(at: tmp)
         return failures == 0 ? 0 : 1
     }
 }

@@ -11,7 +11,11 @@ struct PhotoStore: Sendable {
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        root = appSupport.appendingPathComponent("VinylCat/Photos", isDirectory: true)
+        self.init(root: appSupport.appendingPathComponent("VinylCat/Photos", isDirectory: true))
+    }
+
+    init(root: URL) {
+        self.root = root
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
 

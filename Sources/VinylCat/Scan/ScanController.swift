@@ -49,8 +49,17 @@ final class ScanController {
     let speaker = Speaker()
     weak var appState: AppState?
 
-    private let store = Store.shared
+    private let store: Store
+    private let photos: PhotoStore
     private var tasks: [Task<Void, Never>] = []
+
+    init(store: Store = .shared, photos: PhotoStore = .shared) {
+        self.store = store
+        self.photos = photos
+    }
+
+    /// Test hook: feed a still as if the camera engine produced it.
+    func inject(still: CapturedStill) async { await handle(still: still) }
     private var shotCounter = 0
     private var expectLabel = false
     private var manualKind: ShotKind?
@@ -114,9 +123,9 @@ final class ScanController {
         shotCounter += 1
         let stamp = Self.stamp.string(from: Date())
         let name = "\(stamp)-\(String(format: "%03d", shotCounter))"
-        let thumb = PhotoStore.shared.downscale(still.image, maxSide: 160)
+        let thumb = photos.downscale(still.image, maxSide: 160)
         let fileName: String
-        do { fileName = try PhotoStore.shared.save(still.image, name: name).lastPathComponent } catch {
+        do { fileName = try photos.save(still.image, name: name).lastPathComponent } catch {
             speaker.say("Couldn't save the photo"); return
         }
 
@@ -166,11 +175,12 @@ final class ScanController {
                 speaker.say("\(cands.count) possible matches. " + cands.enumerated().map { "\($0 + 1): \($1.spoken)" }.joined(separator: ". ") + ". Say one, two, three, or none.")
             case .none:
                 let guess = [outcome.reading.artist, outcome.reading.title].compactMap { $0 }.joined(separator: " — ")
-                if !(outcome.reading.isLabelShot ?? false), !expectLabel {
+                let unreadable = outcome.local.lines.isEmpty && outcome.local.barcodes.isEmpty
+                if (!(outcome.reading.isLabelShot ?? false) || unreadable), !expectLabel {
                     expectLabel = true
-                    phase = .needLabel(guess: guess.isEmpty ? "?" : guess.uppercased() + "?")
+                    phase = .needLabel(guess: unreadable ? "NOTHING READABLE" : (guess.isEmpty ? "?" : guess.uppercased() + "?"))
                     Chime.needShot.play()
-                    speaker.say("No confident match. Show me the label.")
+                    speaker.say(unreadable ? "I can't read that. Show me the label, closer." : "No confident match. Show me the label.")
                     await engine.setMode(.shot)
                 } else {
                     park(outcome: outcome, photo: fileName, thumb: thumb, guess: guess)

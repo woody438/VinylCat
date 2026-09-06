@@ -21,7 +21,11 @@ final class AppState {
     var sessionCount = 0
     var reviewCount = 0
     let camera = CameraSession()
-    let scan = ScanController()
+    let scan: ScanController
+
+    init(store: Store = .shared, photos: PhotoStore = .shared) {
+        scan = ScanController(store: store, photos: photos)
+    }
     let identifier = Identifier()
     let discogs = DiscogsClient()
     let voice = SpeechCommands()

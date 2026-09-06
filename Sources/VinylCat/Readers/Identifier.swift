@@ -56,7 +56,10 @@ final class Identifier {
             // No model key yet: OCR-only guess (catalogue number does most of the work anyway).
             onStep("no model key — OCR only")
             modelSkippedForMissingKey = true
-            merged.isLabelShot = expectLabel || local.lines.contains { $0.uppercased().contains("RPM") || $0.uppercased().hasPrefix("SIDE") }
+            // Without a model we can't see the shape; singles are nearly always label shots, and label-ish words settle the rest.
+            let labelWords = ["RPM", "SIDE A", "SIDE B", "SIDE 1", "SIDE 2", "SIDE ONE", "SIDE TWO", "MADE IN", "℗", "(P)"]
+            merged.isLabelShot = expectLabel || sessionFormat.contains("seven") || sessionFormat.contains("twelve")
+                || local.lines.contains { l in labelWords.contains { l.uppercased().contains($0) } }
             let words = local.lines.filter { $0.count > 4 && !$0.contains(where: \.isNumber) && !$0.hasPrefix("(") && !$0.uppercased().hasPrefix("SIDE") }
             merged.title = words.dropFirst().first ?? words.first
             merged.artist = words.dropFirst(2).first ?? words.first
