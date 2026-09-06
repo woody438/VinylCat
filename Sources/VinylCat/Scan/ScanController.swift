@@ -33,7 +33,7 @@ struct SessionItem: Identifiable, Sendable {
 @MainActor
 @Observable
 final class ScanController {
-    private(set) var phase: ScanPhase = .learning
+    private(set) var phase: ScanPhase = .learning { didSet { if phase != oldValue { Log.scan.info("phase \(String(describing: self.phase).prefix(160))") } } }
     private(set) var signal: CaptureSignal?
     private(set) var items: [SessionItem] = []
     private(set) var lastStill: CGImage?
@@ -95,7 +95,12 @@ final class ScanController {
     }
     func relearnBaseline() { Task { await engine.relearnBaseline() } }
 
+    private var lastReason = ""
     private func apply(signal s: CaptureSignal) {
+        if s.reason != lastReason {
+            lastReason = s.reason
+            Log.capture.debug("\(s.reason) sharp \(Int(s.metrics.sharpness)) motion \(String(format: "%.1f", s.metrics.motion)) scene \(Int(s.metrics.sceneDelta))")
+        }
         signal = s
         switch phase {
         case .learning, .paused, .armed, .steady, .captured: break
@@ -119,6 +124,7 @@ final class ScanController {
 
     private func handle(still: CapturedStill) async {
         lastStill = still.image
+        Log.scan.info("captured \(still.forced ? "forced" : "auto") sharp \(Int(still.metrics.sharpness)) scene \(Int(still.metrics.sceneDelta))")
         Chime.captured.play()
         shotCounter += 1
         let stamp = Self.stamp.string(from: Date())
@@ -187,6 +193,7 @@ final class ScanController {
                 }
             }
         } catch {
+            Log.scan.error("identify failed: \(error.localizedDescription)")
             phase = .notFound(guess: "SETUP NEEDED", detail: error.localizedDescription)
             Chime.notFound.play()
             speaker.say(error.localizedDescription)

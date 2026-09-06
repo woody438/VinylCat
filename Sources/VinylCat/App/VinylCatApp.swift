@@ -8,6 +8,11 @@ struct VinylCatApp: App {
         // `VinylCat --self-test` runs the built-in checks and exits (no Xcode/XCTest needed).
         if CommandLine.arguments.contains("--self-test") { exit(MainActor.assumeIsolated { SelfTest.run() }) }
         if let code = MainActor.assumeIsolated({ CLI.run(CommandLine.arguments) }) { exit(code) }
+        // No window-state restoration: after a crash macOS would otherwise block launch behind a "reopen windows?" alert.
+        UserDefaults.standard.set(true, forKey: "ApplePersistenceIgnoreState")
+        try? FileManager.default.removeItem(at: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Saved Application State/com.woodall.vinylcat.savedState"))
+        Log.rotate()
     }
 
     var body: some Scene {
@@ -104,11 +109,13 @@ struct TopBar: View {
 
             Rectangle().fill(Theme.line).frame(width: 1, height: 24)
             HStack(spacing: 6) {
-                Image(systemName: "mic.fill").font(.system(size: 13))
-                Text(state.voice.status == .listening ? "LISTENING" : "MIC OFF").font(Theme.mono(13)).tracking(1.5)
+                Image(systemName: state.voice.status == .listening ? "mic.fill" : "mic.slash").font(.system(size: 13))
+                Text(state.voice.status == .listening ? "LISTENING" : (state.voice.problem == nil ? "MIC OFF" : "VOICE OFF · CLICK")).font(Theme.mono(13)).tracking(1.5)
             }
-            .foregroundStyle(state.voice.status == .listening ? Theme.green : Theme.muted)
-            .help(state.voice.lastHeard)
+            .foregroundStyle(state.voice.status == .listening ? Theme.green : (state.voice.problem == nil ? Theme.muted : Theme.amber))
+            .help(state.voice.problem ?? state.voice.lastHeard)
+            .contentShape(Rectangle())
+            .onTapGesture { Task { await state.voice.retry() } }
         }
         .padding(.horizontal, 24)
         .frame(height: 56)

@@ -55,7 +55,7 @@ enum VoiceCommand: String, CaseIterable, Sendable {
 @Observable
 final class SpeechCommands {
     enum Status: Equatable { case idle, unauthorized, listening, error(String) }
-    private(set) var status: Status = .idle
+    private(set) var status: Status = .idle { didSet { Log.voice.info("status \(String(describing: self.status))") } }
     private(set) var lastHeard = ""
     var onCommand: ((VoiceCommand) -> Void)?
     /// While true (TTS speaking), transcripts are ignored so the app doesn't hear itself.
@@ -68,16 +68,30 @@ final class SpeechCommands {
     private var handledUpTo: TimeInterval = 0
     private var restartTimer: Task<Void, Never>?
     private var wantListening = false
+    private var consecutiveFailures = 0
+    /// Human hint for the top bar when listening isn't possible.
+    var problem: String? {
+        if case .error(let e) = status {
+            if e.localizedCaseInsensitiveContains("dictation") { return "Turn on Dictation: System Settings → Keyboard → Dictation" }
+            return e
+        }
+        if status == .unauthorized { return "Allow Microphone + Speech Recognition in System Settings → Privacy & Security" }
+        return nil
+    }
 
     func start() async {
         wantListening = true
-        let speechOK = await withCheckedContinuation { cont in
-            SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0 == .authorized) }
+        // These callbacks arrive on TCC's / Speech's own queues: keep them @Sendable so no main-actor isolation is assumed.
+        let speechOK = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in cont.resume(returning: status == .authorized) }
         }
         let micOK = await AVCaptureDevice.requestAccess(for: .audio)
         guard speechOK, micOK else { status = .unauthorized; return }
         beginSession()
     }
+
+    /// Try again from scratch (e.g. after the user turned Dictation on).
+    func retry() async { consecutiveFailures = 0; await start() }
 
     func stop() {
         wantListening = false
@@ -101,12 +115,19 @@ final class SpeechCommands {
         let format = input.outputFormat(forBus: 0)
         guard format.channelCount > 0, format.sampleRate > 0 else { status = .error("No microphone input"); return }
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in req.append(buffer) }
+        nonisolated(unsafe) let request = req
+        input.installTap(onBus: 0, bufferSize: 2048, format: format) { @Sendable buffer, _ in request.append(buffer) }
         audioEngine.prepare()
         do { try audioEngine.start() } catch { status = .error(error.localizedDescription); return }
 
-        task = recognizer.recognitionTask(with: req) { [weak self] result, error in
-            Task { @MainActor in self?.handle(result: result, error: error) }
+        task = recognizer.recognitionTask(with: req) { @Sendable [weak self] result, error in
+            // Reduce the result to plain data before hopping to the main actor.
+            let snapshot = result.map { r in
+                Transcript(text: r.bestTranscription.formattedString,
+                           segments: r.bestTranscription.segments.map { Segment(word: $0.substring, timestamp: $0.timestamp, duration: $0.duration) })
+            }
+            let message = error?.localizedDescription
+            Task { @MainActor in self?.handle(transcript: snapshot, error: message) }
         }
         status = .listening
 
@@ -126,23 +147,37 @@ final class SpeechCommands {
         audioEngine.inputNode.removeTap(onBus: 0)
     }
 
-    private func handle(result: SFSpeechRecognitionResult?, error: Error?) {
+    struct Segment: Sendable { var word: String; var timestamp: TimeInterval; var duration: TimeInterval }
+    struct Transcript: Sendable { var text: String; var segments: [Segment] }
+
+    private func handle(transcript: Transcript?, error: String?) {
         if let error {
-            // Common when a session rolls over; restart if we still want to listen.
-            if wantListening { status = .error(error.localizedDescription); beginSession() }
+            // Session roll-overs produce an error too; retry with backoff, give up after a few in a row.
+            consecutiveFailures += 1
+            status = .error(error)
+            guard wantListening, consecutiveFailures <= 5 else { endSession(); return }
+            let delay = min(10, Double(consecutiveFailures) * 2)
+            restartTimer?.cancel()
+            restartTimer = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled, let self, self.wantListening else { return }
+                self.beginSession()
+            }
             return
         }
-        guard let result else { return }
-        let segs = result.bestTranscription.segments
+        consecutiveFailures = 0
+        guard let result = transcript else { return }
+        let segs = result.segments
         guard let last = segs.last else { return }
-        lastHeard = result.bestTranscription.formattedString
+        lastHeard = result.text
         guard !muted else { handledUpTo = last.timestamp + last.duration; return }
         // Only look at words that arrived after the last command we acted on.
         let fresh = segs.filter { $0.timestamp >= handledUpTo }
         guard !fresh.isEmpty else { return }
-        let tail = fresh.suffix(4).map(\.substring).joined(separator: " ")
+        let tail = fresh.suffix(4).map(\.word).joined(separator: " ")
         if let cmd = VoiceCommand.match(trailing: tail) {
             handledUpTo = last.timestamp + last.duration + 0.01
+            Log.voice.info("command \(cmd.rawValue) from “\(tail)”")
             onCommand?(cmd)
         }
     }

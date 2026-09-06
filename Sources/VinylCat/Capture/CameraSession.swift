@@ -36,7 +36,7 @@ final class CameraSession {
         case failed(String)
     }
 
-    private(set) var status: Status = .idle
+    private(set) var status: Status = .idle { didSet { Log.camera.info("status \(String(describing: self.status))") } }
     private(set) var devices: [AVCaptureDevice] = []
     var selectedDeviceID: String? {
         didSet { if oldValue != selectedDeviceID, oldValue != nil { restart() } }
@@ -63,6 +63,7 @@ final class CameraSession {
         default: status = .unauthorized; return
         }
         refreshDevices()
+        Log.camera.info("devices \(self.devices.map(\.localizedName))")
         guard let device = currentDevice() else { status = .noCamera; return }
         selectedDeviceID = device.uniqueID
         configure(device: device)
@@ -93,11 +94,12 @@ final class CameraSession {
         let name = device.localizedName
         box.queue.async { [weak self] in
             let session = box.session
+            if session.isRunning { session.stopRunning() }
             session.beginConfiguration()
-            defer { session.commitConfiguration() }
             for input in session.inputs { session.removeInput(input) }
             for out in session.outputs { session.removeOutput(out) }
-            session.sessionPreset = .high
+            if session.canSetSessionPreset(.high) { session.sessionPreset = .high }
+            var failure: Error?
             do {
                 let input = try AVCaptureDeviceInput(device: device)
                 guard session.canAddInput(input) else { throw CameraError.cannotAddInput }
@@ -107,11 +109,16 @@ final class CameraSession {
                 output.setSampleBufferDelegate(sink, queue: box.queue)
                 guard session.canAddOutput(output) else { throw CameraError.cannotAddOutput }
                 session.addOutput(output)
-                if !session.isRunning { session.startRunning() }
-                Task { @MainActor in self?.status = .running(name) }
-            } catch {
-                Task { @MainActor in self?.status = .failed(error.localizedDescription) }
+            } catch { failure = error }
+            // Commit BEFORE starting: startRunning() inside begin/commit throws an ObjC exception.
+            session.commitConfiguration()
+            if let failure {
+                Task { @MainActor in self?.status = .failed(failure.localizedDescription) }
+                return
             }
+            guard !session.inputs.isEmpty else { Task { @MainActor in self?.status = .failed("No camera input") }; return }
+            session.startRunning()
+            Task { @MainActor in self?.status = session.isRunning ? .running(name) : .failed("Camera did not start") }
         }
     }
 

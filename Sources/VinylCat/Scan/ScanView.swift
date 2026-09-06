@@ -60,7 +60,7 @@ struct HUDOverlay: View {
 
     var body: some View {
         let scan = state.scan
-        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey)
+        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey, voiceProblem: state.voice.problem)
         VStack {
             HStack(alignment: .top) {
                 Caption(cameraTag)
@@ -108,7 +108,7 @@ struct HUDLook {
     var ring: Double = 0
     var ringLabel = "READY"
 
-    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil) {
+    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil) {
         let metrics = signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta) } ?? "camera starting"
         switch phase {
         case .learning:
@@ -121,6 +121,7 @@ struct HUDLook {
             headline = "HOLD UP A RECORD"
             hint = "Auto-captures when the image is steady and sharp · say “capture” to force · " + metrics
             if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only · " + metrics }
+            if let vp = voiceProblem { hint = "Voice off — \(vp) · " + hint }
         case .steady(let p):
             color = Theme.green; state = "STEADY"; meta = "record #\(recordNumber)"
             headline = "HOLD IT…"; ring = p; ringLabel = "HOLD"; hint = metrics

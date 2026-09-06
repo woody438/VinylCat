@@ -142,6 +142,7 @@ final class DiscogsClient {
             if let r = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Remaining"), let v = Int(r) { remaining = v }
         }
         let code = http?.statusCode ?? 0
+        Log.discogs.info("\(method) \(path) → \(code) · \(self.used)/\(self.limit)")
         if code == 429 {
             // Back off for the rest of the window, then retry once.
             try await Task.sleep(for: .seconds(max(2, 60 - Date().timeIntervalSince(windowStart))))
