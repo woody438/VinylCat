@@ -305,7 +305,7 @@ struct AlignmentGuide: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let rect = CGRect(x: w * 0.15, y: h * 0.12, width: w * 0.70, height: h * 0.76)
+            let rect = CGRect(x: w * 0.18, y: h * 0.08, width: w * 0.64, height: h * 0.62)
             let side = min(rect.width, rect.height)
             let disc = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
             ZStack {
@@ -322,7 +322,7 @@ struct AlignmentGuide: View {
                     Rectangle().fill(color.opacity(0.08)).frame(width: rect.width, height: rect.height).position(x: rect.midX, y: rect.midY)
                 }
                 Text("LINE UP THE SLEEVE OR LABEL HERE").font(Theme.mono(11)).tracking(2).foregroundStyle(color.opacity(0.8))
-                    .position(x: rect.midX, y: rect.minY + 16)
+                    .position(x: rect.midX, y: rect.minY - 14)
             }
         }
         .allowsHitTesting(false)
