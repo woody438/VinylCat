@@ -202,8 +202,8 @@ final class SpeechCommands {
         let tail = fresh.suffix(4).joined(separator: " ")
         if let cmd = VoiceCommand.match(trailing: tail) {
             firedText = result.text
-            // The same word twice within 1.5 s is an echo or a stutter, not two commands.
-            if let (prev, at) = lastCommand, prev == cmd, Date().timeIntervalSince(at) < 1.5 { return }
+            // The same word twice within 3 s is a revision ("Album" → "Albums") or an echo, not two commands.
+            if let (prev, at) = lastCommand, prev == cmd, Date().timeIntervalSince(at) < 3 { return }
             lastCommand = (cmd, Date())
             Log.voice.info("command \(cmd.rawValue) from “\(tail)”")
             onCommand?(cmd)
