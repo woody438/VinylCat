@@ -20,6 +20,15 @@ enum CLI {
         case "--make-test-images": return makeTestImages(dir: rest.first ?? "test-images")
         case "--pipeline-test": return runBlocking { await pipelineTest(paths: rest) }
         case "--scenario": return runBlocking { await scenario(dir: rest.first ?? "test-images") }
+        case "--model-test": return runBlocking {
+            guard let img = SetupWizard.testLabelImage() else { return 1 }
+            let provider = Identifier().provider
+            do {
+                let r = try await provider.reader.read(img, hints: .init(sessionFormat: "seven inch singles", expectLabel: true))
+                print("OK \(r.provider): \(r.reading) · $\(String(format: "%.5f", r.usage.costUSD)) · \(r.usage.inputTokens)+\(r.usage.outputTokens) tokens")
+                return 0
+            } catch { print("FAILED \(error.localizedDescription)"); return 1 }
+        }
         default: return nil
         }
     }

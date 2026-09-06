@@ -42,7 +42,7 @@ struct GeminiReader: SleeveReader {
               let parts = (cands.first?["content"] as? [String: Any])?["parts"] as? [[String: Any]],
               let text = parts.compactMap({ $0["text"] as? String }).first,
               let td = text.data(using: .utf8) else { throw ReaderError.badResponse("no candidate text") }
-        let reading = try JSONDecoder().decode(SleeveReading.self, from: td)
+        let reading = try JSONDecoder().decode(SleeveReading.self, from: td).normalized()
         let usage = json["usageMetadata"] as? [String: Any] ?? [:]
         let inTok = usage["promptTokenCount"] as? Int ?? 0, outTok = usage["candidatesTokenCount"] as? Int ?? 0
         let cost = Double(inTok) / 1e6 * pricing.input + Double(outTok) / 1e6 * pricing.output

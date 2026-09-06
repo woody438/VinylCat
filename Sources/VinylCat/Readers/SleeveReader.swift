@@ -11,7 +11,7 @@ struct SleeveReading: Codable, Sendable, Equatable {
     var barcode: String?
     var year: Int?
     var country: String?
-    /// "7\"", "10\"", "12\"", "LP" or null
+    /// Model returns "7in" / "10in" / "12in" / "LP"; `normalized()` maps to the app's "7\"" style.
     var formatGuess: String?
     var isLabelShot: Bool?
     var side: String?
@@ -19,6 +19,22 @@ struct SleeveReading: Codable, Sendable, Equatable {
     /// 0…1 — how sure the model is about artist+title
     var confidence: Double?
     var notes: String?
+
+    /// Maps model-side values to the app's conventions (format strings, trimmed text).
+    func normalized() -> SleeveReading {
+        var r = self
+        switch r.formatGuess?.lowercased().replacingOccurrences(of: " ", with: "") {
+        case "7in", "7\"", "7inch", "7": r.formatGuess = "7\""
+        case "10in", "10\"", "10inch", "10": r.formatGuess = "10\""
+        case "12in", "12\"", "12inch", "12": r.formatGuess = "12\""
+        case "lp", "album": r.formatGuess = "LP"
+        default: break
+        }
+        for kp in [\SleeveReading.artist, \.title, \.label, \.catalogNumber, \.barcode, \.country] {
+            if let v = r[keyPath: kp]?.trimmingCharacters(in: .whitespacesAndNewlines) { r[keyPath: kp] = v.isEmpty ? nil : v }
+        }
+        return r
+    }
 
     static var jsonSchema: [String: Any] { [
         "type": "object",
@@ -31,7 +47,7 @@ struct SleeveReading: Codable, Sendable, Equatable {
             "barcode": ["type": ["string", "null"]],
             "year": ["type": ["integer", "null"]],
             "country": ["type": ["string", "null"]],
-            "formatGuess": ["type": ["string", "null"], "enum": ["7\"", "10\"", "12\"", "LP", NSNull()]],
+            "formatGuess": ["type": ["string", "null"], "enum": ["7in", "10in", "12in", "LP", NSNull()]],
             "isLabelShot": ["type": ["boolean", "null"]],
             "side": ["type": ["string", "null"]],
             "visibleTracks": ["type": ["array", "null"], "items": ["type": "string"]],
@@ -86,9 +102,9 @@ enum ReaderPrompt {
     You identify vinyl records from a photo of a sleeve (cover) or the paper label in the centre of the disc. \
     Extract only what is visible or can be inferred with high confidence. Catalogue numbers matter most: \
     copy them exactly as printed (e.g. "POSP 113", "FAC 73", "7N 17241"). Do not guess a year unless printed. \
-    Set isLabelShot true when the photo shows the round centre label. formatGuess: 7" for a small single label \
-    or 45 RPM marking, 12" for a 45/33 RPM maxi, LP for an album. confidence is your certainty that artist and \
-    title are right (0–1). Return JSON matching the schema; use null for unknown fields.
+    Set isLabelShot true when the photo shows the round centre label. formatGuess: "7in" for a small single label \
+    or 45 RPM marking, "12in" for a 45/33 RPM maxi single, "LP" for an album, "10in" for a ten-inch. confidence is \
+    your certainty that artist and title are right (0–1). Return JSON matching the schema; use null for unknown fields.
     """
 
     static func user(hints: ReadHints) -> String {

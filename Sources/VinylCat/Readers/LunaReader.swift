@@ -60,7 +60,7 @@ struct LunaReader: SleeveReader {
             if text != nil { break }
         }
         guard let text, let td = text.data(using: .utf8) else { throw ReaderError.badResponse("no output_text") }
-        let reading = try JSONDecoder().decode(SleeveReading.self, from: td)
+        let reading = try JSONDecoder().decode(SleeveReading.self, from: td).normalized()
         let usage = json["usage"] as? [String: Any] ?? [:]
         let inTok = usage["input_tokens"] as? Int ?? 0, outTok = usage["output_tokens"] as? Int ?? 0
         let cost = Double(inTok) / 1e6 * pricing.input + Double(outTok) / 1e6 * pricing.output

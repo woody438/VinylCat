@@ -185,14 +185,20 @@ private struct ModelStep: View {
                 ForEach(ReaderProvider.allCases) { Text($0.title).tag($0) }
             }.labelsHidden().pickerStyle(.radioGroup)
             if identifier.provider == .luna {
-                Text("GPT-5.6 Luna · about $0.001 per photo · key from platform.openai.com/api-keys").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                HStack(spacing: 6) {
+                    Text("GPT-5.6 Luna · about $0.001 per photo · key from").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                    Link("platform.openai.com/api-keys", destination: URL(string: "https://platform.openai.com/api-keys")!).font(Theme.mono(12)).underline().foregroundStyle(Theme.green)
+                }
                 HStack(spacing: 12) {
                     SecureField("sk-…", text: $openAI).textFieldStyle(.roundedBorder).frame(width: 360)
                     WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(openAI, for: .openAI); Task { await test() } }
                     WizardButton("GET A KEY", style: .quiet) { NSWorkspace.shared.open(URL(string: "https://platform.openai.com/api-keys")!) }
                 }
             } else {
-                Text("Gemini 3.8 Flash · about $0.002 per photo · key from aistudio.google.com/apikey").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                HStack(spacing: 6) {
+                    Text("Gemini 3.8 Flash · about $0.002 per photo · key from").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                    Link("aistudio.google.com/apikey", destination: URL(string: "https://aistudio.google.com/apikey")!).font(Theme.mono(12)).underline().foregroundStyle(Theme.green)
+                }
                 HStack(spacing: 12) {
                     SecureField("AIza…", text: $gemini).textFieldStyle(.roundedBorder).frame(width: 360)
                     WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(gemini, for: .gemini); Task { await test() } }
