@@ -267,6 +267,7 @@ extension CLI {
         let state = AppState(store: store, photos: photos)
         state.scan.appState = state
         state.scan.speaker.enabled = false
+        state.scan.syncToCollection = false   // fixtures must not land in the real Discogs collection
         var failures = 0
         func check(_ c: Bool, _ label: String) { print("  \(c ? "ok  " : "FAIL") \(label)"); if !c { failures += 1 } }
         func still(_ name: String) -> CapturedStill? {

@@ -69,6 +69,9 @@ final class ScanController {
     func inject(still: CapturedStill) async { await handle(still: still) }
     private var shotCounter = 0
     private var expectLabel = false
+    /// Test harnesses (`--scenario`) turn this off: they run against the real Discogs token, and
+    /// every rebuild was adding the fixture records to Woody's collection.
+    var syncToCollection = true
     /// One re-shoot is offered before a record goes to the review queue (a blurry frame or a
     /// half-read catalogue number usually clears on the second look).
     private var retried = false
@@ -271,7 +274,7 @@ final class ScanController {
             rec.expectedShots = CaptureProfile.load().expected(format: rec.format, discCount: rec.discCount, descriptors: rec.formatDescriptors,
                                                              hadPictureSleeve: firstKind == .coverFront && rec.format == "7\"")
             if !rec.expectedShots.contains(firstKind) { rec.expectedShots.insert(firstKind, at: 0) }
-            rec.sync = UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true ? .pending : .off
+            rec.sync = syncToCollection && (UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true) ? .pending : .off
             store.insert(rec)
             current = rec
             pending = rec.missingShots
