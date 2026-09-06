@@ -9,7 +9,14 @@ Plan of record: `~/.claude/plans/compressed-doodling-stearns.md`. Mockups: `desi
 ```bash
 scripts/build-app.sh debug --run   # swift build → build/VinylCat.app (ad-hoc signed) → open
 scripts/test.sh                    # built-in checks: `VinylCat --self-test` (no XCTest/Swift Testing in CLT)
+B=.build/debug/VinylCat
+$B --diagnose                      # permissions, cameras, keys, Discogs reachability, store
+$B --render-ui <dir>               # every screen/state → PNG (AppKit controls show as placeholders; no ScrollView in views you want to check)
+$B --make-test-images <dir>        # synthetic label/cover photos
+$B --pipeline-test <dir>/*.png     # OCR → Discogs → rank, no model
+$B --scenario <dir>                # end-to-end ScanController run in a temp store (match, B-side, duplicate, skip, LP, undo, review)
 ```
+Run `--self-test` and `--scenario` after any change to Scan/, Readers/, Discogs/ or Persistence/.
 
 Consequences of CLT-only: no SwiftData macros (→ hand-rolled SQLite store), no XCTest (→ `Support/SelfTest.swift`),
 no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barlow Condensed / IBM Plex Mono.
