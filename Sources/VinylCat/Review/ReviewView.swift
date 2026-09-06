@@ -10,21 +10,25 @@ struct ReviewView: View {
     @State private var status = ""
     @State private var busy = false
     @State private var hovered: UUID?
+    @State private var shownPhoto: UUID?
     private let store = Store.shared
 
     var body: some View {
         let _ = store.revision
         let all = store.all()
         let queue = all.filter { $0.status == .needsReview }
-        let incomplete = all.filter { $0.status != .needsReview && !$0.isComplete }
+        let incomplete = all.filter { $0.status != .needsReview && $0.isLive && !$0.isComplete }
         let current = all.first { $0.id == selected } ?? queue.first ?? incomplete.first
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                Caption("REVIEW QUEUE · \(queue.count)").padding(16)
-                ForEach(queue) { r in queueRow(r, active: current?.id == r.id, meta: "not found · \(r.photos.count) shot · \(r.createdAt.formatted(date: .omitted, time: .shortened))") }
-                Caption("INCOMPLETE SHOTS · \(incomplete.count)").padding(16)
-                ForEach(incomplete.prefix(8)) { r in queueRow(r, active: current?.id == r.id, meta: "\(r.photos.count)/\(r.expectedShots.count) shots · needs \(r.missingShots.map { $0.title.lowercased() }.joined(separator: ", "))") }
-                Spacer()
+            // The queue can run to dozens of rows. Without a scroll container the column grew past
+            // the window and pushed the top bar — and its tabs — off screen: no scroll, no way back.
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Caption("REVIEW QUEUE · \(queue.count)").padding(16)
+                    ForEach(queue) { r in queueRow(r, active: current?.id == r.id, meta: "not found · \(r.photos.count) shot · \(r.createdAt.formatted(date: .omitted, time: .shortened))") }
+                    Caption("INCOMPLETE SHOTS · \(incomplete.count)").padding(16)
+                    ForEach(incomplete.prefix(8)) { r in queueRow(r, active: current?.id == r.id, meta: "\(r.photos.count)/\(r.expectedShots.count) shots · needs \(r.missingShots.map { $0.title.lowercased() }.joined(separator: ", "))") }
+                }
             }
             .frame(width: 320)
             Rectangle().fill(Theme.line).frame(width: 1)
@@ -35,6 +39,8 @@ struct ReviewView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 
     private func queueRow(_ r: VinylRecord, active: Bool, meta: String) -> some View {
@@ -63,15 +69,21 @@ struct ReviewView: View {
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
         .contentShape(Rectangle())
         .onHover { hovered = $0 ? r.id : (hovered == r.id ? nil : hovered) }
-        .onTapGesture { selected = r.id; candidates = []; extra = ""; status = "" }
+        .onTapGesture { selected = r.id; shownPhoto = nil; candidates = []; extra = ""; status = "" }
     }
 
     private func detail(_ r: VinylRecord) -> some View {
-        HStack(alignment: .top, spacing: 24) {
-            VStack(spacing: 8) {
-                AsyncImage(url: r.sortedPhotos.first?.url) { $0.resizable().aspectRatio(contentMode: .fit) } placeholder: { Theme.raised }
-                    .frame(width: 520, height: 520).background(Theme.panel)
-                PhotoStrip(photos: r.sortedPhotos, coverArt: r.coverArtURL)
+        // The right-hand column scrolls: candidates plus the read text can outrun the window height.
+        ScrollView {
+          HStack(alignment: .top, spacing: 24) {
+            VStack(alignment: .leading, spacing: 8) {
+                // The whole point of this pane is reading what the readers couldn't, so the photo
+                // carries a loupe; click a thumbnail below to put a different shot under it.
+                let shown = r.sortedPhotos.first { $0.id == shownPhoto } ?? r.sortedPhotos.first
+                MagnifiedPhoto(url: shown?.url)
+                Caption("HOVER TO MAGNIFY")
+                PhotoStrip(photos: r.sortedPhotos, coverArt: r.coverArtURL, selected: shown?.id) { shownPhoto = $0.id }
+                    .frame(width: 440)
             }
             VStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 14) {
@@ -108,12 +120,14 @@ struct ReviewView: View {
                     }
                 }
                 if !status.isEmpty { Text(status).font(Theme.mono(12)).foregroundStyle(Theme.amber) }
-                Spacer()
                 Button("SAVE AS MANUAL ENTRY") { saveManual(r) }
                     .buttonStyle(.plain).font(Theme.mono(12)).foregroundStyle(Theme.secondary)
+                    .padding(.top, 12)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .padding(24)
         }
-        .padding(24)
     }
 
     private func discard(_ r: VinylRecord) {

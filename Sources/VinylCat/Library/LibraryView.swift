@@ -221,6 +221,9 @@ struct RecordDetail: View {
 struct PhotoStrip: View {
     let photos: [ScanPhoto]
     let coverArt: String?
+    /// When set, the strip is a picker: the selected shot gets a ring and taps report back.
+    var selected: UUID? = nil
+    var onSelect: ((ScanPhoto) -> Void)? = nil
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
@@ -228,9 +231,12 @@ struct PhotoStrip: View {
                     VStack(spacing: 4) {
                         AsyncImage(url: p.url) { img in img.resizable().aspectRatio(contentMode: .fill) } placeholder: { Theme.raised }
                             .frame(width: 84, height: 84).clipped()
+                            .overlay(Rectangle().stroke(selected == p.id ? Theme.green : .clear, lineWidth: 2))
                         Caption(p.kind.hud).lineLimit(1)
                     }
                     .frame(width: 84)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onSelect?(p) }
                 }
                 if let c = coverArt, let url = URL(string: c) {
                     VStack(spacing: 4) {
