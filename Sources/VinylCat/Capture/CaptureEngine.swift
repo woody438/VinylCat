@@ -18,10 +18,10 @@ struct CaptureTuning: Sendable {
     var rearmDelta: Double = 12
     /// Once the hold has started, thresholds relax by this fraction — a record that was good enough a
     /// moment ago stays good enough through a wobble, instead of flipping in and out on every frame.
-    var slack: Double = 0.35
+    var slack: Double = 0.5
     /// The steady window drains this many times slower than it fills, so a brief blur dents the ring
     /// rather than resetting it. 1.0 would make it symmetrical.
-    var decayRate: Double = 0.7
+    var decayRate: Double = 0.35
 }
 
 /// What the engine reports to the HUD every frame.
@@ -60,6 +60,7 @@ actor CaptureEngine {
     private var driftFrames = 0
     /// Consecutive qualifying frames — a hold has to be seen, not just timed.
     private var goodFrames = 0
+    private var absentFrames = 0
     private var lastTick: Double?
     /// false = manual mode: keep analysing (ring, hints) but never fire on our own; "capture"/space still works.
     private var autoCapture = true
@@ -178,8 +179,14 @@ actor CaptureEngine {
         let still = m.motion <= tuning.motionMax * (1 + ease * 2)
         let sharp = m.sharpness >= tuning.sharpnessMin * (1 - ease)
 
-        // Nothing in front of the camera is a real reset — everything else only drains the hold.
-        guard present else { resetHold(); emit(m, 0, true, "empty"); return }
+        // Nothing in front of the camera is a real reset — but only once it has been empty for a
+        // few frames, so a dark label or a shadow dipping the scene delta doesn't dump the hold.
+        if !present {
+            absentFrames += 1
+            if absentFrames >= 3 { resetHold(); emit(m, 0, true, "empty"); return }
+            emit(m, steadyCredit / tuning.steadySeconds, true, "steady"); return
+        }
+        absentFrames = 0
 
         // A record sliding through looks "still" frame-to-frame, so compare against the picture the
         // hold started from, and only believe a change that lasts more than one frame.
@@ -231,6 +238,7 @@ actor CaptureEngine {
     private func resetHold() {
         steadyCredit = 0
         goodFrames = 0
+        absentFrames = 0
         steadyReference = nil
         driftFrames = 0
     }

@@ -25,12 +25,15 @@ struct LibraryView: View {
                         Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
                         TextField("Search artist, title, label, cat no…", text: $search).textFieldStyle(.plain).font(Theme.mono(13))
                     }
-                    .padding(8).frame(width: 300).overlay(Rectangle().stroke(Theme.raised, lineWidth: 1))
+                    .padding(.horizontal, 8).frame(width: 300, height: 30).overlay(Rectangle().stroke(Theme.raised, lineWidth: 1))
                     ForEach(Filter.allCases) { f in
                         let n = count(f, in: all)
+                        // One line, one height: "INCOMPLETE · 0" was wrapping and making its chip
+                        // taller than the rest of the row.
                         Text("\(f.rawValue) · \(n)").font(Theme.mono(12)).tracking(1)
+                            .lineLimit(1).fixedSize()
                             .foregroundStyle(filter == f ? Theme.green : Theme.secondary)
-                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .padding(.horizontal, 12).frame(height: 30)
                             .overlay(Rectangle().stroke(filter == f ? Theme.green : Theme.line, lineWidth: 1))
                             .contentShape(Rectangle()).onTapGesture { filter = f }
                     }

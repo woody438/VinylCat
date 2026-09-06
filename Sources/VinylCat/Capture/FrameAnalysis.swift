@@ -21,7 +21,7 @@ final class FrameAnalyzer {
     private var previous: [UInt8]?
     private var baseline: [UInt8]?
     private var lastHash: UInt64?
-    /// Last three raw readings of each metric — thresholds run on the median, which kills the
+    /// Last few raw readings of each metric — thresholds run on the median, which kills the
     /// single-frame spikes (auto-exposure hunting, sensor noise, a hand flicking past) that
     /// otherwise made the HUD flip between steady and moving several times a second.
     private var recentSharpness: [Double] = []
@@ -93,7 +93,7 @@ final class FrameAnalyzer {
 
     private func median(_ window: inout [Double], _ value: Double) -> Double {
         window.append(value)
-        if window.count > 3 { window.removeFirst() }
+        if window.count > 5 { window.removeFirst() }
         return window.sorted()[window.count / 2]
     }
 

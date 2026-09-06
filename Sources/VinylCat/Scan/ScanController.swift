@@ -102,6 +102,8 @@ final class ScanController {
     func relearnBaseline() { Task { await engine.relearnBaseline() } }
 
     private var lastReason = ""
+    /// When the signal first stopped saying "steady" — used to hold the banner briefly.
+    private var notSteadySince: Date?
     private func apply(signal s: CaptureSignal) {
         if s.reason != lastReason {
             lastReason = s.reason
@@ -120,9 +122,21 @@ final class ScanController {
         switch s.reason {
         case "learning": phase = .learning
         case "paused": phase = .paused
-        case "steady": phase = .steady(progress: s.steadyProgress)
-        case "captured": phase = .captured
-        default: phase = .armed(reason: s.reason)
+        case "steady", "ready — say capture":
+            notSteadySince = nil
+            phase = .steady(progress: s.steadyProgress)
+        case "captured": notSteadySince = nil; phase = .captured
+        default:
+            // Don't drop the STEADY banner the instant one frame disqualifies: the engine's ring
+            // already shows the hold slipping, and flipping the headline back and forth is what
+            // made lining a record up feel frantic.
+            if case .steady = phase {
+                let since = notSteadySince ?? Date()
+                notSteadySince = since
+                if Date().timeIntervalSince(since) < 0.4 { return }
+            }
+            notSteadySince = nil
+            phase = .armed(reason: s.reason)
         }
     }
 

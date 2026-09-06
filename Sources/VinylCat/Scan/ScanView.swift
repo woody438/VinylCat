@@ -194,7 +194,7 @@ struct StabilityRing: View {
         .frame(width: 84, height: 84)
         // The engine already smooths its own numbers; this just stops the last few pixels of the
         // ring from stepping, so filling and dipping read as one movement.
-        .animation(.easeOut(duration: 0.2), value: progress)
+        .animation(.easeOut(duration: 0.3), value: progress)
         .animation(.easeOut(duration: 0.25), value: color)
     }
 }
@@ -346,7 +346,7 @@ struct AlignmentGuide: View {
                     .position(x: rect.midX, y: rect.minY - 14)
             }
             .animation(.easeOut(duration: 0.25), value: color)
-            .animation(.easeOut(duration: 0.2), value: progress)
+            .animation(.easeOut(duration: 0.3), value: progress)
         }
         .allowsHitTesting(false)
     }
