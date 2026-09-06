@@ -14,6 +14,7 @@ enum ScanPhase: Equatable {
     case matched(title: String, detail: String, meta: String)
     case ambiguous(candidates: [String])
     case needLabel(guess: String)
+    case retry(guess: String, detail: String)
     case awaitingShot(kind: String, index: Int, total: Int, header: String)
     case notFound(guess: String, detail: String)
     case duplicate(title: String)
@@ -62,6 +63,9 @@ final class ScanController {
     func inject(still: CapturedStill) async { await handle(still: still) }
     private var shotCounter = 0
     private var expectLabel = false
+    /// One re-shoot is offered before a record goes to the review queue (a blurry frame or a
+    /// half-read catalogue number usually clears on the second look).
+    private var retried = false
     private var manualKind: ShotKind?
     private var ambiguity: (outcome: Identifier.Outcome, candidates: [Candidate], photo: String, thumb: CGImage?)?
     private var lastCaptured: (photo: String, thumb: CGImage?)?
@@ -113,7 +117,7 @@ final class ScanController {
         switch phase {
         case .learning, .paused, .armed, .steady, .captured: break
         case .reading, .searching: return
-        case .awaitingShot, .needLabel:
+        case .awaitingShot, .needLabel, .retry:
             // Keep the prompt on screen; the ring shows steadiness via `signal`.
             return
         default:
@@ -200,7 +204,7 @@ final class ScanController {
                 phase = .ambiguous(candidates: cands.map(\.summary))
                 await engine.setMode(.shot)
                 Chime.ambiguous.play()
-                speaker.say("\(cands.count) possible matches. " + cands.enumerated().map { "\($0 + 1): \($1.spoken)" }.joined(separator: ". ") + ". Say one, two, three, or none.")
+                speaker.say("\(cands.count) possible matches on screen. Pick a number, or say none.")
             case .none:
                 let guess = [outcome.reading.artist, outcome.reading.title].compactMap { $0 }.joined(separator: " — ")
                 let unreadable = outcome.local.lines.isEmpty && outcome.local.barcodes.isEmpty
@@ -209,6 +213,15 @@ final class ScanController {
                     phase = .needLabel(guess: unreadable ? "NOTHING READABLE" : (guess.isEmpty ? "?" : guess.uppercased() + "?"))
                     Chime.needShot.play()
                     speaker.say(unreadable ? "I can't read that. Show me the label, closer." : "No confident match. Show me the label.")
+                    await engine.setMode(.shot)
+                } else if !retried {
+                    retried = true
+                    let what = outcome.local.lines.prefix(4).joined(separator: " · ")
+                    phase = .retry(guess: guess.isEmpty ? "NO MATCH YET" : guess.uppercased() + "?",
+                                   detail: what.isEmpty ? "Nothing readable in that shot" : "Read: \(what)")
+                    Chime.needShot.play()
+                    speaker.say("Still no match. One more try — hold it steady and a bit closer.")
+                    await engine.rearm()
                     await engine.setMode(.shot)
                 } else {
                     park(outcome: outcome, photo: fileName, thumb: thumb, guess: guess)
@@ -253,6 +266,7 @@ final class ScanController {
             current = rec
             pending = rec.missingShots
             expectLabel = false
+            retried = false
             let detail = [rec.year.map(String.init), rec.discCount > 1 ? "\(rec.discCount)×\(rec.format)" : rec.format,
                           rec.label.map { "\($0.uppercased()) \(rec.catalogNumber ?? "")" }, rec.country?.uppercased()].compactMap { $0 }.joined(separator: " · ")
             phase = .matched(title: rec.displayTitle.uppercased(), detail: detail, meta: String(format: "%.2f · r%d · %@", c.score, release.id, c.reasons.joined(separator: " ")))
@@ -293,6 +307,7 @@ final class ScanController {
             items[idx].meta += " · \(rec.photos.count) shot\(rec.photos.count == 1 ? "" : "s")"
         }
         if announce { Chime.matched.play(); speaker.say("Done. Next record.") }
+        retried = false
         lastClosedRecordID = current?.id
         current = nil; pending = []; manualKind = nil
         phase = .armed(reason: "next record")
@@ -302,6 +317,7 @@ final class ScanController {
     private func park(outcome: Identifier.Outcome, photo: String, thumb: CGImage?, guess: String) {
         guard let app = appState else { return }
         expectLabel = false
+        retried = false
         var rec = VinylRecord(artist: outcome.reading.artist ?? "", title: outcome.reading.title ?? "", format: app.format.discogsFormat, sessionID: sessionID)
         rec.status = .needsReview
         rec.label = outcome.reading.label
@@ -367,7 +383,7 @@ final class ScanController {
         case .addPhoto: manualShot(.other, say: "Show me the extra photo")
         case .skip:
             if !pending.isEmpty { pending.removeFirst(); nextPrompt() }
-            else if case .needLabel = phase, let o = lastOutcome, let f = lastPhotoName { park(outcome: o, photo: f, thumb: lastThumb, guess: [o.reading.artist, o.reading.title].compactMap { $0 }.joined(separator: " — ")) }
+            else if isAwaitingRetry, let o = lastOutcome, let f = lastPhotoName { park(outcome: o, photo: f, thumb: lastThumb, guess: [o.reading.artist, o.reading.title].compactMap { $0 }.joined(separator: " — ")) }
             else { speaker.say("Nothing to skip") }
         case .done:
             if current != nil { pending = []; finishRecord(announce: true) } else { speaker.say("Nothing open") }
@@ -388,14 +404,11 @@ final class ScanController {
             else if let o = lastOutcome, let f = lastPhotoName { park(outcome: o, photo: f, thumb: lastThumb, guess: o.reading.title ?? "") }
             else { speaker.say("Nothing to park") }
         case .again:
-            expectLabel = false; ambiguity = nil
+            expectLabel = false; retried = false; ambiguity = nil
             speaker.say("Go again"); phase = .armed(reason: "again")
             Task { await engine.rearm(); await engine.setMode(.identify) }
         case .one, .two, .three:
-            let i = command == .one ? 0 : command == .two ? 1 : 2
-            guard let amb = ambiguity, i < amb.candidates.count else { speaker.say("Nothing to choose"); return }
-            ambiguity = nil
-            Task { await finalize(candidate: amb.candidates[i], outcome: amb.outcome, photo: amb.photo, thumb: amb.thumb, allowDuplicate: false) }
+            choose(command == .one ? 0 : command == .two ? 1 : 2)
         case .none:
             guard let amb = ambiguity else { speaker.say("Nothing to choose"); return }
             ambiguity = nil
@@ -413,6 +426,18 @@ final class ScanController {
         case .manualMode: app.autoCapture = false; speaker.say("Manual. Say capture or press space")
         case .yes, .no: break
         }
+    }
+
+    /// Pick one of the candidates on screen — from the number keys or from "one"/"two"/"three".
+    func choose(_ index: Int) {
+        guard let amb = ambiguity, index < amb.candidates.count else { speaker.say("Nothing to choose"); return }
+        ambiguity = nil
+        Task { await finalize(candidate: amb.candidates[index], outcome: amb.outcome, photo: amb.photo, thumb: amb.thumb, allowDuplicate: false) }
+    }
+
+    /// True while the HUD is asking for another look at the same record (label prompt or retry).
+    private var isAwaitingRetry: Bool {
+        switch phase { case .needLabel, .retry: true; default: false }
     }
 
     private func manualShot(_ kind: ShotKind, say: String) {

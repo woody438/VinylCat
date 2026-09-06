@@ -89,6 +89,7 @@ enum CLI {
             ("scan-3-matched", .matched(title: "THE JAM — GOING UNDERGROUND", detail: "1980 · 7\" · POLYDOR POSP 113 · UK", meta: "0.94 · r2413807 · catno title format")),
             ("scan-4-ambiguous", .ambiguous(candidates: ["POLYDOR POSP 113 · UK · 1980 · 7\"", "POLYDOR 2059 227 · GERMANY · 1980 · 7\"", "POLYDOR POSPX 113 · UK · 1980 · 12\""])),
             ("scan-5-needlabel", .needLabel(guess: "THE FALL — ?")),
+            ("scan-5b-retry", .retry(guess: "THE FALL — ?", detail: "Read: ROUGH TRADE · RT 0?? · TOTALE'S TURNS")),
             ("scan-6-awaiting", .awaitingShot(kind: "DISC 2 · SIDE C", index: 5, total: 6, header: "The Clash — London Calling · 2×LP")),
             ("scan-7-notfound", .notFound(guess: "SUNSHINE SUPERMAN — DONOVAN?", detail: "Read: PYE · 7N.1?9?? · SUNSHINE SUPERMAN · DONOVAN")),
             ("scan-8-duplicate", .duplicate(title: "THE SPECIALS — GHOST TOWN")),
@@ -314,13 +315,15 @@ extension CLI {
         scan.handle(command: .done)
         check(scan.current == nil, "done")
 
-        print("scenario · unreadable → label → review")
+        print("scenario · unreadable → label → try again → review")
         state.format = .seven
         let blank = CapturedStill(image: photos.downscale(jam.image, maxSide: 8)!, capturedAt: Date(), metrics: jam.metrics, forced: false)
         await scan.inject(still: blank)
         check({ if case .needLabel = scan.phase { return true } else { return false } }(), "nothing readable on a cover → asks for label (phase \(phaseName(scan.phase)))")
         await scan.inject(still: blank)
-        check({ if case .notFound = scan.phase { return true } else { return false } }() && store.reviewCount() == 1, "still nothing → parked for review (review \(store.reviewCount()))")
+        check({ if case .retry = scan.phase { return true } else { return false } }() && store.reviewCount() == 0, "still nothing → offers one retry before the queue (phase \(phaseName(scan.phase)), review \(store.reviewCount()))")
+        await scan.inject(still: blank)
+        check({ if case .notFound = scan.phase { return true } else { return false } }() && store.reviewCount() == 1, "retry failed too → parked for review (review \(store.reviewCount()))")
 
         print("scenario · ambiguity by voice")
         // Force an ambiguous verdict: Blue Monday has many FAC 73 variants; pick with "one".

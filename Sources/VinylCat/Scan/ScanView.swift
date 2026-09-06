@@ -13,6 +13,26 @@ struct ScanView: View {
             Rectangle().fill(Theme.line).frame(height: 1)
             BottomBar()
         }
+        .background(ChoiceKeys())
+    }
+}
+
+/// 1 / 2 / 3 pick a candidate while the HUD is listing them. The buttons only exist during an
+/// ambiguity, so the number keys stay free for the rest of the app.
+struct ChoiceKeys: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        Group {
+            if case .ambiguous(let cands) = state.scan.phase {
+                ForEach(Array(cands.indices.prefix(9)), id: \.self) { i in
+                    Button("") { state.scan.choose(i) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [])
+                        .hidden()
+                }
+            }
+        }
+        .frame(width: 0, height: 0)
     }
 }
 
@@ -160,13 +180,17 @@ struct HUDLook {
             color = Theme.green; state = "MATCHED"; meta = m
             headline = title; subline = detail; ring = 1; ringLabel = "OK"; hint = ""
         case .ambiguous(let cands):
-            color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "say ONE, TWO, THREE or NONE"
+            color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "press 1–\(cands.count) · or say the number, or NONE"
             headline = ""
             ring = 1; ringLabel = "\(cands.count)"; hint = "Or flip it — the B-side label usually settles it · say “review” to park it"
         case .needLabel(let guess):
             color = Theme.blue; state = "SHOW ME THE LABEL"; meta = "no confident match from the cover"
             headline = guess; headlineSize = 56; ring = signal?.steadyProgress ?? 0; ringLabel = "LABEL"
             hint = "Slide the record out and hold side A up to the camera · say “skip” to park it for review"
+        case .retry(let guess, let detail):
+            color = Theme.amber; state = "TRY AGAIN"; meta = "nothing saved yet · one more look"
+            headline = guess; headlineSize = 56; ring = signal?.steadyProgress ?? 0; ringLabel = "RETRY"
+            hint = "\(detail) · hold it steadier and closer, or turn it to a clearer side · say “skip” or “review” to park it"
         case .awaitingShot(let kind, let i, let n, let header):
             color = Theme.blue; state = "NEXT SHOT · \(i) OF \(n)"; meta = header
             headline = kind.uppercased(); ring = signal?.steadyProgress ?? 0; ringLabel = "HOLD"
