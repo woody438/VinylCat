@@ -9,17 +9,15 @@ struct GeminiReader: SleeveReader {
 
     func read(_ image: CGImage, hints: ReadHints) async throws -> ReaderResult {
         guard let key = Keychain.get(.gemini) else { throw ReaderError.missingKey(name) }
-        guard let jpeg = image.jpegData() else { throw ReaderError.badResponse("could not encode image") }
+        let jpegs = try ReaderPrompt.images(image, hints: hints)
         // Gemini's schema dialect: no "additionalProperties", nullable via "nullable": true.
         let schema = geminiSchema(from: SleeveReading.jsonSchema)
         let body: [String: Any] = [
             "systemInstruction": ["parts": [["text": ReaderPrompt.system]]],
             "contents": [[
                 "role": "user",
-                "parts": [
-                    ["text": ReaderPrompt.user(hints: hints)],
-                    ["inlineData": ["mimeType": "image/jpeg", "data": jpeg.base64EncodedString()]],
-                ],
+                "parts": [["text": ReaderPrompt.user(hints: hints)] as [String: Any]]
+                    + jpegs.map { ["inlineData": ["mimeType": "image/jpeg", "data": $0.base64EncodedString()]] as [String: Any] },
             ]],
             "generationConfig": [
                 "responseMimeType": "application/json",

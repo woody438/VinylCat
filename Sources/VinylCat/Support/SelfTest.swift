@@ -215,6 +215,27 @@ enum SelfTest {
         check(c.contains("7N 17241"), "digit-letter prefix kept")
         check(!c.contains("1980") && !c.contains("45"), "years and RPM dropped")
         check(CatalogueNumber.normalize("posp-113") == CatalogueNumber.normalize("POSP 113"), "normalize strips spacing")
+        // The rank list from --ocr-eval, 2026-09-06: what used to sit ahead of the catalogue number.
+        let cbs = CatalogueNumber.candidates(in: ["COLUMBIA", "38-06611", "ZSS 175774", "STEREO", "45 RPM"])
+        check(cbs.first == "38-06611", "CBS single number outranks its ZSS matrix number (\(cbs))")
+        let polygram = CatalogueNumber.candidates(in: ["885 518-7", "LEVEL 42", "℗ 1985 POLYDOR"])
+        check(polygram.first == "885 518-7", "PolyGram 3-3-1 number outranks the artist name (\(polygram))")
+        let album = CatalogueNumber.candidates(in: ["PB 12243", "FROM THE ALBUM AFL1-3962", "P1980 RCA"])
+        check(album.first == "PB 12243", "number quoted from the album ranks below the single's own (\(album))")
+        check((album.firstIndex(of: "P1980") ?? 0) > (album.firstIndex(of: "PB 12243") ?? 9), "℗ year token ranks below the catalogue number (\(album))")
+        let bare = CatalogueNumber.candidates(in: ["EMI AMERICA", "8071", "(X500511)", "1981"])
+        check(bare.contains("8071") && !bare.contains("1981"), "bare four-digit number kept unless it is a year (\(bare))")
+        check(bare.last == "8071", "bare four-digit number ranks last (\(bare))")
+        check(CatalogueNumber.compare("OS 13001", "OS 13061") == .near, "0/6 read as near in small print")
+        // Vision reports boxes in the rotated (upright-text) frame; the crop has to come from the still.
+        let box = CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.05)   // Vision: origin bottom-left
+        func same(_ a: CGRect, _ b: CGRect) -> Bool { abs(a.minX - b.minX) < 0.01 && abs(a.minY - b.minY) < 0.01 && abs(a.width - b.width) < 0.01 && abs(a.height - b.height) < 0.01 }
+        let rightRect = LocalReader.Zoom.pixelRect(box, orientation: .right, width: 1600, height: 900)
+        let leftRect = LocalReader.Zoom.pixelRect(box, orientation: .left, width: 1600, height: 900)
+        check(same(LocalReader.Zoom.pixelRect(box, orientation: .up, width: 1600, height: 900), CGRect(x: 160, y: 675, width: 480, height: 45)), "upright box maps to pixels top-left")
+        check(same(rightRect, CGRect(x: 1200, y: 540, width: 80, height: 270)), "box read at 90° maps back through the rotation (\(rightRect))")
+        check(same(leftRect, CGRect(x: 320, y: 90, width: 80, height: 270)), "box read at -90° maps back through the rotation (\(leftRect))")
+        check(same(LocalReader.Zoom.pixelRect(box, orientation: .down, width: 1600, height: 900), CGRect(x: 960, y: 180, width: 480, height: 45)), "upside-down box maps back")
 
         print("frame analysis")
         check(FrameAnalyzer.hammingDistance(0, 0) == 0 && FrameAnalyzer.hammingDistance(0b1111, 0) == 4, "hamming distance")

@@ -21,16 +21,14 @@ struct LunaReader: SleeveReader {
 
     func read(_ image: CGImage, hints: ReadHints) async throws -> ReaderResult {
         guard let key = Keychain.get(.openAI) else { throw ReaderError.missingKey(name) }
-        guard let jpeg = image.jpegData() else { throw ReaderError.badResponse("could not encode image") }
+        let jpegs = try ReaderPrompt.images(image, hints: hints)
         let body: [String: Any] = [
             "model": model,
             "instructions": ReaderPrompt.system,
             "input": [[
                 "role": "user",
-                "content": [
-                    ["type": "input_text", "text": ReaderPrompt.user(hints: hints)],
-                    ["type": "input_image", "image_url": "data:image/jpeg;base64," + jpeg.base64EncodedString(), "detail": "high"],
-                ],
+                "content": [["type": "input_text", "text": ReaderPrompt.user(hints: hints)] as [String: Any]]
+                    + jpegs.map { ["type": "input_image", "image_url": "data:image/jpeg;base64," + $0.base64EncodedString(), "detail": "high"] as [String: Any] },
             ]],
             "text": ["format": [
                 "type": "json_schema", "name": "sleeve_reading", "strict": true, "schema": SleeveReading.jsonSchema,
@@ -44,7 +42,8 @@ struct LunaReader: SleeveReader {
             var slim = body
             slim["reasoning"] = nil
             if var input = slim["input"] as? [[String: Any]], var content = input[0]["content"] as? [[String: Any]], content.count > 1 {
-                content[1]["detail"] = nil; input[0]["content"] = content; slim["input"] = input
+                for i in content.indices { content[i]["detail"] = nil }
+                input[0]["content"] = content; slim["input"] = input
             }
             (data, code) = try await post(slim, key: key)
         }

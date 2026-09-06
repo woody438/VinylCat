@@ -193,7 +193,9 @@ final class ScanController {
             }
             lastOutcome = outcome
             phase = .searching
-            let (verdict, ranked) = try await Matcher(discogs: app.discogs).find(reading: outcome.reading, sessionFormat: app.format, catalogueAlternates: outcome.local.catalogueCandidates)
+            // The model's other numbers (matrix, album) go before the OCR tokens: it has seen the print magnified.
+            let alternates = (outcome.model?.otherNumbers ?? []) + outcome.local.catalogueCandidates
+            let (verdict, ranked) = try await Matcher(discogs: app.discogs).find(reading: outcome.reading, sessionFormat: app.format, catalogueAlternates: alternates)
             lastCandidates = ranked
             // Second look at the same record (e.g. flipped to the B-side while ambiguous)? Keep what both shots agree on.
             if let amb = ambiguity {

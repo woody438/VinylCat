@@ -19,6 +19,10 @@ struct SleeveReading: Codable, Sendable, Equatable {
     /// 0…1 — how sure the model is about artist+title
     var confidence: Double?
     var notes: String?
+    /// Every other code printed on the label that could be a catalogue number — matrix numbers, the
+    /// album a single was taken from, distributor codes — exactly as printed. The Discogs search tries
+    /// these when `catalogNumber` finds nothing.
+    var otherNumbers: [String]?
 
     /// Maps model-side values to the app's conventions (format strings, trimmed text).
     func normalized() -> SleeveReading {
@@ -32,6 +36,13 @@ struct SleeveReading: Codable, Sendable, Equatable {
         }
         for kp in [\SleeveReading.artist, \.title, \.label, \.catalogNumber, \.barcode, \.country] {
             if let v = r[keyPath: kp]?.trimmingCharacters(in: .whitespacesAndNewlines) { r[keyPath: kp] = v.isEmpty ? nil : v }
+        }
+        if let others = r.otherNumbers {
+            let main = CatalogueNumber.normalize(r.catalogNumber ?? "")
+            var seen = Set<String>()
+            let kept = others.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty && $0.contains(where: \.isNumber) && CatalogueNumber.normalize($0) != main && seen.insert(CatalogueNumber.normalize($0)).inserted }
+            r.otherNumbers = kept.isEmpty ? nil : Array(kept.prefix(6))
         }
         return r
     }
@@ -53,9 +64,10 @@ struct SleeveReading: Codable, Sendable, Equatable {
             "visibleTracks": ["type": ["array", "null"], "items": ["type": "string"]],
             "confidence": ["type": ["number", "null"]],
             "notes": ["type": ["string", "null"]],
+            "otherNumbers": ["type": ["array", "null"], "items": ["type": "string"]],
         ],
         "required": ["artist", "title", "label", "catalogNumber", "barcode", "year", "country", "formatGuess",
-                     "isLabelShot", "side", "visibleTracks", "confidence", "notes"],
+                     "isLabelShot", "side", "visibleTracks", "confidence", "notes", "otherNumbers"],
     ] }
 }
 
@@ -95,13 +107,24 @@ struct ReadHints: Sendable {
     var barcodes: [String] = []
     var sessionFormat: String = ""
     var expectLabel = false
+    /// Magnified crops of the smallest print (from `LocalReading.closeUps`), sent after the frame.
+    var closeUps: [CGImage] = []
 }
 
 enum ReaderPrompt {
+    /// The frame goes up near its native size: at 1024px the catalogue number on a label is ~6px tall,
+    /// too small for any model. Costs a few hundred extra image tokens, a fraction of a cent.
+    static let frameMaxSide = 1600
+    static let closeUpMaxSide = 1024
+
     static let system = """
     You identify vinyl records from a photo of a sleeve (cover) or the paper label in the centre of the disc. \
     Extract only what is visible or can be inferred with high confidence. Catalogue numbers matter most: \
-    copy them exactly as printed (e.g. "POSP 113", "FAC 73", "7N 17241"). Do not guess a year unless printed. \
+    copy them exactly as printed (e.g. "POSP 113", "FAC 73", "7N 17241", "38-06611"). The catalogue number is \
+    the label's own issue number, usually the small print near the edge or beside the spindle hole; it is not \
+    the matrix/stamper number (e.g. "ZSS 175774"), not the album a single is "from", and not a publisher or \
+    ℗ year. Put every other printed code that could be a catalogue number — matrix numbers, the album number, \
+    distributor codes — in otherNumbers, exactly as printed. Do not guess a year unless printed. \
     Set isLabelShot true when the photo shows the round centre label. formatGuess: "7in" for a small single label \
     or 45 RPM marking, "12in" for a 45/33 RPM maxi single, "LP" for an album, "10in" for a ten-inch. confidence is \
     your certainty that artist and title are right (0–1). Return JSON matching the schema; use null for unknown fields.
@@ -112,8 +135,19 @@ enum ReaderPrompt {
         if !hints.sessionFormat.isEmpty { s += " The operator is currently scanning \(hints.sessionFormat)." }
         if hints.expectLabel { s += " This should be the centre label." }
         if !hints.barcodes.isEmpty { s += " Barcode detected locally: \(hints.barcodes.joined(separator: ", "))." }
+        if !hints.closeUps.isEmpty, ProcessInfo.processInfo.environment["VINYLCAT_MODEL_PLAIN"] == nil {
+            s += " After the photo come \(hints.closeUps.count) magnified close-ups of its smallest print; read catalogue and matrix numbers from those, they are sharper than the photo."
+        }
         if !hints.ocrText.isEmpty { s += "\nLocal OCR lines (may contain errors):\n\(hints.ocrText)" }
         return s
+    }
+
+    /// JPEGs to attach, frame first then the close-ups. VINYLCAT_MODEL_PLAIN=1 sends the old single
+    /// 1024px frame instead, so `--ocr-eval --model` can measure what the close-ups are worth.
+    static func images(_ image: CGImage, hints: ReadHints) throws -> [Data] {
+        let plain = ProcessInfo.processInfo.environment["VINYLCAT_MODEL_PLAIN"] != nil
+        guard let frame = image.jpegData(maxSide: plain ? 1024 : frameMaxSide) else { throw ReaderError.badResponse("could not encode image") }
+        return [frame] + (plain ? [] : hints.closeUps.compactMap { $0.jpegData(maxSide: closeUpMaxSide, quality: 0.85) })
     }
 }
 

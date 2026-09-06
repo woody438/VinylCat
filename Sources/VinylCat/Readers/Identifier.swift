@@ -50,7 +50,7 @@ final class Identifier {
         }
 
         onStep("\(provider.title) reading")
-        let hints = ReadHints(ocrText: local.text, barcodes: local.barcodes, sessionFormat: sessionFormat, expectLabel: expectLabel)
+        let hints = ReadHints(ocrText: local.text, barcodes: local.barcodes, sessionFormat: sessionFormat, expectLabel: expectLabel, closeUps: local.closeUps)
         let r: ReaderResult
         do { r = try await provider.reader.read(image, hints: hints) } catch ReaderError.missingKey {
             // No model key yet: OCR-only guess (catalogue number does most of the work anyway).
