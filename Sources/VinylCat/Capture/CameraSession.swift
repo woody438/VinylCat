@@ -94,6 +94,23 @@ final class CameraSession {
         }
     }
 
+    /// Mirror the preview so a sleeve moved left moves left on screen. True for a camera pointing back
+    /// at you — every built-in or USB webcam — and false for a Continuity iPhone, whose rear camera is
+    /// usually aimed away at the records. Stored per camera; only the preview is ever mirrored.
+    var mirrorPreview = true {
+        didSet {
+            guard oldValue != mirrorPreview, let id = selectedDeviceID else { return }
+            UserDefaults.standard.set(mirrorPreview, forKey: "cameraMirror.\(id)")
+            applyRotation()
+        }
+    }
+
+    private func loadMirror(for device: AVCaptureDevice) {
+        let stored = UserDefaults.standard.object(forKey: "cameraMirror.\(device.uniqueID)") as? Bool
+        let value = stored ?? (device.deviceType != .continuityCamera)
+        if value != mirrorPreview { mirrorPreview = value }
+    }
+
     private func loadRotationOverride(for device: AVCaptureDevice) {
         let stored = UserDefaults.standard.object(forKey: "cameraRotation.\(device.uniqueID)") as? Int
         if stored != rotationOverride { rotationOverride = stored }
@@ -213,7 +230,7 @@ final class CameraSession {
         let generation = self.generation
         status = .warmingUp(name)
         startRotationTracking(device: device)
-        Log.camera.info("switching to \(name) · type \(device.deviceType.rawValue) · connected \(device.isConnected) · suspended \(device.isSuspended) · inUseElsewhere \(device.isInUseByAnotherApplication) · format \(device.activeFormat.formatDescription.dimensions.width)x\(device.activeFormat.formatDescription.dimensions.height) · \(device.formats.count) formats")
+        Log.camera.info("switching to \(name) · type \(device.deviceType.rawValue) · position \(device.position.rawValue) · connected \(device.isConnected) · suspended \(device.isSuspended) · inUseElsewhere \(device.isInUseByAnotherApplication) · format \(device.activeFormat.formatDescription.dimensions.width)x\(device.activeFormat.formatDescription.dimensions.height) · \(device.formats.count) formats")
         box.queue.async { [weak self] in
             let session = box.session
             if session.isRunning { session.stopRunning() }
@@ -306,18 +323,39 @@ final class CameraSession {
     private func startRotationTracking(device: AVCaptureDevice) {
         rotationObservations.removeAll()
         loadRotationOverride(for: device)
+        loadMirror(for: device)
         let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
         rotationCoordinator = coordinator
         rotationObservations = [
             coordinator.observe(\.videoRotationAngleForHorizonLevelPreview) { [weak self] _, _ in
-                Task { @MainActor in self?.applyRotation() }
+                Task { @MainActor in self?.rotationChanged() }
             },
             coordinator.observe(\.videoRotationAngleForHorizonLevelCapture) { [weak self] _, _ in
-                Task { @MainActor in self?.applyRotation() }
+                Task { @MainActor in self?.rotationChanged() }
             },
         ]
         applyRotation()
     }
+
+    /// A new angle has to hold still before it is used. Tipping a phone down towards a record on a
+    /// table leaves gravity almost perpendicular to the screen, so "which way is up" turns ambiguous
+    /// and the reported angle flips between portrait and landscape on the way over. A deliberate turn
+    /// ends with the phone held in the new orientation; a tip-through does not.
+    private func rotationChanged() {
+        guard rotationOverride == nil, let coordinator = rotationCoordinator else { applyRotation(); return }
+        let new = (preview: coordinator.videoRotationAngleForHorizonLevelPreview,
+                   capture: coordinator.videoRotationAngleForHorizonLevelCapture)
+        guard new.preview != lastRotation?.preview || new.capture != lastRotation?.capture else { return }
+        rotationSettle?.cancel()
+        rotationSettle = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(1200))
+            guard !Task.isCancelled, let self, let coordinator = self.rotationCoordinator else { return }
+            guard coordinator.videoRotationAngleForHorizonLevelPreview == new.preview,
+                  coordinator.videoRotationAngleForHorizonLevelCapture == new.capture else { return }
+            self.applyRotation()
+        }
+    }
+    private var rotationSettle: Task<Void, Never>?
 
     /// Rotates preview and frames so the picture is upright however the phone is held. The preview
     /// fits rather than fills: the analyser crops its region from the buffer, so anything cropped off
@@ -334,15 +372,24 @@ final class CameraSession {
         let shown = quarterTurned ? h / w : w / h
         previewLayer?.videoGravity = .resizeAspect
         videoAspect = shown
-        if lastRotation?.preview != preview || lastRotation?.capture != capture {
+        if lastRotation?.preview != preview || lastRotation?.capture != capture || lastMirror != mirrorPreview {
+            lastMirror = mirrorPreview
             lastRotation = (preview: preview, capture: capture)
-            Log.camera.info("rotation preview \(Int(preview))° capture \(Int(capture))° (\(manual == nil ? "auto" : "manual")) · showing \(String(format: "%.2f", shown)):1")
+            Log.camera.info("rotation preview \(Int(preview))° capture \(Int(capture))° (\(manual == nil ? "auto" : "manual")) · showing \(String(format: "%.2f", shown)):1 · preview mirrored \(self.mirrorPreview)")
         }
         let output = self.output
         let layer = previewLayer
+        // Only the preview is mirrored: mirrored stills would not OCR and would be saved back to front.
+        let mirror = mirrorPreview
         box.queue.async {
-            if let connection = layer?.connection, connection.isVideoRotationAngleSupported(preview) {
-                connection.videoRotationAngle = preview
+            if let connection = layer?.connection {
+                if connection.isVideoRotationAngleSupported(preview) { connection.videoRotationAngle = preview }
+                if connection.isVideoMirroringSupported {
+                    connection.automaticallyAdjustsVideoMirroring = false
+                    connection.isVideoMirrored = mirror
+                } else if mirror {
+                    Log.camera.info("preview mirroring not supported by this camera")
+                }
             }
             if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(capture) {
                 connection.videoRotationAngle = capture
@@ -350,6 +397,7 @@ final class CameraSession {
         }
     }
     private var lastRotation: (preview: CGFloat, capture: CGFloat)?
+    private var lastMirror: Bool?
 
     /// The capture engine reports how bright the stream is; a running-but-pitch-black stream is
     /// worth saying out loud rather than showing as a blank preview. Recovers by itself.
@@ -381,6 +429,7 @@ final class CameraSession {
         let box = self.box
         generation &+= 1
         deviceWatch?.cancel(); deviceWatch = nil
+        rotationSettle?.cancel(); rotationSettle = nil
         rotationObservations.removeAll()
         rotationCoordinator = nil
         box.queue.async { if box.session.isRunning { box.session.stopRunning() } }

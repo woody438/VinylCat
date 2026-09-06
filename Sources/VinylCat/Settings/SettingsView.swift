@@ -76,6 +76,12 @@ struct SettingsView: View {
                             ForEach([0, 90, 180, 270], id: \.self) { Text("\($0)°").tag(Optional($0)) }
                         }.labelsHidden().frame(width: 240)
                     }
+                    Row("Mirror preview") {
+                        @Bindable var camera = state.camera
+                        Toggle("", isOn: $camera.mirrorPreview).labelsHidden().toggleStyle(.switch)
+                    }
+                    Text("Mirroring makes a sleeve moved left move left on screen, which is what you want from a camera pointing back at you. It affects the preview only — saved photos are never mirrored. On by default for built-in and USB cameras, off for a Continuity iPhone aimed at the records. Saved per camera.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     Text("An iPhone on Continuity Camera sends a landscape picture whichever way it is held. If the label comes out on its side, set 90° or 270°. Saved per camera.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
