@@ -6,12 +6,12 @@ struct ScanView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                PreviewPane()
+                PreviewPane().tourAnchor(.preview)
                 Rectangle().fill(Theme.line).frame(width: 1)
-                RightRail().frame(width: 340)
+                RightRail().frame(width: 340).tourAnchor(.rail)
             }
             Rectangle().fill(Theme.line).frame(height: 1)
-            BottomBar()
+            BottomBar().tourAnchor(.bottomBar)
         }
         .background(ChoiceKeys())
     }
@@ -88,7 +88,7 @@ struct HUDOverlay: View {
 
     var body: some View {
         let scan = state.scan
-        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey, voiceProblem: state.voice.problem, manual: !state.autoCapture)
+        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey, voiceProblem: state.voice.problem, manual: !state.autoCapture, voiceOff: state.voice.status != .listening)
         ZStack {
             AlignmentGuide(color: look.color, progress: look.ring, videoAspect: state.camera.videoAspect)
             hudChrome(look)
@@ -126,6 +126,7 @@ struct HUDOverlay: View {
                 }
                 Text(look.hint).font(Theme.mono(13)).foregroundStyle(Theme.muted).lineLimit(2)
             }
+            .tourAnchor(.banner)
         }
     }
 
@@ -148,7 +149,7 @@ struct HUDLook {
     var ring: Double = 0
     var ringLabel = "READY"
 
-    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil, manual: Bool = false) {
+    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil, manual: Bool = false, voiceOff: Bool = false) {
         // Coarse buckets: the exact numbers change every frame and made the hint line shimmer.
         let metrics = signal.map { String(format: "sharp %.0f · motion %.0f · scene %.0f",
                                           ($0.metrics.sharpness / 10).rounded() * 10,
@@ -167,6 +168,7 @@ struct HUDLook {
             hint = (manual ? "Manual capture · the ring fills when the shot would be sharp · " : "Line it up in the guide and hold still for a second · say “capture” or press space to force · ") + metrics
             if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only · " + metrics }
             if let vp = voiceProblem { hint = "Voice off — \(vp) · " + hint }
+            else if voiceOff { hint = "Voice off — click VOICE in the top bar to use spoken commands · " + hint }
         case .steady(let p):
             color = Theme.green; state = manual ? "READY" : "STEADY"; meta = "record #\(recordNumber)"
             headline = manual ? (p >= 1 ? "SAY “CAPTURE” OR PRESS SPACE" : "HOLD IT…") : "HOLD IT…"; ring = p; ringLabel = manual ? "GO" : "HOLD"; hint = metrics
@@ -332,7 +334,7 @@ struct BottomBar: View {
                 }
                 .labelsHidden().pickerStyle(.menu).fixedSize()
             }
-            Text("VOICE · “capture” · “flip” · “skip” · “review” · “forty-fives” · “albums” · “undo”")
+            Text((state.voice.status == .listening ? "VOICE" : "VOICE OFF · click VOICE in the top bar, then") + " · “capture” · “flip” · “skip” · “review” · “forty-fives” · “albums” · “undo”")
             Spacer()
             Text("SESSION · \(state.scan.items.count) SHOTS")
         }

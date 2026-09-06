@@ -33,9 +33,13 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - `Voice/` — `SpeechCommands` (on-device SFSpeechRecognizer, phrase table in `VoiceCommand.phrases`), `Speaker` (TTS, mutes recogniser), `Chimes`.
 - `Persistence/` — `Models` (structs), `Store` (SQLite, `revision` drives view refresh, CSV export), `Keychain` (API keys).
 - `Library/`, `Review/`, `Settings/` — the other three tabs.
+- `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
+  `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
+  `--render-ui` writes every step as `tour-NN-<anchor>.png`.
 
 ## Conventions
 
-- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`, `askForBSide`, `askForLabelsOnLP`).
+- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`, `askForBSide`, `askForLabelsOnLP`,
+  `voiceOnLaunch` — default off: the speech recogniser only runs once VOICE is clicked, `setupCompleted`, `tourCompleted`).
 - Exports go to `output/` as `vinylcat_export_vN_YYYY-MM-DD.csv`. Reference docs go in `input/`.
 - Keep `design/mockups/build.mjs` as the single source for mockup changes; re-seed and republish the same canvas.

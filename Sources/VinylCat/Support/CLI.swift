@@ -82,6 +82,7 @@ enum CLI {
         UserDefaults.standard.set(true, forKey: "setupCompleted")
         let state = AppState()
         state.scan.appState = state
+        state.tour.suppressAutoStart = true
         state.reviewCount = Store.shared.reviewCount()   // so the REVIEW tab badge renders
         let phases: [(String, ScanPhase)] = [
             ("scan-1-armed", .armed(reason: "empty")),
@@ -114,6 +115,15 @@ enum CLI {
             let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
             if render(view, to: out.appendingPathComponent("\(name).png")) { written += 1 }
         }
+        // Every callout of the first-run tour, on the tab it belongs to.
+        for i in TourStep.all.indices {
+            state.tour.show(i)
+            let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
+                .environment(\.previewPhase, .armed(reason: "empty"))
+            if render(view, to: out.appendingPathComponent(String(format: "tour-%02d-%@.png", i + 1, TourStep.all[i].anchor.rawValue))) { written += 1 }
+        }
+        state.tour.hide()
+        state.tab = .scan
         print("rendered \(written) screens to \(out.path)")
         return written > 0 ? 0 : 1
     }

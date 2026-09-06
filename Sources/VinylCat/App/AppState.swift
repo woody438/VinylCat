@@ -23,6 +23,10 @@ final class AppState {
         didSet { UserDefaults.standard.set(autoCapture, forKey: "autoCapture"); scan.setAutoCapture(autoCapture) }
     }
     var listening = false
+    /// Off by default: the recogniser only runs when VOICE is clicked, unless Settings says otherwise.
+    var voiceOnLaunch: Bool = UserDefaults.standard.bool(forKey: "voiceOnLaunch") {
+        didSet { UserDefaults.standard.set(voiceOnLaunch, forKey: "voiceOnLaunch") }
+    }
     var sessionCount = 0
     var reviewCount = 0
     let camera = CameraSession()
@@ -33,6 +37,7 @@ final class AppState {
     init(store: Store = .shared, photos: PhotoStore = .shared) {
         scan = ScanController(store: store, photos: photos)
         if let f = UserDefaults.standard.string(forKey: "defaultFormat"), let v = VinylFormat(rawValue: f) { format = v }
+        tour.app = self
     }
 
     /// Once the camera delivers, sample its brightness so a running-but-black stream is reported
@@ -76,10 +81,12 @@ final class AppState {
         Task {
             await camera.start()
             scan.start(camera: camera)
-            await voice.start()
+            // The wizard's Dictation check may have left the recogniser running; launch state is "off" unless asked for.
+            if voiceOnLaunch { await voice.start() } else if voice.status == .listening { voice.stop() }
         }
     }
     let identifier = Identifier()
     let discogs = DiscogsClient()
     let voice = SpeechCommands()
+    let tour = TourState()
 }

@@ -31,6 +31,7 @@ struct SettingsView: View {
                     Row("Skip model when barcode hits") { Toggle("", isOn: $identifier.skipModelWhenBarcode).labelsHidden().toggleStyle(.switch) }
                     Row("Spend this session") { Text(String(format: "$%.3f · %d reads", identifier.sessionCostUSD, identifier.reads)).foregroundStyle(Theme.secondary) }
                 }
+                .tourAnchor(.settingsIdentification)
                 Section("DISCOGS") {
                     Row("Username") { TextField("", text: $discogsUsername).textFieldStyle(.roundedBorder).frame(width: 170) }
                     KeyField(label: "Personal token", text: $discogsToken) { Keychain.set(discogsToken, for: .discogsToken) }
@@ -40,6 +41,7 @@ struct SettingsView: View {
                     }
                     Row("Rate limit") { Text(state.discogs.rateText).foregroundStyle(Theme.green) }
                 }
+                .tourAnchor(.settingsDiscogs)
             }
             VStack(alignment: .leading, spacing: 32) {
                 Section("VOICE") {
@@ -49,6 +51,10 @@ struct SettingsView: View {
                             Text("System default").tag(String?.none)
                             ForEach(state.voice.inputs) { Text($0.name).tag(Optional($0.uid)) }
                         }.labelsHidden().frame(width: 240).onAppear { state.voice.refreshInputs() }
+                    }
+                    Row("Listen from launch") {
+                        @Bindable var app = state
+                        Toggle("", isOn: $app.voiceOnLaunch).labelsHidden().toggleStyle(.switch)
                     }
                     Row("Read out results") { Toggle("", isOn: $speaker.enabled).labelsHidden().toggleStyle(.switch) }
                     Row("Speech rate") { Slider(value: $speaker.rate, in: 0.35...0.65).frame(width: 160) }
@@ -62,6 +68,7 @@ struct SettingsView: View {
                     }
                     Row("Test") { Button("Say something") { state.scan.speaker.say("VinylCat ready. Hold up a record.") } }
                 }
+                .tourAnchor(.settingsVoice)
                 Section("CAPTURE") {
                     Row("Camera") {
                         @Bindable var camera = state.camera
@@ -91,6 +98,7 @@ struct SettingsView: View {
                     Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
                     Row("Live numbers") { Text(state.scan.signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f · %@", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta, $0.reason) } ?? "—").foregroundStyle(Theme.secondary) }
                 }
+                .tourAnchor(.settingsCapture)
             }
             VStack(alignment: .leading, spacing: 32) {
                 Section("SHOTS") {
@@ -99,14 +107,17 @@ struct SettingsView: View {
                     Text("After a confident match Discogs already knows the tracklist, so singles need no extra shots; the B-side is only asked for when a match is ambiguous. LPs: front + back. 2×LP and gatefolds are detected from Discogs. Say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
+                .tourAnchor(.settingsShots)
                 Section("TESTS") {
                     HStack(spacing: 12) {
                         Button("Test Discogs") { Task { testResult = await state.discogs.selfTest() } }
                         Button("Test model") { Task { testResult = await testModel() } }
                         Button("Run setup again") { UserDefaults.standard.set(false, forKey: "setupCompleted") }
+                        Button("Show the tour again") { state.tour.show(0) }
                     }
                     Text(testResult).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(6).fixedSize(horizontal: false, vertical: true)
                 }
+                .tourAnchor(.settingsTests)
             }
         }
         .padding(.horizontal, 40).padding(.vertical, 28)

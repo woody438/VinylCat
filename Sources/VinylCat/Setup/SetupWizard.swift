@@ -286,6 +286,7 @@ private struct ReadyStep: View {
                     Bullet("Put the Mac where you can hold a record about 40 cm from the camera, on a plain background.")
                     Bullet("Set the format in the top bar — or say “forty-fives”, “twelve inch”, “albums”.")
                     Bullet("Line the cover or label up in the guide and hold still for a second — or say “capture” / press space. Chime = captured.")
+                    Bullet("Voice starts off. Click VOICE in the top bar when you want to talk to it (Settings → LISTEN FROM LAUNCH keeps it on).")
                     Bullet("Listen: it reads the match back, then asks for the B-side or back cover. Flip, hold, chime, next record.")
                     Bullet("Can't identify it? It's parked in REVIEW with the photo — finish it later by voice or typing.")
                 }

@@ -51,13 +51,16 @@ struct RootView: View {
             Divider().overlay(Theme.line)
             switch state.tab {
             case .scan: ScanView()
-            case .library: LibraryView()
-            case .review: ReviewView()
+            case .library: LibraryView().tourAnchor(.library)
+            case .review: ReviewView().tourAnchor(.review)
             case .settings: SettingsView()
             }
         }
         .background(Theme.bg)
         .foregroundStyle(Theme.text)
+        // First-run callouts: anchors are collected from the whole tree, the overlay draws above it.
+        .overlayPreferenceValue(TourAnchorKey.self) { TourHost(anchors: $0) }
+        .task { await state.tour.autoStartIfNeeded() }
     }
 }
 
@@ -97,6 +100,7 @@ struct TopBar: View {
                         .onTapGesture { state.tab = tab }
                 }
             }
+            .tourAnchor(.tabs)
             Spacer()
             // The three top-bar controls share one shape so they read as one set.
             // Fixed size: the cluster must never compress into itself — overlapping controls were
@@ -108,6 +112,7 @@ struct TopBar: View {
                                                    : "Manual: nothing fires on its own — say “capture” or press space.") {
                     state.autoCapture.toggle()
                 }
+                .tourAnchor(.capture)
                 SwitchChip(title: "VOICE", state: state.voice.status == .listening ? "ON" : "OFF", stateWidth: 40,
                            isOn: state.voice.status == .listening,
                            tint: state.voice.status == .listening ? Theme.green : (state.voice.problem == nil ? Theme.muted : Theme.amber),
@@ -130,6 +135,7 @@ struct TopBar: View {
                     }
                     .padding(14).background(Theme.panel)
                 }
+                .tourAnchor(.voice)
                 // A real Picker rather than a styled Menu: AppKit draws its own indicator over a
                 // custom menu label and drops the selected value, which is what went wrong here.
                 HStack(spacing: 8) {
@@ -143,6 +149,7 @@ struct TopBar: View {
                 .padding(.leading, 12).padding(.trailing, 6).frame(height: 30)
                 .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
                 .help("What you are cataloguing — narrows the Discogs search")
+                .tourAnchor(.format)
             }
             .fixedSize()
             // Space bar = capture, from anywhere in the window.

@@ -1,5 +1,6 @@
 import CoreVideo
 import Foundation
+import SwiftUI
 
 /// Built-in checks, run with `VinylCat --self-test` (see scripts/test.sh). Kept here because the
 /// Command Line Tools toolchain ships neither XCTest nor Swift Testing.
@@ -250,6 +251,24 @@ enum SelfTest {
         check(distinct.count == 2, "identical pressings collapse (\(distinct.count))")
         check(rk.first?.isStrong == true, "catno + title is a strong match")
         check(CandidateRanker.titleSimilarity(reading: { var x = SleeveReading(); x.artist = "Blue Monday"; x.title = "Factory"; return x }(), resultTitle: "New Order - Blue Monday") > 0.6, "swapped artist/title still matches")
+
+        print("first-run tour")
+        let win = CGSize(width: 1440, height: 900)
+        check(Set(TourStep.all.map(\.anchor)).count == TourStep.all.count, "one callout per anchor")
+        check(Set(TourStep.all.map(\.tab)) == Set(AppTab.allCases), "tour visits every tab")
+        let below = TourLayout.place(anchor: CGRect(x: 1380, y: 14, width: 50, height: 30), placement: .below, in: win)
+        check(below.container.maxX <= win.width - TourLayout.margin && below.placement == .below, "bubble under a right-edge control stays on screen (\(below.container))")
+        check(below.arrow > TourLayout.bubbleWidth / 2 && below.arrow <= TourLayout.bubbleWidth - 20, "arrow slides toward the anchor when the bubble is clamped (\(below.arrow))")
+        let above = TourLayout.place(anchor: CGRect(x: 0, y: 856, width: 1440, height: 44), placement: .above, in: win)
+        check(above.placement == .above && above.container.maxY <= 856 - TourLayout.gap, "bubble above the bottom bar sits clear of it")
+        let flipped = TourLayout.place(anchor: CGRect(x: 0, y: 800, width: 600, height: 100), placement: .below, in: win)
+        check(flipped.placement == .above, "no room below → flips above")
+        let noRoomLeft = TourLayout.place(anchor: CGRect(x: 40, y: 100, width: 400, height: 300), placement: .leading, in: win)
+        check(noRoomLeft.placement == .trailing && noRoomLeft.container.minX >= 440 + TourLayout.gap, "no room to the left → goes right")
+        let rail = TourLayout.place(anchor: CGRect(x: 1100, y: 57, width: 340, height: 800), placement: .leading, in: win)
+        check(rail.placement == .leading && rail.container.maxX <= 1100 - TourLayout.gap && rail.arrow <= 80, "rail callout sits left of the rail, arrow near its top")
+        let inside = TourLayout.place(anchor: CGRect(x: 0, y: 57, width: 1100, height: 800), placement: .inside, in: win)
+        check(inside.container == CGRect(x: 0, y: 57, width: 1100, height: 800) && inside.alignment == .center, "inside placement centres on the region")
 
         print("store round-trip")
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-selftest-\(UUID().uuidString).sqlite")
