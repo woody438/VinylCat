@@ -65,7 +65,7 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 
 ## Conventions
 
-- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`, `askForBSide`, `askForLabelsOnLP`,
+- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`, `askForBSide`, `askForFrontOnLP`, `askForCoversOnLP`, `askForLabelsOnLP`,
   `voiceOnLaunch` — default off: the speech recogniser only runs once VOICE is clicked, `setupCompleted`, `tourCompleted`).
 - Exports go to `output/` as `vinylcat_export_vN_YYYY-MM-DD.csv` and `vinylcat_feedback_vN_YYYY-MM-DD.jsonl`. Reference docs go in `input/`.
 - Keep `design/mockups/build.mjs` as the single source for mockup changes; re-seed and republish the same canvas.

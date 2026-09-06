@@ -276,6 +276,7 @@ final class ScanController {
             rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: firstKind, order: 0)]
             rec.expectedShots = CaptureProfile.load().expected(format: rec.format, discCount: rec.discCount, descriptors: rec.formatDescriptors,
                                                              hadPictureSleeve: firstKind == .coverFront && rec.format == "7\"")
+            // The identifying shot always counts, whatever it was: with every extra off the plan is just that one photo.
             if !rec.expectedShots.contains(firstKind) { rec.expectedShots.insert(firstKind, at: 0) }
             rec.sync = syncToCollection && (UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true) ? .pending : .off
             store.insert(rec)

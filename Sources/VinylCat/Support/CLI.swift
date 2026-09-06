@@ -265,6 +265,8 @@ enum CLI {
             ("label-specials-chstt17", ["2 TONE", "CHS TT 17", "45 RPM", "GHOST TOWN", "(Dammers)", "THE SPECIALS", "A"], NSColor(white: 0.15, alpha: 1)),
             ("label-neworder-fac73", ["FACTORY", "FAC 73", "33 RPM", "BLUE MONDAY", "NEW ORDER", "SIDE ONE", "1983"], NSColor(red: 0.1, green: 0.2, blue: 0.6, alpha: 1)),
             ("cover-clash-clash3", ["THE CLASH", "LONDON CALLING", "CBS CLASH 3", "STEREO"], NSColor(white: 0.05, alpha: 1)),
+            // Album label: the scenario scans an LP from its label to prove the identifying shot alone closes the record.
+            ("label-jam-pold5008", ["POLYDOR", "POLD 5008", "33 RPM", "ALL MOD CONS", "(Weller)", "THE JAM", "SIDE ONE", "1978"], NSColor(red: 0.85, green: 0.1, blue: 0.1, alpha: 1)),
         ]
         var n = 0
         for (name, lines, colour) in labels {
@@ -322,7 +324,7 @@ enum CLI {
                 // Without a vision model, take the longest OCR lines as title/artist hints.
                 let words = local.lines.filter { $0.count > 5 && !$0.contains(where: \.isNumber) && !$0.hasPrefix("(") }
                 reading.title = words.dropFirst().first ?? words.first; reading.artist = words.dropFirst(2).first ?? words.first
-                let fmt: VinylFormat? = p.contains("cover") ? .lp : p.contains("fac73") ? .twelve : .seven
+                let fmt: VinylFormat? = p.contains("cover") || p.contains("pold5008") ? .lp : p.contains("fac73") ? .twelve : .seven
                 let t1 = Date()
                 let (verdict, ranked) = try await Matcher(discogs: dc).find(reading: reading, sessionFormat: fmt, catalogueAlternates: local.catalogueCandidates)
                 print("  discogs \(String(format: "%.2fs", Date().timeIntervalSince(t1))) · \(ranked.count) candidates · \(dc.rateText)")
@@ -407,7 +409,8 @@ extension CLI {
         let scan = state.scan
         print("scenario · 7\" single: match → done (no extra shots) → “flip” reopens for the B-side")
         state.format = .seven
-        guard let jam = still("label-jam-posp113"), let specials = still("label-specials-chstt17"), let clash = still("cover-clash-clash3") else { return 1 }
+        guard let jam = still("label-jam-posp113"), let specials = still("label-specials-chstt17"), let clash = still("cover-clash-clash3"),
+              let allModCons = still("label-jam-pold5008") else { return 1 }
         await scan.inject(still: jam)
         check(scan.current == nil && store.count() == 1, "confident match closes the record immediately (phase \(phaseName(scan.phase)))")
         check(store.all().first?.discogsReleaseID != nil && store.all().first?.isComplete == true, "record saved with Discogs id \(store.all().first?.discogsReleaseID ?? 0), complete")
@@ -438,8 +441,25 @@ extension CLI {
         check(store.all().first?.photos.count == 2 && store.all().first?.photos.last?.kind == .other, "“add photo” attaches an extra shot to the last record")
         scan.handle(command: .done)
 
-        print("scenario · album → front/back/label → undo → done")
+        print("scenario · album, default prefs → one shot closes the record")
         state.format = .lp
+        let lpPrefs = ["askForFrontOnLP", "askForCoversOnLP", "askForLabelsOnLP"]
+        let savedPrefs = lpPrefs.map { UserDefaults.standard.object(forKey: $0) }
+        defer { for (k, v) in zip(lpPrefs, savedPrefs) { UserDefaults.standard.set(v, forKey: k) } }
+        for k in lpPrefs { UserDefaults.standard.set(false, forKey: k) }
+        await scan.inject(still: clash)
+        let clashRec0 = store.all().first
+        check(scan.current == nil && clashRec0?.format == "LP" && clashRec0?.expectedShots == [.coverFront] && clashRec0?.isComplete == true,
+              "LP with the extras off: the identifying shot only, closed (phase \(phaseName(scan.phase)), shots \(clashRec0?.expectedShots.map(\.rawValue) ?? []))")
+        if let r = clashRec0 { await scan.delete(r.id) }
+        await scan.inject(still: allModCons)
+        let amc = store.all().first
+        check(scan.current == nil && amc?.title == "All Mod Cons" && amc?.format == "LP" && amc?.photos.map(\.kind) == [.labelA] && amc?.expectedShots == [.labelA] && amc?.isComplete == true,
+              "LP identified from its label: no front cover asked, closed (phase \(phaseName(scan.phase)), got \(amc?.title ?? "nil") · shots \(amc?.expectedShots.map(\.rawValue) ?? []))")
+        if let r = amc { await scan.delete(r.id) }
+
+        print("scenario · album with the extras on → front/back/label → undo → done")
+        for k in lpPrefs { UserDefaults.standard.set(true, forKey: k) }
         await scan.inject(still: clash)
         let clashRec = scan.current
         print("scenario · thumbs-down on an open record")
@@ -463,7 +483,7 @@ extension CLI {
         await scan.inject(still: clash)
         let clashRec2 = scan.current
         print("  info phase after Clash: \(scan.phase) · current \(clashRec?.displayTitle ?? "nil") · last candidates \(scan.lastCandidates.prefix(2).map { "\($0.result.title) \($0.score)" })")
-        check(clashRec2?.title == "London Calling" && clashRec2?.format == "LP" && (clashRec2?.expectedShots.contains(.coverBack) ?? false), "LP profile: \(clashRec2?.expectedShots.map(\.rawValue) ?? [])")
+        check(clashRec2?.title == "London Calling" && clashRec2?.format == "LP" && clashRec2?.expectedShots == [.coverFront, .coverBack, .labelA] + ((clashRec2?.discCount ?? 1) >= 2 ? [.labelC] : []), "LP profile (\(clashRec2?.discCount ?? 0) discs): \(clashRec2?.expectedShots.map(\.rawValue) ?? [])")
         check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "BACK COVER" } else { return false } }(), "asks for the back cover")
         await scan.inject(still: clash)
         check(scan.current?.photos.count == 2, "back cover attached")

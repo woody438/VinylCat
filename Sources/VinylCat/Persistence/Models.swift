@@ -141,16 +141,25 @@ struct VinylRecord: Identifiable, Sendable, Equatable {
 
 /// Which shots to ask for per format. Discogs metadata (2×LP, gatefold) extends the list.
 struct CaptureProfile: Sendable {
-    /// Once a release is matched, Discogs already knows the tracklist — so by default singles need no extra shots
-    /// (the B-side is only asked for when a match is ambiguous), and albums get front + back covers.
+    /// Once a release is matched, Discogs already knows the tracklist, the sleeve and the disc count — so by default every
+    /// format needs just the one identifying shot. The B-side is only asked for when a match is ambiguous; the extras
+    /// below are opt-in and can always be asked for by voice ("back cover", "gatefold", "disc two", "add photo").
     var seven: [ShotKind] = []
     var twelve: [ShotKind] = []
-    var lp: [ShotKind] = [.coverFront, .coverBack]
+    var lp: [ShotKind] = []
+    /// Front cover on albums (when the identifying shot was the label).
+    var frontOnLP = false
+    /// Back cover on albums, plus the gatefold when Discogs says there is one.
+    var coversOnLP = false
+    /// A label on albums, one per disc when Discogs says there are several.
+    var labelsOnLP = false
 
     static func load() -> CaptureProfile {
         var p = CaptureProfile()
         let d = UserDefaults.standard
-        if d.object(forKey: "askForLabelsOnLP") as? Bool == true { p.lp.append(.labelA) }
+        p.frontOnLP = d.object(forKey: "askForFrontOnLP") as? Bool == true
+        p.coversOnLP = d.object(forKey: "askForCoversOnLP") as? Bool == true
+        p.labelsOnLP = d.object(forKey: "askForLabelsOnLP") as? Bool == true
         if d.object(forKey: "askForBSide") as? Bool == true { p.seven = [.labelA, .labelB]; p.twelve = [.labelA, .labelB] }
         return p
     }
@@ -160,13 +169,17 @@ struct CaptureProfile: Sendable {
         switch format {
         case "7\"": shots = seven; if hadPictureSleeve, !shots.isEmpty { shots.insert(.coverFront, at: 0) }
         case "12\"": shots = twelve
-        default: shots = lp
-        }
-        if descriptors.contains(where: { $0.localizedCaseInsensitiveContains("gatefold") }) && !shots.contains(.gatefold) {
-            shots.append(.gatefold)
-        }
-        if discCount >= 2 {
-            for k in [ShotKind.labelA, .labelB, .labelC, .labelD] where !shots.contains(k) { shots.append(k) }
+        default:
+            shots = lp
+            if frontOnLP { shots.append(.coverFront) }
+            if coversOnLP {
+                shots.append(.coverBack)
+                if descriptors.contains(where: { $0.localizedCaseInsensitiveContains("gatefold") }) { shots.append(.gatefold) }
+            }
+            if labelsOnLP {
+                shots.append(.labelA)
+                if discCount >= 2 { shots.append(.labelC) }
+            }
         }
         return shots
     }

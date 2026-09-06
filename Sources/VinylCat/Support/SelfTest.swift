@@ -292,6 +292,22 @@ enum SelfTest {
         let inside = TourLayout.place(anchor: CGRect(x: 0, y: 57, width: 1100, height: 800), placement: .inside, in: win)
         check(inside.container == CGRect(x: 0, y: 57, width: 1100, height: 800) && inside.alignment == .center, "inside placement centres on the region")
 
+        print("capture profile")
+        let plain = CaptureProfile()
+        check(plain.expected(format: "LP", discCount: 2, descriptors: ["Gatefold"], hadPictureSleeve: false) == [], "default LP: nothing beyond the identifying shot, even for a gatefold 2×LP")
+        var front = CaptureProfile(); front.frontOnLP = true
+        check(front.expected(format: "LP", discCount: 1, descriptors: [], hadPictureSleeve: false) == [.coverFront], "front on: front cover (a no-op when the ID shot was the cover)")
+        check(plain.expected(format: "7\"", discCount: 1, descriptors: [], hadPictureSleeve: true) == [] && plain.expected(format: "12\"", discCount: 1, descriptors: [], hadPictureSleeve: false) == [], "default singles: no extra shots")
+        var covers = CaptureProfile(); covers.coversOnLP = true
+        check(covers.expected(format: "LP", discCount: 1, descriptors: [], hadPictureSleeve: false) == [.coverBack], "back on: back cover only")
+        check(covers.expected(format: "LP", discCount: 2, descriptors: ["Gatefold"], hadPictureSleeve: false) == [.coverBack, .gatefold], "back on: gatefold from Discogs, no labels")
+        var labels = CaptureProfile(); labels.labelsOnLP = true
+        check(labels.expected(format: "LP", discCount: 1, descriptors: [], hadPictureSleeve: false) == [.labelA], "labels on: one label")
+        check(labels.expected(format: "LP", discCount: 2, descriptors: [], hadPictureSleeve: false) == [.labelA, .labelC], "labels on: a label per disc on a 2×LP")
+        var both = CaptureProfile(); both.frontOnLP = true; both.coversOnLP = true; both.labelsOnLP = true; both.seven = [.labelA, .labelB]
+        check(both.expected(format: "LP", discCount: 2, descriptors: ["Gatefold"], hadPictureSleeve: false) == [.coverFront, .coverBack, .gatefold, .labelA, .labelC], "all on: covers first, then labels")
+        check(both.expected(format: "7\"", discCount: 1, descriptors: [], hadPictureSleeve: true) == [.coverFront, .labelA, .labelB], "B-side on + picture sleeve: cover first")
+
         print("store round-trip")
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-selftest-\(UUID().uuidString).sqlite")
         let store = Store(url: tmp)

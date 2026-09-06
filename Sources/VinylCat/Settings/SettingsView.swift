@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("steadySeconds") private var steadySeconds = 1.0
     @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0
     @AppStorage("askForBSide") private var askForBSide = false
+    @AppStorage("askForFrontOnLP") private var askForFrontOnLP = false
+    @AppStorage("askForCoversOnLP") private var askForCoversOnLP = false
     @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = false
     @AppStorage("steadySeconds") private var steadySecondsDefault = 1.0
     @State private var testResult = ""
@@ -103,8 +105,10 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 32) {
                 Section("SHOTS") {
                     Row("Also photograph both labels on singles") { Toggle("", isOn: $askForBSide).labelsHidden().toggleStyle(.switch) }
-                    Row("Also photograph a label on LPs") { Toggle("", isOn: $askForLabelsOnLP).labelsHidden().toggleStyle(.switch) }
-                    Text("After a confident match Discogs already knows the tracklist, so singles need no extra shots; the B-side is only asked for when a match is ambiguous. LPs: front + back. 2×LP and gatefolds are detected from Discogs. Say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
+                    Row("Also photograph the front cover on albums") { Toggle("", isOn: $askForFrontOnLP).labelsHidden().toggleStyle(.switch) }
+                    Row("Also photograph the back cover on albums") { Toggle("", isOn: $askForCoversOnLP).labelsHidden().toggleStyle(.switch) }
+                    Row("Also photograph a label on albums") { Toggle("", isOn: $askForLabelsOnLP).labelsHidden().toggleStyle(.switch) }
+                    Text("After a confident match Discogs already knows the tracklist, the sleeve and the disc count, so the one photo it was identified from — cover or label — is enough for any format; the B-side is only asked for when a match is ambiguous. With these on, gatefolds get an inside shot and double albums a label per disc — both detected from Discogs. Say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .tourAnchor(.settingsShots)
