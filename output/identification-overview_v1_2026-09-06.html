@@ -1,0 +1,826 @@
+<title>How VinylCat Finds a Record</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #F3F1EC;
+    --surface: #FFFFFF;
+    --surface-2: #E9E6DF;
+    --ink: #1B1D20;
+    --ink-2: #4A4E53;
+    --muted: #7A7E83;
+    --rule: #D3CFC6;
+    --accent: #D9891F;
+    --accent-ink: #1B1D20;
+    --good: #2E8B62;
+    --warn: #C77A12;
+    --bad: #C4453A;
+    --discogs: #3E6FA8;
+    --code-bg: #EFECE5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121416;
+      --surface: #1B1F23;
+      --surface-2: #23282D;
+      --ink: #E8E4DA;
+      --ink-2: #BDB8AD;
+      --muted: #8A8F94;
+      --rule: #30363C;
+      --accent: #F2A93B;
+      --accent-ink: #121416;
+      --good: #5DD39E;
+      --warn: #F2A93B;
+      --bad: #E4574C;
+      --discogs: #7FB2E5;
+      --code-bg: #15181B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121416;
+    --surface: #1B1F23;
+    --surface-2: #23282D;
+    --ink: #E8E4DA;
+    --ink-2: #BDB8AD;
+    --muted: #8A8F94;
+    --rule: #30363C;
+    --accent: #F2A93B;
+    --accent-ink: #121416;
+    --good: #5DD39E;
+    --warn: #F2A93B;
+    --bad: #E4574C;
+    --discogs: #7FB2E5;
+    --code-bg: #15181B;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .page { max-width: 1040px; margin: 0 auto; padding: 40px 28px 96px; }
+  .measure { max-width: 68ch; }
+
+  h1, h2, h3 {
+    font-family: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    line-height: 1.02;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h1 { font-size: 64px; font-weight: 700; }
+  h2 { font-size: 36px; font-weight: 600; }
+  h3 { font-size: 22px; font-weight: 600; letter-spacing: 0.03em; }
+  p { margin: 0 0 14px; }
+  .lede { font-size: 19px; color: var(--ink-2); max-width: 62ch; margin-top: 18px; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  header { padding-bottom: 28px; border-bottom: 2px solid var(--ink); }
+
+  /* Layer index: this IS a sequence, so numbers carry meaning */
+  .index { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 36px 0 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .index a {
+    display: block; padding: 14px 12px 14px 0; text-decoration: none; color: var(--ink);
+    border-right: 1px solid var(--rule); padding-left: 12px;
+  }
+  .index a:last-child { border-right: 0; }
+  .index a:hover, .index a:focus-visible { background: var(--surface-2); outline: none; }
+  .index .n { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); display: block; }
+  .index .t { font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; font-size: 20px; font-weight: 600; display: block; line-height: 1.1; }
+  .index .s { font-size: 12.5px; color: var(--ink-2); display: block; margin-top: 3px; }
+
+  section.layer { padding: 56px 0 8px; border-bottom: 1px solid var(--rule); }
+  section.layer:last-of-type { border-bottom: 0; }
+  .layer-head { display: grid; grid-template-columns: 72px 1fr; gap: 20px; align-items: start; margin-bottom: 18px; }
+  .layer-num {
+    font-family: "Barlow Condensed", sans-serif; font-size: 64px; font-weight: 700; line-height: 0.9;
+    color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .layer-head .where { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  figure { margin: 22px 0 26px; }
+  figure svg { display: block; width: 100%; height: auto; max-width: 100%; color: var(--ink); font-family: "IBM Plex Sans", sans-serif; }
+  figure .scroll { overflow-x: auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-2); margin-top: 10px; max-width: 72ch; }
+  svg text { fill: currentColor; }
+  svg .box { fill: var(--surface); stroke: currentColor; stroke-width: 1.2; }
+  svg .box-accent { fill: var(--accent); stroke: var(--accent); }
+  svg .box-good { fill: var(--good); stroke: var(--good); }
+  svg .box-warn { fill: var(--warn); stroke: var(--warn); }
+  svg .box-bad { fill: var(--bad); stroke: var(--bad); }
+  svg .box-disc { fill: var(--surface); stroke: var(--discogs); stroke-width: 1.6; }
+  svg .on-fill { fill: var(--accent-ink); }
+  svg .t { font-size: 13px; font-weight: 600; }
+  svg .sub { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; fill: var(--muted); }
+  svg .lbl { font-size: 11px; fill: var(--ink-2); }
+  svg .mono { font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+  svg .edge { stroke: currentColor; stroke-width: 1.2; fill: none; }
+  svg .edge-dash { stroke: currentColor; stroke-width: 1.2; fill: none; stroke-dasharray: 4 4; }
+  svg .edge-accent { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+  svg .edge-dash-accent { stroke: var(--accent); stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; margin: 8px 0 20px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+
+  /* Data tables */
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 10px 0 22px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.k { font-family: "IBM Plex Mono", monospace; font-size: 13px; white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+
+  /* Prompt blocks: the one thing on the page rendered as an artefact of the system */
+  .prompt {
+    background: var(--code-bg); border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+    padding: 16px 18px; margin: 14px 0 20px; overflow-x: auto;
+  }
+  .prompt .tag { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .prompt pre { margin: 0; font-family: "IBM Plex Mono", Menlo, monospace; font-size: 13px; line-height: 1.55; white-space: pre-wrap; color: var(--ink); }
+  code { font-family: "IBM Plex Mono", Menlo, monospace; font-size: 0.92em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+
+  .note { border-top: 2px solid var(--accent); padding-top: 10px; margin: 18px 0; font-size: 14.5px; }
+  .note b { font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; font-size: 16px; letter-spacing: 0.04em; }
+  ul { padding-left: 20px; margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+  .pill { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 3px; color: var(--accent-ink); margin-right: 4px; }
+  .pill.good { background: var(--good); } .pill.warn { background: var(--warn); } .pill.bad { background: var(--bad); }
+  .sources { margin-top: 48px; border-top: 2px solid var(--ink); padding-top: 14px; font-size: 13.5px; color: var(--ink-2); }
+  .sources code { font-size: 12.5px; }
+  @media (prefers-reduced-motion: no-preference) { .index a { transition: background .15s; } }
+
+  @media print {
+    :root, :root[data-theme="dark"] {
+      --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #EFECE5; --ink: #1B1D20; --ink-2: #4A4E53; --muted: #6E7276;
+      --rule: #C9C5BC; --accent: #C97A15; --accent-ink: #FFFFFF; --good: #2E8B62; --warn: #C77A12; --bad: #C4453A;
+      --discogs: #3E6FA8; --code-bg: #F3F1EC;
+    }
+    @page { size: A4; margin: 16mm 14mm; }
+    body { font-size: 11.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { max-width: none; padding: 0; }
+    h1 { font-size: 40pt; }
+    h2 { font-size: 24pt; }
+    .lede { font-size: 13pt; }
+    section.layer { padding-top: 28px; break-before: page; }
+    section.layer:first-of-type { break-before: auto; }
+    figure, table, .prompt, .note { break-inside: avoid; }
+    .index { grid-template-columns: repeat(3, 1fr); }
+    .index a { padding: 8px 8px; border-right: 1px solid var(--rule); }
+    .index a:nth-child(3n) { border-right: 0; }
+    .index .t { font-size: 15pt; }
+    .prompt pre { font-size: 9.5pt; }
+    .index a { color: var(--ink); }
+    .cols { gap: 20px; }
+  }
+</style>
+
+<div class="page">
+<header>
+  <span class="eyebrow">VinylCat · scan pipeline · working tree as of 6 Sep 2026</span>
+  <h1>How VinylCat Finds a Record</h1>
+  <p class="lede">You hold a record up to the camera. About two seconds later the app says the artist, title, year and format out loud, and the record is in the library. This page walks through the six layers that make that happen, what each one costs, and the exact words we send to the vision model.</p>
+
+  <nav class="index" aria-label="Layers">
+    <a href="#l1"><span class="n">01</span><span class="t">Camera watch</span><span class="s">Decide when the record is steady and take one still</span></a>
+    <a href="#l2"><span class="n">02</span><span class="t">Local read</span><span class="s">Free, on-device barcode + text recognition</span></a>
+    <a href="#l3"><span class="n">03</span><span class="t">Vision model</span><span class="s">Luna or Gemini turns the photo into structured fields</span></a>
+    <a href="#l4"><span class="n">04</span><span class="t">Discogs search</span><span class="s">Up to six queries, strongest key first</span></a>
+    <a href="#l5"><span class="n">05</span><span class="t">Rank &amp; decide</span><span class="s">Score every hit, then match, ask, or give up</span></a>
+    <a href="#l6"><span class="n">06</span><span class="t">What happens next</span><span class="s">Save, ask you, re-shoot, or park for review</span></a>
+  </nav>
+</header>
+
+<section class="layer" style="border-bottom:1px solid var(--rule)">
+  <h2>The whole run in one line</h2>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1040 160" role="img" aria-label="Seven stages from camera watch to outcome, with a bypass arrow showing that a strong barcode skips the vision model">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+        <marker id="a1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker>
+      </defs>
+      <!-- bypass -->
+      <path class="edge-dash-accent" d="M372 80 C372 26, 664 26, 664 80" marker-end="url(#a1c)"/>
+      <text x="518" y="24" text-anchor="middle" class="lbl" style="fill:var(--accent)">barcode of 8+ digits read locally: model skipped, £0</text>
+
+      <g class="t" text-anchor="middle">
+        <rect class="box" x="20" y="80" width="120" height="58"/><text x="80" y="105">Camera watch</text><text x="80" y="122" class="sub">steady ≥ 1.0 s</text>
+        <rect class="box" x="166" y="80" width="120" height="58"/><text x="226" y="105">One still</text><text x="226" y="122" class="sub">full-res, saved</text>
+        <rect class="box" x="312" y="80" width="120" height="58"/><text x="372" y="105">Local read</text><text x="372" y="122" class="sub">Vision · free</text>
+        <rect class="box-accent" x="458" y="80" width="120" height="58"/><text x="518" y="105" class="on-fill">Vision model</text><text x="518" y="122" class="sub on-fill" style="fill:var(--accent-ink)">Luna or Gemini</text>
+        <rect class="box-disc" x="604" y="80" width="120" height="58"/><text x="664" y="105">Discogs search</text><text x="664" y="122" class="sub">≤ 6 queries</text>
+        <rect class="box" x="750" y="80" width="120" height="58"/><text x="810" y="105">Rank &amp; decide</text><text x="810" y="122" class="sub">score 0 – 1</text>
+        <rect class="box" x="896" y="80" width="120" height="58"/><text x="956" y="105">Outcome</text><text x="956" y="122" class="sub">Layer 6</text>
+      </g>
+      <g class="edge">
+        <line x1="140" y1="109" x2="164" y2="109" marker-end="url(#a1)"/>
+        <line x1="286" y1="109" x2="310" y2="109" marker-end="url(#a1)"/>
+        <line x1="432" y1="109" x2="456" y2="109" marker-end="url(#a1)"/>
+        <line x1="578" y1="109" x2="602" y2="109" marker-end="url(#a1)"/>
+        <line x1="724" y1="109" x2="748" y2="109" marker-end="url(#a1)"/>
+        <line x1="870" y1="109" x2="894" y2="109" marker-end="url(#a1)"/>
+      </g>
+      <g class="lbl" text-anchor="middle">
+        <text x="153" y="70">capture</text>
+        <text x="299" y="70">JPEG</text>
+        <text x="445" y="70">OCR lines + barcodes</text>
+        <text x="591" y="70">structured reading</text>
+        <text x="737" y="70">≤ 15 hits per query</text>
+        <text x="883" y="70">verdict</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Every scan runs left to right. Only one stage costs money (the vision model) and only one talks to Discogs. A clean barcode lets the run skip the paid stage entirely.</figcaption>
+  </figure>
+  <p class="measure">Two ideas underpin the whole design. First, <strong>the catalogue number does most of the work.</strong> A label that says "POSP 113" pins a release far more precisely than the artist and title do, so every layer is tuned to find and preserve that string. Second, <strong>do the free thing first.</strong> Apple's on-device recognition runs before anything is sent to a paid model, and a good barcode means nothing is sent at all.</p>
+</section>
+
+<!-- ============ LAYER 1 ============ -->
+<section class="layer" id="l1">
+  <div class="layer-head">
+    <div class="layer-num">1</div>
+    <div>
+      <h2>Camera watch</h2>
+      <div class="where">Capture/CaptureEngine.swift · Capture/FrameAnalysis.swift</div>
+    </div>
+  </div>
+  <p class="measure">Nothing is "searched" yet. This layer's only job is to notice that a record is being held still and sharp in front of the camera, and to take exactly one photo of it. It never fires while you are moving the record, and it never fires twice on the same record.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 232" role="img" aria-label="Capture state machine: learning, armed, steady, captured, cooldown, then back to armed; a forced capture jumps straight to captured">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+      <marker id="a2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker></defs>
+      <path class="edge-dash-accent" d="M275 70 C275 22, 645 22, 645 70" marker-end="url(#a2c)"/>
+      <text x="460" y="22" text-anchor="middle" class="lbl" style="fill:var(--accent)">say "capture" or press space: next frame is taken regardless</text>
+      <g class="t" text-anchor="middle">
+        <rect class="box" x="20" y="70" width="140" height="56"/><text x="90" y="94">LEARNING</text><text x="90" y="111" class="sub">memorise empty scene</text>
+        <rect class="box" x="205" y="70" width="140" height="56"/><text x="275" y="94">ARMED</text><text x="275" y="111" class="sub">watching every frame</text>
+        <rect class="box-accent" x="390" y="70" width="140" height="56"/><text x="460" y="94" class="on-fill">STEADY</text><text x="460" y="111" class="sub" style="fill:var(--accent-ink)">ring fills over 1.0 s</text>
+        <rect class="box" x="575" y="70" width="140" height="56"/><text x="645" y="94">CAPTURED</text><text x="645" y="111" class="sub">one full-res still</text>
+        <rect class="box" x="760" y="70" width="140" height="56"/><text x="830" y="94">COOLDOWN</text><text x="830" y="111" class="sub">no double scans</text>
+      </g>
+      <g class="edge">
+        <line x1="160" y1="98" x2="203" y2="98" marker-end="url(#a2)"/>
+        <line x1="345" y1="98" x2="388" y2="98" marker-end="url(#a2)"/>
+        <line x1="530" y1="98" x2="573" y2="98" marker-end="url(#a2)"/>
+        <line x1="715" y1="98" x2="758" y2="98" marker-end="url(#a2)"/>
+        <path d="M830 126 V200 H275 V128" marker-end="url(#a2)"/>
+      </g>
+      <g class="lbl" text-anchor="middle">
+        <text x="182" y="58">~6 still frames</text>
+        <text x="367" y="58">present · still · sharp</text>
+        <text x="552" y="58">credit full + 3 good frames</text>
+        <text x="737" y="58">still handed on</text>
+        <text x="460" y="150">a wobble drains the ring at 0.35× speed instead of resetting it</text>
+        <text x="552" y="218">record taken away (scene back near empty) or clearly swapped (fingerprint differs)</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>The engine is a small state machine. The only way from ARMED to CAPTURED is a full second of good frames, or you forcing it.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div>
+      <h3>What it measures</h3>
+      <p>Every camera frame is shrunk to a 96 × 72 greyscale thumbnail of the <em>central</em> region only (the alignment guide), so hands at the edges do not count. Four numbers are computed per frame, each smoothed as the median of the last five so a single flicker cannot flip the state:</p>
+      <div class="tablewrap"><table>
+        <tr><th>Signal</th><th>How</th><th class="num">Threshold</th></tr>
+        <tr><td><strong>Sharpness</strong></td><td>Variance of a Laplacian edge filter. Blur flattens edges.</td><td class="num">≥ 60</td></tr>
+        <tr><td><strong>Motion</strong></td><td>Mean pixel difference vs the previous frame (0–255).</td><td class="num">≤ 6</td></tr>
+        <tr><td><strong>Presence</strong></td><td>Mean difference vs the memorised empty scene.</td><td class="num">≥ 14</td></tr>
+        <tr><td><strong>Fingerprint</strong></td><td>64-bit perceptual hash (8 × 8 average hash). "Is this the same item I just shot?"</td><td class="num">≤ 10 bits = same</td></tr>
+      </table></div>
+    </div>
+    <div>
+      <h3>Details that matter</h3>
+      <ul>
+        <li><strong>Hold credit, not a timer.</strong> Good frames add time to a 1.0 s bucket; bad frames drain it at about a third of the rate. Once a hold has started, thresholds relax by 50 % so the ring does not strobe.</li>
+        <li><strong>Drift check.</strong> A record sliding past looks "still" frame to frame, so the engine also compares against the frame the hold started from. Three consecutive frames more than 18 apart restart the hold.</li>
+        <li><strong>Two modes.</strong> <code>identify</code> (first shot of a new record) waits for the record to be removed before re-arming. <code>shot</code> (extra photos of a matched record) re-arms at once but demands a burst of motion first, so a flip is required before the next capture.</li>
+        <li><strong>Hand-held phone.</strong> The motion limit of 6 and drift limit of 18 were raised specifically so a Continuity-Camera iPhone in the hand can ever fill the ring.</li>
+        <li><strong>Settings sliders</strong> override sharpness, steady seconds and presence thresholds.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LAYER 2 ============ -->
+<section class="layer" id="l2">
+  <div class="layer-head">
+    <div class="layer-num">2</div>
+    <div>
+      <h2>Local read</h2>
+      <div class="where">Readers/LocalReader.swift · Readers/Identifier.swift</div>
+    </div>
+  </div>
+  <p class="measure">The still goes first to Apple's on-device Vision framework. This costs nothing, works offline, and takes a fraction of a second. It produces three things: any barcodes, every line of printed text it can see, and a shortlist of tokens that look like catalogue numbers.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 250" role="img" aria-label="The still goes to barcode detection and OCR in parallel; OCR lines are filtered by a catalogue-number pattern; a strong barcode short-circuits to Discogs, otherwise everything goes on to the vision model as hints">
+      <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+      <marker id="a3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker></defs>
+      <g class="t" text-anchor="middle">
+        <rect class="box" x="20" y="98" width="120" height="56"/><text x="80" y="122">Still</text><text x="80" y="139" class="sub">CGImage</text>
+        <rect class="box" x="220" y="30" width="180" height="56"/><text x="310" y="54">Barcode detector</text><text x="310" y="71" class="sub">EAN-13/8 · UPC-E · Code 128/39</text>
+        <rect class="box" x="220" y="166" width="180" height="56"/><text x="310" y="190">Text recogniser (OCR)</text><text x="310" y="207" class="sub">accurate · no autocorrect · en/fr/de</text>
+        <rect class="box" x="470" y="166" width="180" height="56"/><text x="560" y="190">Catalogue-number sieve</text><text x="560" y="207" class="sub">pattern + filters, best first</text>
+        <rect class="box-disc" x="740" y="30" width="160" height="56"/><text x="820" y="54">Straight to Discogs</text><text x="820" y="71" class="sub">confidence 0.5 · no model</text>
+        <rect class="box-accent" x="740" y="166" width="160" height="56"/><text x="820" y="190" class="on-fill">On to the model</text><text x="820" y="207" class="sub" style="fill:var(--accent-ink)">as hints (Layer 3)</text>
+      </g>
+      <g class="edge">
+        <path d="M140 126 H180 V58 H218" marker-end="url(#a3)"/>
+        <path d="M140 126 H180 V194 H218" marker-end="url(#a3)"/>
+        <line x1="400" y1="194" x2="468" y2="194" marker-end="url(#a3)"/>
+        <line x1="650" y1="194" x2="738" y2="194" marker-end="url(#a3)"/>
+        <line x1="400" y1="58" x2="738" y2="58" marker-end="url(#a3)"/>
+        <path class="edge-dash" d="M400 70 C 560 70, 560 180, 738 182"/>
+      </g>
+      <g class="lbl" text-anchor="middle">
+        <text x="569" y="48">barcode with ≥ 8 digits found</text>
+        <text x="560" y="150" class="mono">"POSP 113" · "FAC 73" · "7N 17241"</text>
+        <text x="470" y="115">no barcode: lines + barcodes ride along</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Barcode and OCR run together on the same still. A confident barcode is the one case where the paid model is never called.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div>
+      <h3>The catalogue-number sieve</h3>
+      <p>Every OCR line is upper-cased and run through one pattern: up to two short letter/digit groups, then a run of one to seven digits, optionally a second short digit run. That deliberately loose net catches "CHS TT 17", "2059 227" and "SRK 6095", but also years and speeds, so the filters do the real work:</p>
+      <ul>
+        <li>Drop bare four-digit numbers, "45" and "33" (years and RPM).</li>
+        <li>Drop bare numbers shorter than five digits.</li>
+        <li>Drop "A1", "B2" style side markers (one digit, fewer than three letters).</li>
+        <li>De-duplicate ignoring spaces.</li>
+        <li>Sort: anything with letters first, then longer strings first.</li>
+      </ul>
+      <p>The full shortlist, not just the winner, is passed on to the Discogs layer. A label prints matrix and side suffixes too, and the first-ranked token is not always the one Discogs uses.</p>
+    </div>
+    <div>
+      <h3>Details that matter</h3>
+      <ul>
+        <li><strong>OCR autocorrect is off.</strong> Apple's language correction would "fix" catalogue numbers into words. We want the raw glyphs.</li>
+        <li><strong>Comparison form.</strong> Whenever two catalogue numbers are compared later, both are reduced to upper-case letters and digits only, so "POSP-113", "POSP 113" and "posp113" all agree.</li>
+        <li><strong>Barcode shortcut</strong> is the setting <code>skipModelWhenBarcode</code> (on by default). It needs at least 8 digits, so a stray Code 39 fragment does not trigger it.</li>
+        <li><strong>No API key at all?</strong> The app still works, badly. It guesses "is this a label?" from words like RPM, SIDE A, MADE IN, ℗, picks the first long non-numeric lines as label / title / artist, sets confidence 0.3, and lets the catalogue number carry the search. The HUD then nudges you to add a key.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LAYER 3 ============ -->
+<section class="layer" id="l3">
+  <div class="layer-head">
+    <div class="layer-num">3</div>
+    <div>
+      <h2>Vision model</h2>
+      <div class="where">Readers/SleeveReader.swift · Readers/LunaReader.swift · Readers/GeminiReader.swift</div>
+    </div>
+  </div>
+  <p class="measure">If there was no usable barcode, the photo goes to a multimodal model with everything the local pass found attached as hints. The model is not asked to identify the release. It is asked to <em>read</em> the sleeve or label into thirteen fixed fields, and it is forced to answer in exactly that shape.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 300" role="img" aria-label="Five inputs are assembled into a system plus user prompt, sent to Luna or Gemini, which must return strict JSON; that reading is normalised and merged with the local catalogue number and barcode">
+      <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g class="t" text-anchor="middle">
+        <rect class="box" x="20" y="30" width="170" height="34"/><text x="105" y="52" style="font-weight:500">Photo · JPEG ≤ 1024 px</text>
+        <rect class="box" x="20" y="78" width="170" height="34"/><text x="105" y="100" style="font-weight:500">OCR lines (Layer 2)</text>
+        <rect class="box" x="20" y="126" width="170" height="34"/><text x="105" y="148" style="font-weight:500">Barcodes (Layer 2)</text>
+        <rect class="box" x="20" y="174" width="170" height="34"/><text x="105" y="196" style="font-weight:500">Session format (7" / 12" / LP)</text>
+        <rect class="box" x="20" y="222" width="170" height="34"/><text x="105" y="244" style="font-weight:500">"Expect a label shot"</text>
+
+        <rect class="box" x="240" y="30" width="130" height="226"/><text x="305" y="136">Prompt</text><text x="305" y="153" class="sub">system + user</text>
+        <rect class="box-accent" x="410" y="113" width="160" height="60"/><text x="490" y="139" class="on-fill">Vision model</text><text x="490" y="156" class="sub" style="fill:var(--accent-ink)">Luna · Gemini</text>
+        <rect class="box" x="610" y="113" width="120" height="60"/><text x="670" y="139">Strict JSON</text><text x="670" y="156" class="sub">13 fields, null OK</text>
+        <rect class="box" x="770" y="113" width="130" height="60"/><text x="835" y="139">Merged reading</text><text x="835" y="156" class="sub">to Layer 4</text>
+      </g>
+      <g class="edge">
+        <line x1="190" y1="47" x2="238" y2="47" marker-end="url(#a4)"/>
+        <line x1="190" y1="95" x2="238" y2="95" marker-end="url(#a4)"/>
+        <line x1="190" y1="143" x2="238" y2="143" marker-end="url(#a4)"/>
+        <line x1="190" y1="191" x2="238" y2="191" marker-end="url(#a4)"/>
+        <line x1="190" y1="239" x2="238" y2="239" marker-end="url(#a4)"/>
+        <line x1="370" y1="143" x2="408" y2="143" marker-end="url(#a4)"/>
+        <line x1="570" y1="143" x2="608" y2="143" marker-end="url(#a4)"/>
+        <line x1="730" y1="143" x2="768" y2="143" marker-end="url(#a4)"/>
+        <path class="edge-dash" d="M105 256 V282 H835 V175" marker-end="url(#a4)"/>
+      </g>
+      <g class="lbl" text-anchor="middle">
+        <text x="389" y="132">HTTPS</text>
+        <text x="589" y="132">≤ 600 tokens</text>
+        <text x="749" y="132">normalise</text>
+        <text x="470" y="296">if the model left catalogue number or barcode blank, the local values fill them in</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>The model sees the photo plus the local OCR as a hint, and must answer in a fixed JSON shape. Fields it leaves empty are back-filled from the local pass.</figcaption>
+  </figure>
+
+  <h3>The exact prompts</h3>
+  <p class="measure">Both providers get identical wording. The system prompt sets the job and the house rules. The user prompt is assembled per scan from the hints.</p>
+
+  <div class="prompt">
+    <div class="tag">System prompt · sent verbatim, one paragraph</div>
+    <pre>You identify vinyl records from a photo of a sleeve (cover) or the paper label in the centre of the disc. Extract only what is visible or can be inferred with high confidence. Catalogue numbers matter most: copy them exactly as printed (e.g. "POSP 113", "FAC 73", "7N 17241"). Do not guess a year unless printed. Set isLabelShot true when the photo shows the round centre label. formatGuess: "7in" for a small single label or 45 RPM marking, "12in" for a 45/33 RPM maxi single, "LP" for an album, "10in" for a ten-inch. confidence is your certainty that artist and title are right (0–1). Return JSON matching the schema; use null for unknown fields.</pre>
+  </div>
+
+  <div class="prompt">
+    <div class="tag">User prompt · assembled per scan; lines 2–4 appear only when that hint exists</div>
+    <pre>Read this record photo. The operator is currently scanning seven inch. This should be the centre label. Barcode detected locally: 5012394112345.
+Local OCR lines (may contain errors):
+POLYDOR
+BLUE MONDAY
+POSP 113
+45 RPM
+SIDE A</pre>
+  </div>
+
+  <p class="measure">"The operator is currently scanning seven inch" comes from the format button or the voice commands "sevens", "twelves", "albums". "This should be the centre label" is added after the app has asked you to show the label. The OCR block is a deliberate hint: the model can read the photo itself, but a second opinion on hard-to-read catalogue numbers helps, and the "may contain errors" caveat stops it copying OCR mistakes blindly.</p>
+
+  <div class="cols">
+    <div>
+      <h3>The answer shape</h3>
+      <p>The model is told it must return every one of these keys (null when unknown). Anything else is rejected by the API before we see it.</p>
+      <div class="tablewrap"><table>
+        <tr><th>Field</th><th>Meaning</th></tr>
+        <tr><td class="k">artist, title</td><td>As printed</td></tr>
+        <tr><td class="k">label</td><td>Record company</td></tr>
+        <tr><td class="k">catalogNumber</td><td>Exactly as printed. The most important field.</td></tr>
+        <tr><td class="k">barcode</td><td>Digits if visible</td></tr>
+        <tr><td class="k">year, country</td><td>Only if printed</td></tr>
+        <tr><td class="k">formatGuess</td><td>One of 7in · 10in · 12in · LP (app maps to 7", 10", 12", LP)</td></tr>
+        <tr><td class="k">isLabelShot</td><td>True for the round centre label</td></tr>
+        <tr><td class="k">side</td><td>A / B / 1 / 2 if visible</td></tr>
+        <tr><td class="k">visibleTracks</td><td>Track titles it can see</td></tr>
+        <tr><td class="k">confidence</td><td>0–1 for artist + title only</td></tr>
+        <tr><td class="k">notes</td><td>Free text</td></tr>
+      </table></div>
+    </div>
+    <div>
+      <h3>Providers and cost</h3>
+      <div class="tablewrap"><table>
+        <tr><th></th><th>GPT-5.6 Luna (default)</th><th>Gemini 3.8 Flash</th></tr>
+        <tr><td>API</td><td>OpenAI Responses</td><td>Google generateContent</td></tr>
+        <tr><td>Output control</td><td>JSON schema, strict mode</td><td>Response schema, temperature 0.1</td></tr>
+        <tr><td>Reasoning</td><td>effort "low"</td><td>none</td></tr>
+        <tr><td>Image detail</td><td>"high"</td><td>inline JPEG</td></tr>
+        <tr><td>Output cap</td><td class="num">600 tokens</td><td class="num">600 tokens</td></tr>
+        <tr><td>Price in / out per 1M tokens</td><td class="num">$0.20 / $1.20</td><td class="num">$0.75 / $3.75</td></tr>
+        <tr><td>Timeout</td><td class="num">45 s</td><td class="num">45 s</td></tr>
+      </table></div>
+      <ul>
+        <li><strong>Image size.</strong> The still is downscaled so its longest side is 1024 px and JPEG-compressed at 80 % before upload. That caps the per-image token cost.</li>
+        <li><strong>Cost meter.</strong> Every reply's token counts are multiplied by the price table and added to the session total shown in the HUD.</li>
+        <li><strong>Provider switch</strong> is the Settings choice <code>readerProvider</code>. Keys live only in the Keychain.</li>
+        <li><strong>Luna retry.</strong> If OpenAI rejects the "reasoning" or "detail" knobs, the request is sent once more without them.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LAYER 4 ============ -->
+<section class="layer" id="l4">
+  <div class="layer-head">
+    <div class="layer-num">4</div>
+    <div>
+      <h2>Discogs search</h2>
+      <div class="where">Discogs/Matcher.swift · Discogs/DiscogsClient.swift</div>
+    </div>
+  </div>
+  <p class="measure">Discogs is the only source of truth for what a release actually is. The app never asks Discogs an open question if it can ask a precise one, so it works down a ladder from the strongest key to the weakest, collecting hits into one pool and stopping the moment a precise key lands.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 480" role="img" aria-label="Six Discogs queries run in order from barcode down to free text; each contributes hits to one pool, which goes to the ranker">
+      <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+      <marker id="a5d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--discogs)"/></marker></defs>
+      <g text-anchor="start">
+        <rect class="box" x="20" y="20" width="440" height="48"/>
+        <text x="36" y="40" class="mono" style="font-weight:500">1  barcode = digits only</text><text x="36" y="58" class="sub">only if a barcode with ≥ 8 digits was read</text>
+        <rect class="box" x="20" y="96" width="440" height="48"/>
+        <text x="36" y="116" class="mono" style="font-weight:500">2  label = … &amp; catno = … &amp; format = …</text><text x="36" y="134" class="sub">for each catalogue-number candidate, best first</text>
+        <rect class="box" x="20" y="172" width="440" height="48"/>
+        <text x="36" y="192" class="mono" style="font-weight:500">3  catno = … alone</text><text x="36" y="210" class="sub">same candidate, label dropped · first candidate to hit wins and is remembered</text>
+        <rect class="box" x="20" y="248" width="440" height="48"/>
+        <text x="36" y="268" class="mono" style="font-weight:500">4  q = "catno" &amp; format = …</text><text x="36" y="286" class="sub">free text: tolerates side suffixes like "ZS8 3592-3" that catno= rejects</text>
+        <rect class="box" x="20" y="324" width="440" height="48"/>
+        <text x="36" y="344" class="mono" style="font-weight:500">5  artist = … &amp; release_title = … &amp; format = …</text><text x="36" y="362" class="sub">only if the pool still has fewer than 3 hits and the model read a name</text>
+        <rect class="box" x="20" y="400" width="440" height="48"/>
+        <text x="36" y="420" class="mono" style="font-weight:500">6  q = "artist title"</text><text x="36" y="438" class="sub">last resort, no format filter</text>
+      </g>
+      <g class="edge">
+        <line x1="240" y1="68" x2="240" y2="94" marker-end="url(#a5)"/>
+        <line x1="240" y1="144" x2="240" y2="170" marker-end="url(#a5)"/>
+        <line x1="240" y1="220" x2="240" y2="246" marker-end="url(#a5)"/>
+        <line x1="240" y1="296" x2="240" y2="322" marker-end="url(#a5)"/>
+        <line x1="240" y1="372" x2="240" y2="398" marker-end="url(#a5)"/>
+      </g>
+      <g class="lbl" text-anchor="start">
+        <text x="250" y="85">always continues</text>
+        <text x="250" y="161">no hits</text>
+        <text x="250" y="237">no hits for any candidate</text>
+        <text x="250" y="313">still empty</text>
+        <text x="250" y="389">still empty</text>
+      </g>
+      <g class="t" text-anchor="middle">
+        <rect class="box-disc" x="560" y="20" width="150" height="428"/>
+        <text x="635" y="226">Result pool</text><text x="635" y="243" class="sub">≤ 15 per query</text><text x="635" y="258" class="sub">releases only</text>
+        <rect class="box" x="770" y="204" width="130" height="60"/><text x="835" y="230">Rank</text><text x="835" y="247" class="sub">Layer 5</text>
+      </g>
+      <g style="stroke:var(--discogs)" class="edge">
+        <line x1="460" y1="44" x2="558" y2="44" marker-end="url(#a5d)"/>
+        <line x1="460" y1="120" x2="558" y2="120" marker-end="url(#a5d)"/>
+        <line x1="460" y1="196" x2="558" y2="196" marker-end="url(#a5d)"/>
+        <line x1="460" y1="272" x2="558" y2="272" marker-end="url(#a5d)"/>
+        <line x1="460" y1="348" x2="558" y2="348" marker-end="url(#a5d)"/>
+        <line x1="460" y1="424" x2="558" y2="424" marker-end="url(#a5d)"/>
+      </g>
+      <g class="lbl" text-anchor="middle" style="fill:var(--discogs)">
+        <text x="509" y="36">hits</text><text x="509" y="112">hits</text><text x="509" y="188">hits</text><text x="509" y="264">hits</text><text x="509" y="340">hits</text><text x="509" y="416">hits</text>
+      </g>
+      <line class="edge" x1="710" y1="234" x2="768" y2="234" marker-end="url(#a5)"/>
+    </svg>
+    </div>
+    <figcaption>The ladder stops early: a barcode or catalogue-number hit usually ends the run after one or two calls. Free-text and artist/title queries only fire when the precise keys found nothing.</figcaption>
+  </figure>
+
+  <h3>What actually goes over the wire</h3>
+  <p class="measure">Every search is one HTTPS GET to the same Discogs endpoint. The only things that change between the six rungs are which query parameters are present. Two are always sent: <code>type=release</code> and <code>per_page=15</code>.</p>
+
+  <div class="prompt">
+    <div class="tag">Request headers · every call</div>
+    <pre>GET https://api.discogs.com/database/search?…
+Authorization: Discogs token=&lt;your personal token from Settings&gt;
+User-Agent: VinylCat/0.1 +https://github.com/woodall/vinylcat
+Accept: application/json</pre>
+  </div>
+
+  <div class="tablewrap"><table>
+    <tr><th>Parameter</th><th>Discogs meaning</th><th>What we put in it</th><th>Rung</th></tr>
+    <tr><td class="k">barcode</td><td>Exact barcode</td><td>Digits only, spaces and hyphens stripped: <code>5012394112345</code></td><td>1</td></tr>
+    <tr><td class="k">catno</td><td>Exact catalogue number as Discogs lists it</td><td>The token as read. From the model: as printed on the sleeve (<code>POSP 113</code>). From the OCR sieve: upper-cased, spacing as OCR saw it.</td><td>2, 3</td></tr>
+    <tr><td class="k">label</td><td>Label name</td><td>The model's <code>label</code> field, untouched: <code>Polydor</code></td><td>2</td></tr>
+    <tr><td class="k">format</td><td>Format descriptor</td><td>Your session choice, or the model's guess: <code>7"</code>, <code>12"</code> or <code>LP</code> (sent URL-encoded as <code>7%22</code>)</td><td>2, 4, 5</td></tr>
+    <tr><td class="k">q</td><td>Free-text search across all fields</td><td>Rung 4: the catalogue token alone. Rung 6: <code>artist title</code> joined with a space.</td><td>4, 6</td></tr>
+    <tr><td class="k">artist</td><td>Artist name</td><td>The model's <code>artist</code> field, untouched</td><td>5</td></tr>
+    <tr><td class="k">release_title</td><td>Release title</td><td>The model's <code>title</code> field, untouched</td><td>5</td></tr>
+  </table></div>
+
+  <p class="measure">A worked example. The model reads a Polydor 7" label as artist "New Order", title "Blue Monday", label "Polydor", catalogue number "POSP 113", and OCR also produced "POSP 113" and "45". No barcode. Session format is 7". The calls that go out, in order, until one returns hits:</p>
+
+  <div class="prompt">
+    <div class="tag">Rung 2 · label + catno + format (first hit ends the ladder here)</div>
+    <pre>/database/search?type=release&amp;per_page=15&amp;label=Polydor&amp;catno=POSP%20113&amp;format=7%22</pre>
+  </div>
+  <div class="prompt">
+    <div class="tag">Rung 3 · only if rung 2 was empty</div>
+    <pre>/database/search?type=release&amp;per_page=15&amp;catno=POSP%20113</pre>
+  </div>
+  <div class="prompt">
+    <div class="tag">Rung 4 · only if no catalogue token hit at all</div>
+    <pre>/database/search?type=release&amp;per_page=15&amp;q=POSP%20113&amp;format=7%22</pre>
+  </div>
+  <div class="prompt">
+    <div class="tag">Rungs 5 and 6 · only if the pool still has fewer than 3 hits</div>
+    <pre>/database/search?type=release&amp;per_page=15&amp;artist=New%20Order&amp;release_title=Blue%20Monday&amp;format=7%22
+/database/search?type=release&amp;per_page=15&amp;q=New%20Order%20Blue%20Monday</pre>
+  </div>
+
+  <p class="measure">Note what is <em>not</em> sent: the photo, the OCR text, your Discogs username, or anything from the model beyond those five fields. Rung 1 would be <code>barcode=5012394112345</code> and runs on its own before the catalogue ladder whenever a barcode is available.</p>
+
+  <p class="measure">After a match, three more calls use the release id from the search hit:</p>
+  <div class="prompt">
+    <div class="tag">Follow-up calls · release id 1234567, currency from Settings</div>
+    <pre>GET  /releases/1234567?curr_abbr=GBP                 full record: artists, labels, formats, tracklist, images, genres
+GET  /marketplace/stats/1234567?curr_abbr=GBP        lowest price and copies for sale, in your currency
+GET  /oauth/identity                                 once, to learn your username
+POST /users/&lt;username&gt;/collection/folders/1/releases/1234567    adds it to your "Uncategorized" folder (if sync is on)</pre>
+  </div>
+  <p class="measure">Each search reply is read for only these fields per hit: id, title (Discogs formats it "Artist - Title"), year, country, label list, catno, format list, barcode list, thumbnail, cover image and master id. Those are exactly the inputs the ranker in Layer 5 scores against.</p>
+
+  <div class="cols">
+    <div>
+      <h3>Details that matter</h3>
+      <ul>
+        <li><strong>Format filter.</strong> Steps 2, 4 and 5 pass the session format (your "sevens / twelves / albums" choice) or, failing that, the model's guess. That is what keeps a 7" single from matching its 12" or album cousin.</li>
+        <li><strong>Which catalogue number won is remembered.</strong> The ranker in the next layer scores against the candidate that actually found the release, not the first thing OCR saw. Otherwise "ZS8 3592-3" read off the label would only ever get an approximate-match score against the "ZS8 3592" Discogs lists.</li>
+        <li><strong>Every query asks for releases only</strong>, never masters, and at most 15 results.</li>
+        <li><strong>Duplicates across queries</strong> are collapsed by Discogs release id before scoring.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Rate limit</h3>
+      <ul>
+        <li>Discogs allows 60 requests per minute with a token, 25 without. The client reads the limit back from every response header.</li>
+        <li>The app keeps five requests of headroom: it never sends more than limit − 5 in any rolling minute, and sleeps for the rest of the minute if it would.</li>
+        <li>A 429 (too many requests) backs off for the rest of the window and retries once.</li>
+        <li>After a match, two more calls follow in the background: the full release (tracklist, images, genres) and marketplace stats (lowest price, copies for sale, in your currency). A third adds the release to your Discogs collection if sync is on.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LAYER 5 ============ -->
+<section class="layer" id="l5">
+  <div class="layer-head">
+    <div class="layer-num">5</div>
+    <div>
+      <h2>Rank &amp; decide</h2>
+      <div class="where">Discogs/CandidateRanker.swift · Discogs/Matcher.swift</div>
+    </div>
+  </div>
+  <p class="measure">Discogs returns hits, not answers. Each one is scored from 0 to 1 against what was read off the record, look-alike pressings are folded together, and then a simple set of gates decides whether to accept the top hit, ask you to choose, or admit defeat.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 920 300" role="img" aria-label="Pool goes to scoring, then look-alike collapse, then a top-versus-runner-up comparison that yields match, ambiguous, or none">
+      <defs><marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g class="t" text-anchor="middle">
+        <rect class="box-disc" x="20" y="122" width="110" height="56"/><text x="75" y="146">Pool</text><text x="75" y="163" class="sub">Discogs hits</text>
+        <rect class="box" x="180" y="122" width="150" height="56"/><text x="255" y="146">Score each hit</text><text x="255" y="163" class="sub">0 – 1, with reasons</text>
+        <rect class="box" x="380" y="122" width="150" height="56"/><text x="455" y="146">Fold look-alikes</text><text x="455" y="163" class="sub">label · catno · country · year</text>
+        <rect class="box" x="580" y="122" width="140" height="56"/><text x="650" y="146">Top vs runner-up</text><text x="650" y="163" class="sub">is there a clear winner?</text>
+        <rect class="box-good" x="780" y="30" width="120" height="50"/><text x="840" y="60" class="on-fill">MATCH</text>
+        <rect class="box-warn" x="780" y="125" width="120" height="50"/><text x="840" y="155" class="on-fill">AMBIGUOUS</text>
+        <rect class="box-bad" x="780" y="220" width="120" height="50"/><text x="840" y="250" class="on-fill">NONE</text>
+      </g>
+      <g class="edge">
+        <line x1="130" y1="150" x2="178" y2="150" marker-end="url(#a6)"/>
+        <line x1="330" y1="150" x2="378" y2="150" marker-end="url(#a6)"/>
+        <line x1="530" y1="150" x2="578" y2="150" marker-end="url(#a6)"/>
+        <path d="M720 140 C750 140, 750 55, 778 55" marker-end="url(#a6)"/>
+        <line x1="720" y1="150" x2="778" y2="150" marker-end="url(#a6)"/>
+        <path d="M720 160 C750 160, 750 245, 778 245" marker-end="url(#a6)"/>
+      </g>
+      <g class="lbl" text-anchor="end">
+        <text x="774" y="40">score ≥ 0.85 (or "strong") and clear winner</text>
+        <text x="774" y="120">score ≥ 0.60 (or "strong"): show top 3</text>
+        <text x="774" y="285">everything else</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Two thresholds, 0.85 to accept and 0.60 to ask, plus a "strong" override for exact catalogue-number or barcode hits whose title also agrees.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div>
+      <h3>Scoring weights</h3>
+      <p>Points are added per hit and clamped to 0–1. The reasons are kept and shown in the HUD's meta line (for example <code>0.92 · r1234567 · catno title 0.96 format</code>).</p>
+      <div class="tablewrap"><table>
+        <tr><th>Evidence</th><th>Test</th><th class="num">Points</th></tr>
+        <tr><td>Catalogue number, exact</td><td>Letters + digits identical after normalising</td><td class="num">+0.50</td></tr>
+        <tr><td>Catalogue number, approximate</td><td>One contains or ends with the other (4+ chars)</td><td class="num">+0.30</td></tr>
+        <tr><td>Barcode</td><td>Digits identical</td><td class="num">+0.50</td></tr>
+        <tr><td>Label</td><td>Name similarity above 0.85</td><td class="num">+0.15</td></tr>
+        <tr><td>Artist / title</td><td>Similarity above 0.60, scaled</td><td class="num">up to +0.25</td></tr>
+        <tr><td>Format</td><td>Matches session or model format</td><td class="num">+0.10</td></tr>
+        <tr><td>Format</td><td>Contradicts it</td><td class="num">−0.15</td></tr>
+        <tr><td>Year</td><td>Within one year of a printed year</td><td class="num">+0.05</td></tr>
+        <tr><td>Home country</td><td>UK if currency is GBP, US for USD, etc.</td><td class="num">+0.03</td></tr>
+      </table></div>
+      <p>So an exact catalogue number plus a good title plus the right format lands around 0.85 on its own. A barcode plus title does the same. Artist and title alone can never pass 0.85, which is the point: names alone cannot tell pressings apart.</p>
+    </div>
+    <div>
+      <h3>Details that matter</h3>
+      <ul>
+        <li><strong>Text similarity</strong> is Jaro–Winkler on lower-cased, punctuation-stripped strings with a leading "The" removed. It rewards shared prefixes, which suits titles.</li>
+        <li><strong>Swapped artist and title</strong> are tolerated: the ranker tries the whole "Artist - Title" string and also each part against each part, and takes the best.</li>
+        <li><strong>"Strong"</strong> means an exact catalogue number or barcode <em>and</em> a title match. A strong hit is accepted even below 0.85. This is the safety net for scores dented by a wrong format guess.</li>
+        <li><strong>Look-alikes.</strong> Two Discogs entries with the same label, catalogue number, country and year cannot be told apart from a photo, so they are folded into one before deciding. Without this, every reissue would trigger a "which one?" question.</li>
+        <li><strong>Clear winner</strong> means the runner-up is at least 0.10 behind, or both are the same master release and the top is strong.</li>
+        <li><strong>Ambiguous</strong> hands you the top three distinct pressings, each shown as headline plus "label · catno · country · year · format".</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LAYER 6 ============ -->
+<section class="layer" id="l6">
+  <div class="layer-head">
+    <div class="layer-num">6</div>
+    <div>
+      <h2>What happens next</h2>
+      <div class="where">Scan/ScanController.swift · Review/ReviewView.swift</div>
+    </div>
+  </div>
+  <p class="measure">The verdict drives the HUD, the voice, and the camera mode. There are three paths, and two of them loop back to Layer 1 for another photo of the same record before anything is given up on.</p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 960 400" role="img" aria-label="Match leads through a duplicate check to save, extra shots and enrichment; ambiguous holds the camera and asks you to pick a number or say none; none asks for the label, then one retry, then the review queue">
+      <defs><marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g class="t" text-anchor="middle">
+        <rect class="box-good" x="20" y="30" width="120" height="48"/><text x="80" y="59" class="on-fill">MATCH</text>
+        <rect class="box" x="190" y="30" width="150" height="48"/><text x="265" y="51">Already in library?</text><text x="265" y="67" class="sub">same Discogs release id</text>
+        <rect class="box" x="390" y="30" width="150" height="48"/><text x="465" y="51">Save record</text><text x="465" y="67" class="sub">full release fetched</text>
+        <rect class="box" x="590" y="30" width="150" height="48"/><text x="665" y="51">Extra shots</text><text x="665" y="67" class="sub">per capture profile</text>
+        <rect class="box" x="790" y="30" width="150" height="48"/><text x="865" y="51">Done · next record</text><text x="865" y="67" class="sub">price + collection sync</text>
+        <rect class="box" x="190" y="104" width="150" height="48"/><text x="265" y="125">"Already catalogued"</text><text x="265" y="141" class="sub">say "add anyway" to keep</text>
+
+        <rect class="box-warn" x="20" y="180" width="120" height="48"/><text x="80" y="209" class="on-fill">AMBIGUOUS</text>
+        <rect class="box" x="190" y="180" width="150" height="48"/><text x="265" y="201">Camera held</text><text x="265" y="217" class="sub">"N possible matches…"</text>
+        <rect class="box" x="390" y="180" width="150" height="48"/><text x="465" y="201">Pick 1 · 2 · 3</text><text x="465" y="217" class="sub">voice or number keys</text>
+        <rect class="box" x="590" y="180" width="150" height="48"/><text x="665" y="201">Or flip to B-side</text><text x="665" y="217" class="sub">second read narrows</text>
+
+        <rect class="box-bad" x="20" y="330" width="120" height="48"/><text x="80" y="359" class="on-fill">NONE</text>
+        <rect class="box" x="190" y="330" width="150" height="48"/><text x="265" y="351">Was it a label shot?</text><text x="265" y="367" class="sub">or nothing readable</text>
+        <rect class="box" x="390" y="330" width="150" height="48"/><text x="465" y="351">"Show me the label"</text><text x="465" y="367" class="sub">re-shoot → Layer 1</text>
+        <rect class="box" x="590" y="330" width="150" height="48"/><text x="665" y="351">One retry</text><text x="665" y="367" class="sub">"hold it steady, closer"</text>
+        <rect class="box" x="790" y="330" width="150" height="48"/><text x="865" y="351">Review queue</text><text x="865" y="367" class="sub">saved as needs-review</text>
+      </g>
+      <g class="edge">
+        <line x1="140" y1="54" x2="188" y2="54" marker-end="url(#a7)"/>
+        <line x1="340" y1="54" x2="388" y2="54" marker-end="url(#a7)"/>
+        <line x1="540" y1="54" x2="588" y2="54" marker-end="url(#a7)"/>
+        <line x1="740" y1="54" x2="788" y2="54" marker-end="url(#a7)"/>
+        <line x1="265" y1="78" x2="265" y2="102" marker-end="url(#a7)"/>
+        <path d="M340 128 H465 V80" marker-end="url(#a7)"/>
+
+        <line x1="140" y1="204" x2="188" y2="204" marker-end="url(#a7)"/>
+        <line x1="340" y1="204" x2="388" y2="204" marker-end="url(#a7)"/>
+        <line x1="540" y1="204" x2="588" y2="204" marker-end="url(#a7)"/>
+        <path d="M465 180 V130 H500 V80" marker-end="url(#a7)"/>
+        <path class="edge-dash" d="M465 228 V280 H865 V328" marker-end="url(#a7)"/>
+
+        <line x1="140" y1="354" x2="188" y2="354" marker-end="url(#a7)"/>
+        <line x1="340" y1="354" x2="388" y2="354" marker-end="url(#a7)"/>
+        <line x1="540" y1="354" x2="588" y2="354" marker-end="url(#a7)"/>
+        <line x1="740" y1="354" x2="788" y2="354" marker-end="url(#a7)"/>
+      </g>
+      <g class="lbl">
+        <text x="270" y="94" text-anchor="start">yes</text>
+        <text x="364" y="46" text-anchor="middle">no</text>
+        <text x="405" y="122" text-anchor="start">"add anyway"</text>
+        <text x="505" y="122" text-anchor="start">chosen</text>
+        <text x="665" y="274" text-anchor="middle">"none" or "review" → parked with the best guess</text>
+        <text x="364" y="346" text-anchor="middle">no</text>
+        <text x="564" y="346" text-anchor="middle">still none</text>
+        <text x="764" y="346" text-anchor="middle">still none</text>
+      </g>
+    </svg>
+    </div>
+    <figcaption>Green, amber and red lanes for the three verdicts. Only the red lane ever ends in the review queue, and only after a label shot and one retry.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div>
+      <h3>Match lane</h3>
+      <ul>
+        <li><strong>Duplicate check</strong> is by Discogs release id. A second copy is allowed, but only if you say "add anyway".</li>
+        <li><strong>What gets saved</strong> comes from the full Discogs release, not the search hit: artist line, title, label, catalogue number, format and disc count, year, country, genres, styles, tracklist, cover image. The photo, the raw OCR text, the barcode and the match score are stored alongside.</li>
+        <li><strong>Extra shots</strong> depend on format. By default singles need none (Discogs already knows the tracklist), albums get front and back cover, gatefolds add a gatefold shot, multi-disc sets add all four labels. Settings can add the B-side for singles and labels for LPs.</li>
+        <li><strong>Spoken confirmation:</strong> "New Order, Blue Monday, 1983, twelve inch." Then the next shot prompt, if any.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Ambiguous and none lanes</h3>
+      <ul>
+        <li><strong>The camera is frozen</strong> while a question is on screen, so the next steady frame cannot wipe the list. "Capture" and space still work.</li>
+        <li><strong>Second look.</strong> If you flip the record while the list is up, the new read runs the whole pipeline again; if exactly one candidate survives both reads, it is accepted and both photos are kept as sides A and B.</li>
+        <li><strong>Label first.</strong> When a cover shot fails to match, the app assumes the label will do better, switches the camera to shot mode, and tells the model to expect a label. Only if that also fails does it offer one retry, then park the record.</li>
+        <li><strong>Review tab</strong> keeps everything read so far. You can type extra words; a catalogue number in them is pulled out and searched exactly, the rest goes in as free text, and the same ranker orders the results.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="layer">
+  <h2>Every knob in one place</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Layer</th><th>Setting</th><th class="num">Default</th><th>Where</th></tr>
+    <tr><td>1</td><td>Sharpness minimum</td><td class="num">60</td><td>Settings slider</td></tr>
+    <tr><td>1</td><td>Steady hold</td><td class="num">1.0 s</td><td>Settings slider</td></tr>
+    <tr><td>1</td><td>Presence (scene delta) minimum</td><td class="num">14</td><td>Settings slider</td></tr>
+    <tr><td>1</td><td>Motion maximum / drift maximum</td><td class="num">6 / 18</td><td>Code only</td></tr>
+    <tr><td>2</td><td>Skip model when barcode ≥ 8 digits</td><td class="num">on</td><td>Code only</td></tr>
+    <tr><td>3</td><td>Provider</td><td class="num">Luna</td><td>Settings · <code>readerProvider</code></td></tr>
+    <tr><td>3</td><td>Upload size / output cap</td><td class="num">1024 px / 600 tokens</td><td>Code only</td></tr>
+    <tr><td>4</td><td>Results per query / Discogs limit headroom</td><td class="num">15 / 5</td><td>Code only</td></tr>
+    <tr><td>5</td><td>Auto-accept / ask thresholds</td><td class="num">0.85 / 0.60</td><td>Code only</td></tr>
+    <tr><td>5</td><td>Preferred country</td><td class="num">from currency</td><td>Settings · <code>currency</code></td></tr>
+    <tr><td>6</td><td>Extra shots (B-side on singles, labels on LPs)</td><td class="num">off / off</td><td>Settings · <code>askForBSide</code>, <code>askForLabelsOnLP</code></td></tr>
+    <tr><td>6</td><td>Add matches to Discogs collection</td><td class="num">on</td><td>Settings · <code>discogsSync</code></td></tr>
+  </table></div>
+
+  <div class="sources">
+    <strong>Sources</strong> (working tree, including uncommitted edits): <code>Sources/VinylCat/Capture/CaptureEngine.swift</code>, <code>Capture/FrameAnalysis.swift</code>, <code>Readers/LocalReader.swift</code>, <code>Readers/Identifier.swift</code>, <code>Readers/SleeveReader.swift</code>, <code>Readers/LunaReader.swift</code>, <code>Readers/GeminiReader.swift</code>, <code>Discogs/Matcher.swift</code>, <code>Discogs/CandidateRanker.swift</code>, <code>Discogs/DiscogsClient.swift</code>, <code>Scan/ScanController.swift</code>, <code>Review/ReviewView.swift</code>, <code>Persistence/Models.swift</code> (CaptureProfile).
+  </div>
+</section>
+</div>
