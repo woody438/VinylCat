@@ -62,6 +62,7 @@ final class ScanController {
     func start(camera: CameraSession) {
         guard tasks.isEmpty else { return }
         let engine = self.engine
+        applyTuning()
         tasks.append(Task { await engine.run(frames: camera.frames) })
         tasks.append(Task { [weak self] in for await s in engine.signals { self?.apply(signal: s) } })
         tasks.append(Task { [weak self] in for await still in engine.stills { await self?.handle(still: still) } })
@@ -73,6 +74,16 @@ final class ScanController {
     }
 
     func forceCapture() { Task { await engine.forceCapture() } }
+
+    /// Reads the capture tunables from UserDefaults (Settings sliders) and pushes them to the engine.
+    func applyTuning() {
+        var t = CaptureTuning()
+        let d = UserDefaults.standard
+        if let v = d.object(forKey: "sharpnessMin") as? Double { t.sharpnessMin = v }
+        if let v = d.object(forKey: "steadySeconds") as? Double { t.steadySeconds = v }
+        if let v = d.object(forKey: "sceneDeltaMin") as? Double { t.sceneDeltaMin = v }
+        Task { await engine.setTuning(t) }
+    }
     func relearnBaseline() { Task { await engine.relearnBaseline() } }
 
     private func apply(signal s: CaptureSignal) {
@@ -80,7 +91,7 @@ final class ScanController {
         switch phase {
         case .learning, .paused, .armed, .steady, .captured: break
         case .reading, .searching: return
-        case .awaitingShot:
+        case .awaitingShot, .needLabel:
             // Keep the prompt on screen; the ring shows steadiness via `signal`.
             return
         default:
@@ -141,7 +152,7 @@ final class ScanController {
                 ambiguity = (outcome, cands, fileName, thumb)
                 phase = .ambiguous(candidates: cands.map(\.summary))
                 Chime.ambiguous.play()
-                speaker.say("\(cands.count) possible matches. " + cands.enumerated().map { "\($0 + 1): \($1.result.title), \($1.summary)" }.joined(separator: ". ") + ". Say one, two, three, or none.")
+                speaker.say("\(cands.count) possible matches. " + cands.enumerated().map { "\($0 + 1): \($1.spoken)" }.joined(separator: ". ") + ". Say one, two, three, or none.")
             case .none:
                 let guess = [outcome.reading.artist, outcome.reading.title].compactMap { $0 }.joined(separator: " — ")
                 if !(outcome.reading.isLabelShot ?? false), !expectLabel {

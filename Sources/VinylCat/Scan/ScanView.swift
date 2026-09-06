@@ -56,10 +56,11 @@ struct CameraMessage: View {
 /// HUD bound to the scan controller's phase. Colours/copy mirror the mockups.
 struct HUDOverlay: View {
     @Environment(AppState.self) private var state
+    @Environment(\.previewPhase) private var previewPhase
 
     var body: some View {
         let scan = state.scan
-        let look = HUDLook(phase: scan.phase, recordNumber: scan.recordNumber, signal: scan.signal)
+        let look = HUDLook(phase: previewPhase ?? scan.phase, recordNumber: scan.recordNumber, signal: scan.signal, noModelKey: !state.identifier.hasAnyKey)
         VStack {
             HStack(alignment: .top) {
                 Caption(cameraTag)
@@ -69,7 +70,18 @@ struct HUDOverlay: View {
             .padding(20)
             Spacer()
             StateBanner(color: look.color, state: look.state, meta: look.meta) {
-                Text(look.headline).font(Theme.display(look.headlineSize)).lineLimit(1).minimumScaleFactor(0.5)
+                if case .ambiguous(let cands) = previewPhase ?? scan.phase {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(cands.enumerated()), id: \.offset) { i, c in
+                            HStack(alignment: .firstTextBaseline, spacing: 18) {
+                                Text("\(i + 1)").font(Theme.display(44)).foregroundStyle(Theme.orange).frame(width: 40, alignment: .leading)
+                                Text(c).font(Theme.display(30)).lineLimit(1).minimumScaleFactor(0.6)
+                            }
+                        }
+                    }
+                } else {
+                    Text(look.headline).font(Theme.display(look.headlineSize)).lineLimit(1).minimumScaleFactor(0.5)
+                }
                 if !look.subline.isEmpty {
                     Text(look.subline).font(Theme.display(30, weight: .medium)).foregroundStyle(Theme.secondary).lineLimit(1)
                 }
@@ -96,7 +108,7 @@ struct HUDLook {
     var ring: Double = 0
     var ringLabel = "READY"
 
-    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?) {
+    init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil) {
         let metrics = signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta) } ?? ""
         switch phase {
         case .learning:
@@ -108,6 +120,7 @@ struct HUDLook {
             state = "ARMED"; meta = "record #\(recordNumber) · \(reason)"
             headline = "HOLD UP A RECORD"
             hint = "Auto-captures when the image is steady and sharp · say “capture” to force · " + metrics
+            if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only · " + metrics }
         case .steady(let p):
             color = Theme.green; state = "STEADY"; meta = "record #\(recordNumber)"
             headline = "HOLD IT…"; ring = p; ringLabel = "HOLD"; hint = metrics
@@ -125,12 +138,12 @@ struct HUDLook {
             headline = title; subline = detail; ring = 1; ringLabel = "OK"; hint = ""
         case .ambiguous(let cands):
             color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "say ONE, TWO, THREE or NONE"
-            headline = cands.enumerated().map { "\($0 + 1)· \($1)" }.joined(separator: "   "); headlineSize = 30
-            ring = 1; ringLabel = "\(cands.count)"; hint = "Or flip it — the B-side label usually settles it"
+            headline = ""
+            ring = 1; ringLabel = "\(cands.count)"; hint = "Or flip it — the B-side label usually settles it · say “review” to park it"
         case .needLabel(let guess):
             color = Theme.blue; state = "SHOW ME THE LABEL"; meta = "no confident match from the cover"
-            headline = guess; headlineSize = 56; ring = 0.25; ringLabel = "LABEL"
-            hint = "Slide the record out and hold side A up to the camera"
+            headline = guess; headlineSize = 56; ring = signal?.steadyProgress ?? 0; ringLabel = "LABEL"
+            hint = "Slide the record out and hold side A up to the camera · say “skip” to park it for review"
         case .awaitingShot(let kind, let i, let n, let header):
             color = Theme.blue; state = "NEXT SHOT · \(i) OF \(n)"; meta = header
             headline = kind.uppercased(); ring = signal?.steadyProgress ?? 0; ringLabel = "HOLD"

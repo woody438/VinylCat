@@ -20,6 +20,9 @@ final class Identifier {
     var skipModelWhenBarcode = true
     private(set) var sessionCostUSD = 0.0
     private(set) var reads = 0
+    /// True once a scan ran without any model key — the HUD nudges the user to add one.
+    private(set) var modelSkippedForMissingKey = false
+    var hasAnyKey: Bool { Keychain.get(.openAI) != nil || Keychain.get(.gemini) != nil }
 
     init() {
         provider = ReaderProvider(rawValue: UserDefaults.standard.string(forKey: "readerProvider") ?? "") ?? .luna
@@ -48,7 +51,19 @@ final class Identifier {
 
         onStep("\(provider.title) reading")
         let hints = ReadHints(ocrText: local.text, barcodes: local.barcodes, sessionFormat: sessionFormat, expectLabel: expectLabel)
-        let r = try await provider.reader.read(image, hints: hints)
+        let r: ReaderResult
+        do { r = try await provider.reader.read(image, hints: hints) } catch ReaderError.missingKey {
+            // No model key yet: OCR-only guess (catalogue number does most of the work anyway).
+            onStep("no model key — OCR only")
+            modelSkippedForMissingKey = true
+            merged.isLabelShot = expectLabel || local.lines.contains { $0.uppercased().contains("RPM") || $0.uppercased().hasPrefix("SIDE") }
+            let words = local.lines.filter { $0.count > 4 && !$0.contains(where: \.isNumber) && !$0.hasPrefix("(") && !$0.uppercased().hasPrefix("SIDE") }
+            merged.title = words.dropFirst().first ?? words.first
+            merged.artist = words.dropFirst(2).first ?? words.first
+            merged.label = words.first
+            merged.confidence = 0.3
+            return Outcome(local: local, model: nil, provider: nil, reading: merged)
+        }
         sessionCostUSD += r.usage.costUSD
         reads += 1
         var m = r.reading

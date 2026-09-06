@@ -8,6 +8,11 @@ struct SettingsView: View {
     @AppStorage("discogsUsername") private var discogsUsername = ""
     @AppStorage("currency") private var currency = "GBP"
     @AppStorage("discogsSync") private var discogsSync = true
+    @AppStorage("sharpnessMin") private var sharpnessMin = 60.0
+    @AppStorage("steadySeconds") private var steadySeconds = 0.6
+    @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0
+    @AppStorage("askForBSide") private var askForBSide = true
+    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = true
     @State private var testResult = ""
 
     var body: some View {
@@ -57,6 +62,16 @@ struct SettingsView: View {
                         }.labelsHidden().frame(width: 240)
                     }
                     Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
+                    Row("Steady for") { HStack { Slider(value: $steadySeconds, in: 0.3...1.5).frame(width: 140); Text(String(format: "%.1f s", steadySeconds)).frame(width: 44) } }
+                    Row("Sharpness needed") { HStack { Slider(value: $sharpnessMin, in: 20...200).frame(width: 140); Text("\(Int(sharpnessMin))").frame(width: 44) } }
+                    Row("Scene change needed") { HStack { Slider(value: $sceneDeltaMin, in: 5...40).frame(width: 140); Text("\(Int(sceneDeltaMin))").frame(width: 44) } }
+                    Row("Live numbers") { Text(state.scan.signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f · %@", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta, $0.reason) } ?? "—").foregroundStyle(Theme.secondary) }
+                }
+                Section("SHOTS") {
+                    Row("Ask for the B-side on singles") { Toggle("", isOn: $askForBSide).labelsHidden().toggleStyle(.switch) }
+                    Row("Ask for a label shot on LPs") { Toggle("", isOn: $askForLabelsOnLP).labelsHidden().toggleStyle(.switch) }
+                    Text("LPs: front + back (+ label). 2×LP and gatefolds are detected from Discogs. Say “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted)
                     Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
                 }
                 Section("TESTS") {
@@ -71,6 +86,9 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 40).padding(.vertical, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onChange(of: sharpnessMin) { _, _ in state.scan.applyTuning() }
+        .onChange(of: steadySeconds) { _, _ in state.scan.applyTuning() }
+        .onChange(of: sceneDeltaMin) { _, _ in state.scan.applyTuning() }
     }
 
     private func testModel() async -> String {

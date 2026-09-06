@@ -5,6 +5,13 @@ struct Candidate: Identifiable, Sendable {
     var score: Double
     var reasons: [String]
     var id: Int { result.id }
+    /// Exact catalogue number (or barcode) plus a title match — enough to accept even below the score threshold.
+    var isStrong: Bool { (reasons.contains("catno") || reasons.contains("barcode")) && reasons.contains(where: { $0.hasPrefix("title") }) }
+    /// Same label + catno + country + year ⇒ indistinguishable from a photo; treated as one candidate.
+    var variantKey: String {
+        [result.label?.first, result.catno, result.country, result.year].map { ($0 ?? "").uppercased() }.joined(separator: "|")
+    }
+    var sameMaster: (Candidate) -> Bool { { other in self.result.master_id != nil && self.result.master_id == other.result.master_id } }
     /// "POLYDOR POSP 113 · UK · 1980 · 7\""
     var summary: String {
         var parts: [String] = []
@@ -12,13 +19,25 @@ struct Candidate: Identifiable, Sendable {
         if let c = result.catno, c != "none" { parts.append(c.uppercased()) }
         if let c = result.country { parts.append(c.uppercased()) }
         if let y = result.year, !y.isEmpty { parts.append(y) }
-        if let f = result.format?.first { parts.append(f) }
+        if let f = result.format?.first(where: { ["7\"", "10\"", "12\"", "LP"].contains($0) }) ?? result.format?.first { parts.append(f) }
         return parts.joined(separator: " · ")
+    }
+    /// Same, but readable aloud.
+    var spoken: String {
+        summary.replacingOccurrences(of: " · ", with: ", ").replacingOccurrences(of: "7\"", with: "seven inch")
+            .replacingOccurrences(of: "12\"", with: "twelve inch").replacingOccurrences(of: "10\"", with: "ten inch").replacingOccurrences(of: "LP", with: "album")
     }
 }
 
 /// Scores Discogs search hits against what was read from the record.
 enum CandidateRanker {
+    /// Country preferred on ties, from the valuation currency (GBP → UK, USD → US, …).
+    static var preferredCountry: String {
+        switch UserDefaults.standard.string(forKey: "currency") ?? "GBP" {
+        case "GBP": "UK"; case "USD": "US"; case "CAD": "Canada"; case "EUR": "Europe"; default: ""
+        }
+    }
+
     static func rank(_ results: [DiscogsClient.SearchResult], reading: SleeveReading, sessionFormat: VinylFormat?) -> [Candidate] {
         var seen = Set<Int>()
         let out: [Candidate] = results.compactMap { r in
@@ -37,13 +56,9 @@ enum CandidateRanker {
             if let label = reading.label, let rl = r.label?.first, similarity(label, rl) > 0.85 {
                 score += 0.15; why.append("label")
             }
-            let readTitle = [reading.artist, reading.title].compactMap { $0 }.joined(separator: " - ")
-            if !readTitle.isEmpty {
-                let sim = similarity(readTitle, r.title)
-                if sim > 0.6 { score += 0.25 * sim; why.append(String(format: "title %.2f", sim)) }
-            } else if let t = reading.title, similarity(t, r.title.components(separatedBy: " - ").last ?? r.title) > 0.8 {
-                score += 0.15; why.append("title")
-            }
+            let sim = titleSimilarity(reading: reading, resultTitle: r.title)
+            if sim > 0.6 { score += 0.25 * sim; why.append(String(format: "title %.2f", sim)) }
+            if let pc = preferredCountry.nilIfEmpty, r.country?.caseInsensitiveCompare(pc) == .orderedSame { score += 0.03 }
             if let wanted = sessionFormat?.discogsFormat ?? reading.formatGuess, let fmts = r.format {
                 if fmts.contains(where: { $0.caseInsensitiveCompare(wanted) == .orderedSame }) { score += 0.1; why.append("format") }
                 else { score -= 0.15; why.append("format✗") }
@@ -52,6 +67,21 @@ enum CandidateRanker {
             return Candidate(result: r, score: min(1, max(0, score)), reasons: why)
         }
         return out.sorted { $0.score > $1.score }
+    }
+
+    /// Best of: whole "Artist - Title" vs result, or per-part matching that tolerates artist/title being swapped.
+    static func titleSimilarity(reading: SleeveReading, resultTitle: String) -> Double {
+        let parts = resultTitle.components(separatedBy: " - ")
+        let rArtist = parts.count > 1 ? parts[0] : ""
+        let rTitle = parts.count > 1 ? parts.dropFirst().joined(separator: " - ") : resultTitle
+        let a = reading.artist ?? "", t = reading.title ?? ""
+        if a.isEmpty && t.isEmpty { return 0 }
+        var best = 0.0
+        if !a.isEmpty && !t.isEmpty { best = similarity("\(a) - \(t)", resultTitle) }
+        let titlePart = max(t.isEmpty ? 0 : similarity(t, rTitle), a.isEmpty ? 0 : similarity(a, rTitle))
+        let artistPart = rArtist.isEmpty ? titlePart : max(a.isEmpty ? 0 : similarity(a, rArtist), t.isEmpty ? 0 : similarity(t, rArtist))
+        let partial = (a.isEmpty || t.isEmpty) ? max(titlePart, artistPart) : (titlePart + artistPart) / 2
+        return max(best, partial)
     }
 
     /// Jaro–Winkler similarity on lower-cased, punctuation-stripped strings (0…1).

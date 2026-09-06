@@ -7,6 +7,7 @@ struct VinylCatApp: App {
     init() {
         // `VinylCat --self-test` runs the built-in checks and exits (no Xcode/XCTest needed).
         if CommandLine.arguments.contains("--self-test") { exit(MainActor.assumeIsolated { SelfTest.run() }) }
+        if let code = MainActor.assumeIsolated({ CLI.run(CommandLine.arguments) }) { exit(code) }
     }
 
     var body: some Scene {

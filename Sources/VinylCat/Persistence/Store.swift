@@ -7,14 +7,14 @@ import SQLite3
 @MainActor
 @Observable
 final class Store {
-    static let shared = Store()
+    static let shared = Store(url: PhotoStore.shared.root.deletingLastPathComponent().appendingPathComponent("VinylCat.sqlite"))
 
     private(set) var revision = 0
     private var db: OpaquePointer?
     let url: URL
 
-    private init() {
-        url = PhotoStore.shared.root.deletingLastPathComponent().appendingPathComponent("VinylCat.sqlite")
+    init(url: URL) {
+        self.url = url
         open()
     }
 

@@ -96,7 +96,6 @@ struct LibraryView: View {
     }
 
     private func count(_ f: Filter, in all: [VinylRecord]) -> Int {
-        let keep = filter; defer { _ = keep }
         return all.filter { r in
             switch f {
             case .all: true

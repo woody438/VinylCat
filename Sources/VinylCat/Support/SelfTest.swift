@@ -1,3 +1,4 @@
+import CoreVideo
 import Foundation
 
 /// Built-in checks, run with `VinylCat --self-test` (see scripts/test.sh). Kept here because the
@@ -15,6 +16,52 @@ enum SelfTest {
                             format: [String] = ["Vinyl", "7\""], country: String? = "UK") -> DiscogsClient.SearchResult {
         .init(id: id, type: "release", title: title, year: year, country: country, label: label.map { [$0] }, catno: catno,
               format: format, barcode: nil, thumb: nil, cover_image: nil, master_id: nil)
+    }
+
+    /// Drives the engine with synthetic BGRA frames: empty → record A (steady) → still A → empty → record B.
+    private static func runEngineScenario() -> (captures: Int, doubleFire: Bool, emptyNoFire: Bool) {
+        var tuning = CaptureTuning(); tuning.steadySeconds = 0.1
+        let engine = CaptureEngine(tuning: tuning)
+        var cont: AsyncStream<Frame>.Continuation!
+        let stream = AsyncStream<Frame>(bufferingPolicy: .unbounded) { cont = $0 }
+        let runTask = Task { await engine.run(frames: stream) }
+        var captures = 0, capturesAfterA = 0, capturesDuringEmpty = 0
+        let collector = Task { for await _ in engine.stills { captures += 1 } }
+
+        func frame(pattern: Int) -> Frame {
+            var pb: CVPixelBuffer?
+            CVPixelBufferCreate(nil, 320, 240, kCVPixelFormatType_32BGRA, nil, &pb)
+            CVPixelBufferLockBaseAddress(pb!, [])
+            let base = CVPixelBufferGetBaseAddress(pb!)!.assumingMemoryBound(to: UInt8.self)
+            let stride = CVPixelBufferGetBytesPerRow(pb!)
+            for y in 0..<240 { for x in 0..<320 {
+                let p = base + y * stride + x * 4
+                var v: UInt8 = 90
+                if pattern == 1 { v = ((x / 8 + y / 8) % 2 == 0) ? 240 : 20 }            // checkerboard "record"
+                if pattern == 2 { v = ((x / 5) % 3 == 0 || (y / 7) % 2 == 0) ? 230 : 30 }  // different record
+                p[0] = v; p[1] = v; p[2] = v; p[3] = 255
+            } }
+            CVPixelBufferUnlockBaseAddress(pb!, [])
+            return Frame(pixelBuffer: pb!, timestamp: .zero)
+        }
+        func feed(_ pattern: Int, frames n: Int) {
+            for _ in 0..<n { cont.yield(frame(pattern: pattern)); Thread.sleep(forTimeInterval: 0.03) }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        // Pump the main run loop so the actor + collector tasks make progress between feeds.
+        func pump(_ s: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(s)) }
+
+        feed(0, frames: 10); pump(0.2)                        // learn baseline
+        let before = captures
+        feed(1, frames: 12); pump(0.3)                        // record A held steady → capture
+        capturesAfterA = captures
+        feed(1, frames: 12); pump(0.3)                        // still holding A → no second capture
+        let doubleFire = captures > capturesAfterA
+        feed(0, frames: 8); pump(0.2)                         // removed → cooldown clears
+        capturesDuringEmpty = captures
+        feed(2, frames: 12); pump(0.3)                        // record B → capture
+        cont.finish(); runTask.cancel(); collector.cancel()
+        return (captures - before, doubleFire, capturesDuringEmpty == capturesAfterA)
     }
 
     static func run() -> Int32 {
@@ -58,6 +105,55 @@ enum SelfTest {
 
         print("formats")
         check(VinylFormat.allCases.count == 3 && VinylFormat.seven.discogsFormat == "7\"", "format mapping")
+
+        print("voice phrases")
+        check(VoiceCommand.match(trailing: "ok capture") == .capture, "trailing word matches")
+        check(VoiceCommand.match(trailing: "flip it") == .flip, "multi-word phrase")
+        check(VoiceCommand.match(trailing: "number two") == .two, "longest phrase wins")
+        check(VoiceCommand.match(trailing: "forty fives") == .sevens, "format switch")
+        check(VoiceCommand.match(trailing: "capturing") == nil, "no partial-word matches")
+        check(VoiceCommand.match(trailing: "back cover") == .backCover && VoiceCommand.match(trailing: "back") == .backCover, "back cover")
+
+        print("matcher — variant collapsing")
+        let twins = [
+            hit(10, "The Jam - Going Underground", catno: "POSP 113", label: "Polydor", year: "1980"),
+            hit(11, "The Jam - Going Underground", catno: "POSP 113", label: "Polydor", year: "1980"),
+            hit(12, "The Jam - Going Underground", catno: "POSP 113", label: "Polydor", year: "1980", country: "Ireland"),
+        ]
+        let rk = CandidateRanker.rank(twins, reading: r, sessionFormat: .seven)
+        var keys = Set<String>()
+        let distinct = rk.filter { keys.insert($0.variantKey).inserted }
+        check(distinct.count == 2, "identical pressings collapse (\(distinct.count))")
+        check(rk.first?.isStrong == true, "catno + title is a strong match")
+        check(CandidateRanker.titleSimilarity(reading: { var x = SleeveReading(); x.artist = "Blue Monday"; x.title = "Factory"; return x }(), resultTitle: "New Order - Blue Monday") > 0.6, "swapped artist/title still matches")
+
+        print("store round-trip")
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-selftest-\(UUID().uuidString).sqlite")
+        let store = Store(url: tmp)
+        var rec = VinylRecord(artist: "The Jam", title: "Going Underground", format: "7\"", sessionID: UUID())
+        rec.discogsReleaseID = 2413807; rec.year = 1980; rec.genres = ["Rock"]; rec.tracks = [Track(position: "A", title: "Going Underground", duration: "2:58")]
+        rec.expectedShots = [.labelA, .labelB]
+        rec.photos = [ScanPhoto(recordID: rec.id, fileName: "x.jpg", kind: .labelA, order: 0)]
+        store.insert(rec)
+        let back = store.fetch(rec.id)
+        check(back != nil, "fetch after insert")
+        check(back?.discogsReleaseID == 2413807 && back?.tracks.first?.duration == "2:58" && back?.genres == ["Rock"], "fields and JSON columns survive")
+        check(back?.photos.count == 1 && back?.missingShots == [.labelB] && back?.isComplete == false, "photos + expected shots")
+        check(store.existing(discogsReleaseID: 2413807)?.id == rec.id, "duplicate lookup by release id")
+        rec.photos.append(ScanPhoto(recordID: rec.id, fileName: "y.jpg", kind: .labelB, order: 1)); store.update(rec)
+        check(store.fetch(rec.id)?.isComplete == true, "update adds photo → complete")
+        check(store.count() == 1, "count")
+        let csv = try? store.exportCSV(to: tmp.deletingLastPathComponent())
+        check(csv != nil && ((try? String(contentsOf: csv!, encoding: .utf8))?.contains("Going Underground") ?? false), "csv export")
+        store.delete(rec.id)
+        check(store.count() == 0, "delete cascades")
+        try? FileManager.default.removeItem(at: tmp); if let csv { try? FileManager.default.removeItem(at: csv) }
+
+        print("capture engine — synthetic frames")
+        let engineOK = runEngineScenario()
+        check(engineOK.captures == 2, "two distinct records → two captures (got \(engineOK.captures))")
+        check(engineOK.doubleFire == false, "same record held still does not re-fire")
+        check(engineOK.emptyNoFire, "empty scene never fires")
 
         print("\(passed) passed, \(failures) failed")
         return failures == 0 ? 0 : 1

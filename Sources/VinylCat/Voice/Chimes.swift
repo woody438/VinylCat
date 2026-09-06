@@ -11,7 +11,7 @@ enum Chime: String, CaseIterable {
 
     @MainActor
     func play() {
-        if let custom = Bundle.main.url(forResource: rawValue, withExtension: "aiff", subdirectory: "Sounds"),
+        if let custom = Bundle.main.url(forResource: rawValue, withExtension: "wav", subdirectory: "Sounds"),
            let s = NSSound(contentsOf: custom, byReference: true) {
             s.play(); return
         }

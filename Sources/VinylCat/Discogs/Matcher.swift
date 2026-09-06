@@ -31,10 +31,15 @@ struct Matcher {
             }
         }
         let ranked = CandidateRanker.rank(pool, reading: reading, sessionFormat: sessionFormat)
-        guard let top = ranked.first else { return (.none, ranked) }
-        if top.score >= autoAccept, ranked.count == 1 || ranked[1].score < top.score - 0.1 { return (.match(top), ranked) }
-        if top.score >= askAbove { return (.ambiguous(Array(ranked.prefix(3))), ranked) }
-        return (.none, ranked)
+        // Collapse pressings that look identical from a photo (same label/catno/country/year).
+        var keys = Set<String>()
+        let distinct = ranked.filter { keys.insert($0.variantKey).inserted }
+        guard let top = distinct.first else { return (.none, ranked) }
+        let runnerUp = distinct.dropFirst().first
+        let clearWinner = runnerUp.map { $0.score < top.score - 0.1 || (top.sameMaster($0) && top.isStrong) } ?? true
+        if (top.score >= autoAccept || top.isStrong) && clearWinner { return (.match(top), distinct) }
+        if top.score >= askAbove || top.isStrong { return (.ambiguous(Array(distinct.prefix(3))), distinct) }
+        return (.none, distinct)
     }
 }
 

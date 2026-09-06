@@ -40,7 +40,7 @@ enum LocalReader {
 /// Heuristics for record catalogue numbers: "POSP 113", "CHS TT 17", "FAC 73", "2059 227", "7N 17241", "SRK 6095".
 enum CatalogueNumber {
     private static let pattern = try! NSRegularExpression(
-        pattern: #"\b(?:[A-Z0-9]{1,6}[ .\-]?){0,2}\d{2,7}(?:[ .\-]\d{2,5})?\b"#)
+        pattern: #"\b(?:[A-Z0-9]{1,6}[ .\-]?){0,2}\d{1,7}(?:[ .\-]\d{2,5})?\b"#)
 
     static func candidates(in lines: [String]) -> [String] {
         var seen = Set<String>()
@@ -55,6 +55,7 @@ enum CatalogueNumber {
                 // Skip years, RPMs and bare numbers; prefer letter+digit combos.
                 if letters == 0 && (digits == 4 || s == "45" || s == "33") { continue }
                 if letters == 0 && digits < 5 { continue }
+                if letters > 0 && digits == 1 && letters < 3 { continue }   // "A1", "B2" side markers
                 let key = s.replacingOccurrences(of: " ", with: "")
                 if seen.insert(key).inserted { out.append(s) }
             }

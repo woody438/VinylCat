@@ -122,13 +122,15 @@ final class DiscogsClient {
     }
 
     private func request<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem]) async throws -> T {
-        guard let token = Keychain.get(.discogsToken), !token.isEmpty else { throw DiscogsError.noToken }
+        let token = Keychain.get(.discogsToken)?.nilIfEmpty
+        if token == nil, method != "GET" || path.hasPrefix("/oauth") { throw DiscogsError.noToken }
+        if token == nil { limit = min(limit, 25) }
         await throttle()
         var comps = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { comps.queryItems = query }
         var req = URLRequest(url: comps.url!)
         req.httpMethod = method
-        req.setValue("Discogs token=\(token)", forHTTPHeaderField: "Authorization")
+        if let token { req.setValue("Discogs token=\(token)", forHTTPHeaderField: "Authorization") }
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.timeoutInterval = 20
