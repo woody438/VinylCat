@@ -18,8 +18,11 @@ BUNDLE_DIR="$(dirname "$BIN")/VinylCat_VinylCat.bundle"
 [[ -d "$BUNDLE_DIR" ]] && cp -R "$BUNDLE_DIR" "$APP/Contents/Resources/"
 [[ -d Resources/Sounds ]] && cp -R Resources/Sounds "$APP/Contents/Resources/"
 [[ -d Resources/Fonts ]] && cp -R Resources/Fonts "$APP/Contents/Resources/"
-# Ad-hoc signature is enough for camera/mic/speech permission prompts on this Mac.
-codesign --force --deep --sign - "$APP" >/dev/null
+# Sign with the local "VinylCat Local Signing" certificate when present so Camera/Mic/Speech permissions survive rebuilds;
+# ad-hoc otherwise (works, but macOS re-asks after every build).
+IDENTITY="$(security find-certificate -c "VinylCat Local Signing" -Z ~/Library/Keychains/login.keychain-db 2>/dev/null | awk '/SHA-1/{print $NF}')"
+codesign --force --deep --sign "${IDENTITY:--}" "$APP" >/dev/null
+echo "signed with ${IDENTITY:-ad-hoc}"
 echo "built $APP"
 if (( RUN )); then
   pkill -x VinylCat 2>/dev/null || true

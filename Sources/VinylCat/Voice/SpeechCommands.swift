@@ -58,12 +58,19 @@ final class SpeechCommands {
     private(set) var status: Status = .idle { didSet { Log.voice.info("status \(String(describing: self.status))") } }
     private(set) var lastHeard = ""
     var onCommand: ((VoiceCommand) -> Void)?
-    /// While true (TTS speaking), transcripts are ignored so the app doesn't hear itself. Words spoken during the mute
-    /// can arrive from the recogniser *after* it ends, so both edges also discard everything up to "now".
-    var muted = false {
-        didSet { handledUpTo = max(handledUpTo, Date().timeIntervalSince(sessionStart)) }
-    }
+    /// While true (TTS speaking) microphone audio is not fed to the recogniser at all, so the app never hears itself.
+    var muted = false { didSet { gate.muted = muted } }
+    private let gate = AudioGate()
     private var sessionStart = Date()
+
+    final class AudioGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _muted = false
+        var muted: Bool {
+            get { lock.lock(); defer { lock.unlock() }; return _muted }
+            set { lock.lock(); _muted = newValue; lock.unlock() }
+        }
+    }
     private var lastCommand: (VoiceCommand, Date)?
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-GB"))
@@ -124,7 +131,10 @@ final class SpeechCommands {
         guard format.channelCount > 0, format.sampleRate > 0 else { status = .error("No microphone input"); return }
         input.removeTap(onBus: 0)
         nonisolated(unsafe) let request = req
-        input.installTap(onBus: 0, bufferSize: 2048, format: format) { @Sendable buffer, _ in request.append(buffer) }
+        let gate = self.gate
+        input.installTap(onBus: 0, bufferSize: 2048, format: format) { @Sendable buffer, _ in
+            if !gate.muted { request.append(buffer) }
+        }
         audioEngine.prepare()
         do { try audioEngine.start() } catch { status = .error(error.localizedDescription); return }
 
@@ -178,7 +188,6 @@ final class SpeechCommands {
         let segs = result.segments
         guard let last = segs.last else { return }
         lastHeard = result.text
-        guard !muted else { handledUpTo = last.timestamp + last.duration; return }
         // Only look at words that arrived after the last command we acted on.
         let fresh = segs.filter { $0.timestamp >= handledUpTo }
         guard !fresh.isEmpty else { return }
