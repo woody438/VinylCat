@@ -31,7 +31,7 @@ struct SettingsView: View {
                     Row("Spend this session") { Text(String(format: "$%.3f · %d reads", identifier.sessionCostUSD, identifier.reads)).foregroundStyle(Theme.secondary) }
                 }
                 Section("DISCOGS") {
-                    Row("Username") { TextField("", text: $discogsUsername).textFieldStyle(.roundedBorder).frame(width: 220) }
+                    Row("Username") { TextField("", text: $discogsUsername).textFieldStyle(.roundedBorder).frame(width: 170) }
                     KeyField(label: "Personal token", text: $discogsToken) { Keychain.set(discogsToken, for: .discogsToken) }
                     Row("Add matches to my Collection") { Toggle("", isOn: $discogsSync).labelsHidden().toggleStyle(.switch) }
                     Row("Valuation currency") {
@@ -137,9 +137,9 @@ private struct KeyField: View {
     var body: some View {
         Row(label) {
             HStack(spacing: 8) {
-                SecureField("paste key", text: $text).textFieldStyle(.roundedBorder).frame(width: 220)
+                SecureField("paste key", text: $text).textFieldStyle(.roundedBorder).frame(width: 170)
                     .onSubmit { save(); saved = true }
-                Button(saved ? "Saved" : "Save") { save(); saved = true }
+                Button(saved ? "Saved" : "Save") { save(); saved = true }.fixedSize()
             }
         }
     }

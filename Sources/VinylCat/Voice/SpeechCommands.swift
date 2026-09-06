@@ -99,6 +99,7 @@ final class SpeechCommands {
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
+        guard format.channelCount > 0, format.sampleRate > 0 else { status = .error("No microphone input"); return }
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in req.append(buffer) }
         audioEngine.prepare()
