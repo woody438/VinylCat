@@ -23,8 +23,8 @@ enum VoiceCommand: String, CaseIterable, Sendable {
         (.none, ["none", "none of those", "neither"]),
         (.yes, ["yes", "yep", "correct"]),
         (.no, ["no", "nope", "wrong"]),
-        (.sevens, ["forty fives", "forty-fives", "seven inch", "singles", "sevens"]),
-        (.twelves, ["twelve inch", "twelves", "maxi"]),
+        (.sevens, ["forty fives", "forty-fives", "forty five", "45s", "45's", "45 s", "seven inch", "seven inches", "singles", "sevens"]),
+        (.twelves, ["twelve inch", "twelve inches", "twelves", "12 inch", "maxi"]),
         (.albums, ["albums", "album", "lps", "l p s", "long players"]),
         (.pause, ["pause", "stop listening", "hold on"]),
         (.resume, ["resume", "carry on", "continue"]),
@@ -82,6 +82,7 @@ final class SpeechCommands {
     private var wantListening = false
     private var consecutiveFailures = 0
     private var lastLoggedLength = 0
+    private var firedText = ""
     /// Human hint for the top bar when listening isn't possible.
     var problem: String? {
         if case .error(let e) = status {
@@ -125,6 +126,7 @@ final class SpeechCommands {
         handledUpTo = 0
         sessionStart = Date()
         lastLoggedLength = 0
+        firedText = ""
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -188,20 +190,26 @@ final class SpeechCommands {
         let segs = result.segments
         guard let last = segs.last else { return }
         lastHeard = result.text
-        // Only look at words that arrived after the last command we acted on.
-        let fresh = segs.filter { $0.timestamp >= handledUpTo }
+        // Compare against the transcript we last acted on: only words beyond the common prefix are new.
+        // (Timestamps are unreliable — the recogniser revises earlier words and re-emits them.)
+        let words = result.text.split(separator: " ").map(String.init)
+        let old = firedText.split(separator: " ").map(String.init)
+        var common = 0
+        while common < min(words.count, old.count), words[common].lowercased() == old[common].lowercased() { common += 1 }
+        let fresh = Array(words.dropFirst(common))
         guard !fresh.isEmpty else { return }
-        let tail = fresh.suffix(4).map(\.word).joined(separator: " ")
+        _ = last
+        let tail = fresh.suffix(4).joined(separator: " ")
         if let cmd = VoiceCommand.match(trailing: tail) {
-            handledUpTo = last.timestamp + last.duration + 0.01
+            firedText = result.text
             // The same word twice within 1.5 s is an echo or a stutter, not two commands.
             if let (prev, at) = lastCommand, prev == cmd, Date().timeIntervalSince(at) < 1.5 { return }
             lastCommand = (cmd, Date())
             Log.voice.info("command \(cmd.rawValue) from “\(tail)”")
             onCommand?(cmd)
-        } else if result.text.count > lastLoggedLength {
+        } else if result.text.count != lastLoggedLength {
             lastLoggedLength = result.text.count
-            Log.voice.debug("heard “\(tail)”")
+            Log.voice.debug("heard “\(result.text.suffix(60))”")
         }
     }
 }
