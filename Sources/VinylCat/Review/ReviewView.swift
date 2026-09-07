@@ -12,6 +12,7 @@ struct ReviewView: View {
     @State private var busy = false
     @State private var hovered: UUID?
     @State private var shownPhoto: UUID?
+    @FocusState private var searchFocused: Bool
     private let store = Store.shared
 
     var body: some View {
@@ -37,7 +38,8 @@ struct ReviewView: View {
             .frame(width: 320)
             Rectangle().fill(Theme.line).frame(width: 1)
             if let r = current {
-                detail(r)
+                // Re-created per record so the cursor lands in the search box every time, not just the first.
+                detail(r).id(r.id).onAppear { searchFocused = true }
             } else {
                 VStack { Text("QUEUE EMPTY").font(Theme.display(40)); Caption("EVERYTHING IS IDENTIFIED AND PHOTOGRAPHED") }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,19 +108,34 @@ struct ReviewView: View {
                     Text("Missing: \(r.missingShots.map(\.title).joined(separator: ", ")). Go to SCAN, say “label” / “back cover” / “flip” with this record open — or take them in a second pass.")
                         .font(Theme.mono(13)).foregroundStyle(Theme.secondary)
                 }
-                Caption("WHAT I READ")
+                if r.notes.hasPrefix("Scan error:") {
+                    Text(r.notes).font(Theme.mono(13)).foregroundStyle(Theme.red)
+                }
+                let ev = store.evidence(for: r.id)
+                if let m = ev?.modelReading {
+                    // The model's reading is what the search ran on; it is the thing to correct.
+                    Caption("WHAT THE MODEL READ · \(ev?.provider?.uppercased() ?? "")")
+                    Text([[m.artist, m.title].compactMap { $0 }.joined(separator: " — "), [m.label, m.catalogNumber].compactMap { $0 }.joined(separator: " "),
+                          m.year.map(String.init), m.otherNumbers.map { "other numbers: " + $0.joined(separator: ", ") }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(Theme.mono(13)).foregroundStyle(Theme.secondary).lineLimit(3)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading).overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+                } else if ev != nil || r.readText.isEmpty == false {
+                    Text(ev?.provider == nil ? "The vision model did not read this one — OCR only." : "").font(Theme.mono(11)).foregroundStyle(Theme.muted)
+                }
+                Caption("WHAT THE OCR READ")
                 Text(r.readText.isEmpty ? "—" : r.readText).font(Theme.mono(13)).foregroundStyle(Theme.secondary).lineLimit(6)
                     .padding(12).frame(maxWidth: .infinity, alignment: .leading).overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
                 Caption("TELL ME MORE — ARTIST, TITLE, LABEL, CATALOGUE NUMBER, YEAR", color: Theme.green)
                 HStack(spacing: 12) {
-                    TextField("e.g. Donovan Sunshine Superman Pye 7N 17241 1966", text: $extra).textFieldStyle(.plain).font(Theme.mono(15))
+                    TextField("Title, artist, catalogue number, label, year — any of them", text: $extra).textFieldStyle(.plain).font(Theme.mono(15))
+                        .focused($searchFocused)
                         .onSubmit { Task { await research(r) } }
                     Button(busy ? "…" : "SEARCH") { Task { await research(r) } }.disabled(busy)
                 }
                 .padding(14).overlay(Rectangle().stroke(Theme.green, lineWidth: 1))
                 if !candidates.isEmpty {
-                    Caption("CANDIDATES · PICK ONE", color: Theme.orange)
-                    ForEach(Array(candidates.prefix(5).enumerated()), id: \.element.id) { i, c in
+                    Caption("CANDIDATES · \(candidates.count) · PICK ONE", color: Theme.orange)
+                    ForEach(Array(candidates.enumerated()), id: \.element.id) { i, c in
                         HStack(alignment: .firstTextBaseline, spacing: 18) {
                             Text("\(i + 1)").font(Theme.display(44)).foregroundStyle(Theme.orange).frame(width: 40)
                             VStack(alignment: .leading, spacing: 4) {
@@ -166,9 +183,9 @@ struct ReviewView: View {
             if !q.isEmpty {
                 // Pull a catalogue number out of the free text if there is one; the rest becomes the query.
                 let cats = CatalogueNumber.candidates(in: [q])
-                if let c = cats.first { reading.catalogNumber = c; pool += try await state.discogs.search(catno: c) }
-                pool += try await state.discogs.search(query: q, format: VinylFormat.allCases.first { $0.discogsFormat == r.format }?.discogsFormat)
-                if pool.isEmpty { pool += try await state.discogs.search(query: q) }
+                if let c = cats.first { reading.catalogNumber = c; pool += try await state.discogs.search(catno: c, perPage: 50) }
+                pool += try await state.discogs.search(query: q, format: VinylFormat.allCases.first { $0.discogsFormat == r.format }?.discogsFormat, perPage: 50)
+                if pool.isEmpty { pool += try await state.discogs.search(query: q, perPage: 50) }
                 let words = q.components(separatedBy: " ")
                 if reading.artist == nil, words.count >= 2 { reading.artist = words.prefix(2).joined(separator: " ") }
                 reading.title = q
@@ -193,6 +210,10 @@ struct ReviewView: View {
                                                              hadPictureSleeve: old.photos.first?.kind == .coverFront && rec.format == "7\"")
             rec.sync = UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true ? .pending : .off
             store.update(rec)
+            // The other half of the tuning signal: what it took to find it by hand.
+            store.logFeedback(rec.id, .fixed, correction: CorrectionNote(source: "review", typed: extra.trimmingCharacters(in: .whitespaces),
+                                                                        chosenReleaseID: c.result.id, previousReleaseID: old.discogsReleaseID,
+                                                                        previousStatus: old.status.rawValue, foundBy: c.reasons.joined(separator: " ")))
             state.scan.enrich(rec.id)
             state.reviewCount = store.reviewCount()
             state.scan.speaker.say("Saved \(rec.artist), \(rec.title)")
@@ -209,6 +230,8 @@ struct ReviewView: View {
         }
         if rec.artist.isEmpty && rec.title.isEmpty { status = "Type at least “Artist - Title” first."; return }
         rec.status = .manual; rec.expectedShots = rec.photos.map(\.kind)
-        store.update(rec); state.reviewCount = store.reviewCount(); selected = nil; extra = ""
+        store.update(rec)
+        store.logFeedback(rec.id, .fixed, correction: CorrectionNote(source: "manual", typed: q, previousReleaseID: r.discogsReleaseID, previousStatus: r.status.rawValue))
+        state.reviewCount = store.reviewCount(); selected = nil; extra = ""
     }
 }

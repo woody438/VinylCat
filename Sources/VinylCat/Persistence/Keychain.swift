@@ -11,7 +11,13 @@ enum Keychain {
         case discogsToken = "discogs-token"
     }
 
+    /// `VINYLCAT_NO_KEYCHAIN=1` makes every key read as missing. For the headless harnesses
+    /// (`--render-ui`) that don't need keys: a freshly built binary otherwise blocks on the
+    /// Keychain's "allow access?" dialog, which nobody is there to answer.
+    static let disabled = ProcessInfo.processInfo.environment["VINYLCAT_NO_KEYCHAIN"] != nil
+
     static func get(_ key: Key) -> String? {
+        if disabled { return nil }
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

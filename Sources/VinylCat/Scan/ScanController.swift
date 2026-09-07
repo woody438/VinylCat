@@ -18,6 +18,9 @@ enum ScanPhase: Equatable {
     case awaitingShot(kind: String, index: Int, total: Int, header: String)
     case notFound(guess: String, detail: String)
     case duplicate(title: String)
+    /// Something outside the operator's control failed (model, Discogs, network). The photo is
+    /// parked in the review queue so nothing is lost; `detail` says what went wrong in plain words.
+    case error(title: String, detail: String)
 }
 
 /// One row of the "N MATCHES" list: who/what it is, then the pressing details that tell the rows apart.
@@ -188,11 +191,13 @@ final class ScanController {
         guard let app = appState else { return }
         await engine.setHold(false)
         phase = .reading(step: "starting")
+        var partial: Identifier.Outcome?
         do {
             let outcome = try await app.identifier.identify(still.image, sessionFormat: app.format.spoken, expectLabel: expectLabel) { [weak self] step in
                 self?.phase = .reading(step: step)
             }
             lastOutcome = outcome
+            partial = outcome
             phase = .searching
             // The model's other numbers (matrix, album) go before the OCR tokens: it has seen the print magnified.
             let alternates = (outcome.model?.otherNumbers ?? []) + outcome.local.catalogueCandidates
@@ -231,9 +236,7 @@ final class ScanController {
                     await engine.setMode(.shot)
                 } else if !retried {
                     retried = true
-                    let what = outcome.local.lines.prefix(4).joined(separator: " · ")
-                    phase = .retry(guess: guess.isEmpty ? "NO MATCH YET" : guess.uppercased() + "?",
-                                   detail: what.isEmpty ? "Nothing readable in that shot" : "Read: \(what)")
+                    phase = .retry(guess: guess.isEmpty ? "NO MATCH YET" : guess.uppercased() + "?", detail: outcome.readSummary)
                     Chime.needShot.play()
                     speaker.say("Still no match. One more try — hold it steady and a bit closer.")
                     await engine.rearm()
@@ -243,11 +246,14 @@ final class ScanController {
                 }
             }
         } catch {
-            Log.scan.error("identify failed: \(error.localizedDescription)")
-            phase = .notFound(guess: "SETUP NEEDED", detail: error.localizedDescription)
-            Chime.notFound.play()
-            speaker.say(error.localizedDescription)
-            items.insert(SessionItem(thumbnail: thumb, title: "Shot \(shotCounter)", meta: "error · photo kept", tone: .review), at: 0)
+            // Reader errors are absorbed upstream (OCR-only fallback), so what lands here is Discogs
+            // or the network. Say what broke, in words, and park the photo so the scan isn't lost.
+            let isKey = { if case ReaderError.missingKey = error { return true } else { return false } }()
+            let friendly = FriendlyError.describe(error, context: partial == nil ? app.identifier.provider.title : "Discogs")
+            Log.scan.error("identify failed: \(error) — \(friendly)")
+            let title = isKey ? "SETUP NEEDED" : partial == nil ? "READER ERROR" : "DISCOGS ERROR"
+            park(outcome: partial, photo: fileName, thumb: thumb, guess: partial.map { [$0.reading.artist, $0.reading.title].compactMap { $0 }.joined(separator: " — ") } ?? "",
+                 error: (title, friendly))
         }
         trimItems()
     }
@@ -256,7 +262,26 @@ final class ScanController {
     private func finalize(candidate c: Candidate, outcome: Identifier.Outcome, photo: String, thumb: CGImage?, allowDuplicate: Bool) async {
         guard let app = appState else { return }
         await engine.setHold(false)
-        if !allowDuplicate, let dup = store.existing(discogsReleaseID: c.result.id) {
+        if !allowDuplicate, var dup = store.existing(discogsReleaseID: c.result.id) {
+            if dup.photos.isEmpty {
+                // Pulled from the Discogs collection, never photographed: this scan *is* its photo.
+                let kind: ShotKind = (outcome.reading.isLabelShot ?? false) || expectLabel ? .labelA : .coverFront
+                dup.photos = [ScanPhoto(recordID: dup.id, fileName: photo, kind: kind, order: 0)]
+                dup.readText = outcome.local.text
+                dup.confidence = c.score
+                if !dup.expectedShots.contains(kind) { dup.expectedShots.insert(kind, at: 0) }
+                store.update(dup)
+                store.saveEvidence(Self.evidence(for: dup, outcome: outcome, candidates: lastCandidates, chosen: c))
+                lastClosedRecordID = dup.id
+                expectLabel = false; retried = false
+                phase = .matched(title: dup.displayTitle.uppercased(), detail: "already in your Discogs collection · photo added", meta: String(format: "%.2f · r%d", c.score, c.result.id))
+                Chime.matched.play()
+                items.insert(SessionItem(recordID: dup.id, thumbnail: thumb, title: dup.displayTitle, meta: "in Discogs already · photo added", tone: .normal), at: 0)
+                speaker.say("\(dup.artist), \(dup.title). Already in your collection, photo added.")
+                enrich(dup.id)
+                finishRecord(announce: false)
+                return
+            }
             duplicate = (c, outcome, photo, thumb)
             phase = .duplicate(title: dup.displayTitle.uppercased())
             Chime.duplicate.play()
@@ -298,9 +323,11 @@ final class ScanController {
             enrich(rec.id)
             if pending.isEmpty { finishRecord(announce: false) } else { await engine.setMode(.shot); showPrompt() }
         } catch {
-            phase = .notFound(guess: "DISCOGS ERROR", detail: error.localizedDescription)
-            Chime.notFound.play()
-            speaker.say("Discogs error. \(error.localizedDescription)")
+            // The release lookup failed after a good match: park the photo with what we know so it
+            // can be finished from Review once Discogs is back.
+            let friendly = FriendlyError.describe(error, context: "Discogs")
+            Log.scan.error("release r\(c.result.id) failed: \(error) — \(friendly)")
+            park(outcome: outcome, photo: photo, thumb: thumb, guess: c.headline, error: ("DISCOGS ERROR", friendly))
         }
     }
 
@@ -332,25 +359,46 @@ final class ScanController {
         Task { await engine.setMode(.identify) }
     }
 
-    private func park(outcome: Identifier.Outcome, photo: String, thumb: CGImage?, guess: String) {
+    /// Into the review queue, with everything the readers saw saved as evidence so the fix made
+    /// there can be compared with it later. `outcome` is nil only when the readers themselves failed.
+    private func park(outcome: Identifier.Outcome?, photo: String, thumb: CGImage?, guess: String, error: (title: String, detail: String)? = nil) {
         guard let app = appState else { return }
         expectLabel = false
         retried = false
-        var rec = VinylRecord(artist: outcome.reading.artist ?? "", title: outcome.reading.title ?? "", format: app.format.discogsFormat, sessionID: sessionID)
+        let reading = outcome?.reading ?? SleeveReading()
+        var rec = VinylRecord(artist: reading.artist ?? "", title: reading.title ?? "", format: app.format.discogsFormat, sessionID: sessionID)
         rec.status = .needsReview
-        rec.label = outcome.reading.label
-        rec.catalogNumber = outcome.reading.catalogNumber
-        rec.barcode = outcome.reading.barcode
-        rec.year = outcome.reading.year
-        rec.readText = outcome.local.text
-        rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: (outcome.reading.isLabelShot ?? false) ? .labelA : .coverFront, order: 0)]
+        rec.label = reading.label
+        rec.catalogNumber = reading.catalogNumber
+        rec.barcode = reading.barcode
+        rec.year = reading.year
+        rec.readText = outcome?.local.text ?? ""
+        if let error { rec.notes = "Scan error: \(error.detail)" }
+        rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: (reading.isLabelShot ?? false) || expectLabel ? .labelA : .coverFront, order: 0)]
         store.insert(rec)
+        if let outcome {
+            var e = ScanEvidence(recordID: rec.id, mergedReading: outcome.reading)
+            e.provider = outcome.provider; e.ocrLines = outcome.local.lines; e.barcodes = outcome.local.barcodes
+            e.catalogueCandidates = outcome.local.catalogueCandidates; e.modelReading = outcome.model
+            e.candidates = lastCandidates.prefix(12).map {
+                .init(releaseID: $0.result.id, title: $0.result.title, label: $0.result.label?.first, catno: $0.result.catno,
+                      year: $0.result.year, country: $0.result.country, score: $0.score, reasons: $0.reasons)
+            }
+            store.saveEvidence(e)
+        }
         app.reviewCount = store.reviewCount()
-        let what = outcome.local.lines.prefix(4).joined(separator: " · ")
-        phase = .notFound(guess: guess.isEmpty ? "UNKNOWN" : guess.uppercased() + "?", detail: "Read: \(what)")
-        Chime.notFound.play()
-        speaker.say("Not found. Added to the review queue.")
-        items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: guess.isEmpty ? "Unknown" : guess, meta: "REVIEW QUEUE", tone: .review), at: 0)
+        let shown = guess.isEmpty ? "Unknown" : guess
+        if let error {
+            phase = .error(title: error.title, detail: error.detail)
+            Chime.notFound.play()
+            speaker.say("\(error.title.capitalized). \(error.detail). The photo is in the review queue.")
+            items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: shown, meta: "error · REVIEW QUEUE", tone: .review), at: 0)
+        } else {
+            phase = .notFound(guess: guess.isEmpty ? "UNKNOWN" : guess.uppercased() + "?", detail: outcome?.readSummary ?? "")
+            Chime.notFound.play()
+            speaker.say("Not found. Added to the review queue.")
+            items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: shown, meta: "REVIEW QUEUE", tone: .review), at: 0)
+        }
         Task { await engine.setHold(false); await engine.setMode(.identify) }
     }
 
@@ -397,6 +445,7 @@ final class ScanController {
         store.logFeedback(id, v)
         if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].verdict = v }
         switch v {
+        case .fixed: break
         case .up:
             rec.verified = true
             if rec.status == .rejected { rec.status = .matched; if rec.sync == .off, syncToCollection, UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true { rec.sync = .pending } }
@@ -504,11 +553,13 @@ final class ScanController {
                 store.deletePhoto(last.id); rec.photos.removeAll { $0.id == last.id }; current = rec
                 pending.insert(last.kind, at: 0); speaker.say("Retake \(last.kind.title)"); showPrompt()
             } else if let rec = current {
-                store.delete(rec.id); items.removeAll { $0.recordID == rec.id }; current = nil; pending = []
-                speaker.say("Deleted"); phase = .armed(reason: "deleted"); Task { await engine.rearm(); await engine.setMode(.identify) }
+                // `delete` also pulls it from the Discogs collection — "undo" must not leave a ghost there.
+                current = nil; pending = []
+                speaker.say("Deleted"); phase = .armed(reason: "deleted")
+                Task { await delete(rec.id); await engine.rearm(); await engine.setMode(.identify) }
             } else if let first = items.first, let rid = first.recordID {
-                store.delete(rid); items.removeFirst(); speaker.say("Deleted \(first.title)")
-                app.reviewCount = store.reviewCount()
+                speaker.say("Deleted \(first.title)")
+                Task { await delete(rid) }
             } else { speaker.say("Nothing to undo") }
         case .review:
             if let amb = ambiguity { ambiguity = nil; park(outcome: amb.outcome, photo: amb.photo, thumb: amb.thumb, guess: amb.outcome.reading.title ?? "") }

@@ -34,7 +34,10 @@ struct LunaReader: SleeveReader {
                 "type": "json_schema", "name": "sleeve_reading", "strict": true, "schema": SleeveReading.jsonSchema,
             ]],
             "reasoning": ["effort": "low"],
-            "max_output_tokens": 600,
+            // Reasoning tokens count against this budget. At 600 the model sometimes ran out mid-JSON
+            // — "no output_text", or a cut-off reply Foundation reported as "data in the wrong
+            // format" — so the cap is generous; what is billed is what gets used, not the cap.
+            "max_output_tokens": 2500,
         ]
         var (data, code) = try await post(body, key: key)
         if code == 400, let msg = String(data: data, encoding: .utf8), msg.contains("reasoning") || msg.contains("detail") {
@@ -49,6 +52,10 @@ struct LunaReader: SleeveReader {
         }
         guard (200..<300).contains(code) else { throw ReaderError.http(code, String(data: data, encoding: .utf8) ?? "") }
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ReaderError.badResponse("not JSON") }
+        if json["status"] as? String == "incomplete" {
+            let why = ((json["incomplete_details"] as? [String: Any])?["reason"] as? String) ?? "cut off"
+            throw ReaderError.badResponse("reply \(why)")
+        }
 
         // Find the first output_text in output[].content[].
         var text: String?
@@ -59,7 +66,11 @@ struct LunaReader: SleeveReader {
             if text != nil { break }
         }
         guard let text, let td = text.data(using: .utf8) else { throw ReaderError.badResponse("no output_text") }
-        let reading = try JSONDecoder().decode(SleeveReading.self, from: td).normalized()
+        let reading: SleeveReading
+        do { reading = try JSONDecoder().decode(SleeveReading.self, from: td).normalized() } catch {
+            Log.scan.error("model JSON unreadable: \(text.prefix(200))")
+            throw ReaderError.badResponse("unreadable JSON: \(text.prefix(60))")
+        }
         let usage = json["usage"] as? [String: Any] ?? [:]
         let inTok = usage["input_tokens"] as? Int ?? 0, outTok = usage["output_tokens"] as? Int ?? 0
         let cost = Double(inTok) / 1e6 * pricing.input + Double(outTok) / 1e6 * pricing.output

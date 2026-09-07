@@ -13,18 +13,64 @@ struct ScanView: View {
             Rectangle().fill(Theme.line).frame(height: 1)
             BottomBar().tourAnchor(.bottomBar)
         }
-        .background(ChoiceKeys())
+        .background(ScanKeys())
     }
 }
 
-/// 1 / 2 / 3 pick a candidate while the HUD is listing them. The buttons only exist during an
-/// ambiguity, so the number keys stay free for the rest of the app.
-struct ChoiceKeys: View {
+/// A keyboard action on the Scan tab. Keys and voice fire the same commands, so the legend along
+/// the bottom can show both: the key, and — while voice is on — the word.
+struct ScanKey: Identifiable, Equatable {
+    let key: KeyEquivalent
+    /// What the legend prints on the key cap.
+    let label: String
+    let action: String
+    /// The spoken phrase that does the same thing.
+    let word: String
+    let command: VoiceCommand
+    var id: String { label + action }
+    static func == (a: ScanKey, b: ScanKey) -> Bool { a.id == b.id }
+
+    static let capture = ScanKey(key: .space, label: "SPACE", action: "capture", word: "capture", command: .capture)
+    static let skip = ScanKey(key: "s", label: "S", action: "skip · to the review queue", word: "skip", command: .skip)
+    static let skipShot = ScanKey(key: "s", label: "S", action: "skip this shot", word: "skip", command: .skip)
+    static let done = ScanKey(key: "d", label: "D", action: "done", word: "done", command: .done)
+    static let undo = ScanKey(key: "u", label: "U", action: "undo · forget the last scan", word: "undo", command: .undo)
+    static let retake = ScanKey(key: "u", label: "U", action: "retake the last shot", word: "undo", command: .undo)
+    static let wrong = ScanKey(key: "w", label: "W", action: "wrong record", word: "wrong record", command: .wrong)
+    static let flip = ScanKey(key: "f", label: "F", action: "flip · B-side", word: "flip", command: .flip)
+    static let review = ScanKey(key: "r", label: "R", action: "park for review", word: "review", command: .review)
+    static let again = ScanKey(key: .escape, label: "ESC", action: "start over", word: "again", command: .again)
+    static let none = ScanKey(key: "n", label: "N", action: "none of those", word: "none", command: .none)
+    static let addAnyway = ScanKey(key: .return, label: "RETURN", action: "add anyway · second copy", word: "add anyway", command: .addAnyway)
+    static let addPhoto = ScanKey(key: "p", label: "P", action: "add a photo to the last record", word: "add photo", command: .addPhoto)
+    /// Legend-only stand-in for the number keys, which `ScanKeys` installs one by one.
+    static let pick = ScanKey(key: "1", label: "1–3", action: "pick a match", word: "one, two, three", command: .one)
+
+    /// What is worth doing from the keyboard in each phase — the legend shows exactly this list.
+    static func set(for phase: ScanPhase) -> [ScanKey] {
+        switch phase {
+        case .ambiguous: [pick, none, flip, review]
+        case .needLabel, .retry: [capture, skip, again]
+        case .awaitingShot: [capture, skipShot, done, retake]
+        case .duplicate: [addAnyway, again]
+        case .paused: []
+        default: [capture, flip, undo, wrong, addPhoto]
+        }
+    }
+}
+
+/// Installs the phase's keys as hidden buttons. Bare letters are safe here because the Scan tab has
+/// no text field; the buttons go away with the tab.
+struct ScanKeys: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
+        let phase = state.scan.phase
         Group {
-            if case .ambiguous(let cands) = state.scan.phase {
+            ForEach(ScanKey.set(for: phase).filter { $0 != .pick }) { k in
+                Button("") { state.scan.handle(command: k.command) }.keyboardShortcut(k.key, modifiers: []).hidden()
+            }
+            if case .ambiguous(let cands) = phase {
                 ForEach(Array(cands.indices.prefix(9)), id: \.self) { i in
                     Button("") { state.scan.choose(i) }
                         .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: [])
@@ -185,27 +231,30 @@ struct HUDLook {
             color = Theme.green; state = "MATCHED"; meta = m
             headline = title; subline = detail; ring = 1; ringLabel = "OK"; hint = ""
         case .ambiguous(let cands):
-            color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "press 1–\(cands.count) · or say the number, or NONE"
+            color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "press 1–\(cands.count) · N for none · or say the number"
             headline = ""
-            ring = 1; ringLabel = "\(cands.count)"; hint = "Scanning is paused until you answer · or flip it and press space — the B-side label usually settles it · say “review” to park it"
+            ring = 1; ringLabel = "\(cands.count)"; hint = "Scanning is paused until you answer · F then SPACE shoots the B-side, which usually settles it · R parks it for review"
         case .needLabel(let guess):
             color = Theme.blue; state = "SHOW ME THE LABEL"; meta = "no confident match from the cover"
             headline = guess; headlineSize = 56; ring = signal?.steadyProgress ?? 0; ringLabel = "LABEL"
-            hint = "Slide the record out and hold side A up to the camera · say “skip” to park it for review"
+            hint = "Slide the record out and hold side A up to the camera · S parks it in the review queue"
         case .retry(let guess, let detail):
             color = Theme.amber; state = "TRY AGAIN"; meta = "nothing saved yet · one more look"
             headline = guess; headlineSize = 56; ring = signal?.steadyProgress ?? 0; ringLabel = "RETRY"
-            hint = "\(detail) · hold it steadier and closer, or turn it to a clearer side · say “skip” or “review” to park it"
+            hint = "\(detail) · hold it steadier and closer, or turn it to a clearer side · S parks it in the review queue"
         case .awaitingShot(let kind, let i, let n, let header):
             color = Theme.blue; state = "NEXT SHOT · \(i) OF \(n)"; meta = header
             headline = kind.uppercased(); ring = signal?.steadyProgress ?? 0; ringLabel = "HOLD"
-            hint = "say “skip” to move on · “done” to finish this record · “undo” to retake the last shot"
+            hint = "S skips this shot · D finishes the record · U retakes the last shot"
         case .notFound(let guess, let detail):
             color = Theme.red; state = "NOT FOUND"; meta = "added to review queue · photo kept"
             headline = guess; headlineSize = 56; ring = 1; ringLabel = "—"; hint = detail
         case .duplicate(let title):
             color = Theme.amber; state = "ALREADY CATALOGUED"; meta = "skipped"
-            headline = title; headlineSize = 56; ring = 1; ringLabel = "DUP"; hint = "Say “add anyway” to keep a second copy"
+            headline = title; headlineSize = 56; ring = 1; ringLabel = "DUP"; hint = "RETURN keeps a second copy · or just show the next record"
+        case .error(let title, let detail):
+            color = Theme.red; state = "ERROR"; meta = "nothing matched · photo parked in the review queue"
+            headline = title; headlineSize = 56; ring = 1; ringLabel = "!"; hint = detail
         }
     }
 }
@@ -251,6 +300,7 @@ struct StateBanner<Content: View>: View {
 
 struct RightRail: View {
     @Environment(AppState.self) private var state
+    @State private var pendingDelete: SessionItem?
 
     var body: some View {
         let scan = state.scan
@@ -271,18 +321,34 @@ struct RightRail: View {
                 Text("Nothing scanned yet.").font(Theme.mono(13)).foregroundStyle(Theme.muted).padding(.horizontal, 20)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(scan.items.prefix(8)) { item in SessionRow(item: item) }
+                    ForEach(scan.items.prefix(8)) { item in SessionRow(item: item) { pendingDelete = item } }
                 }
                 .padding(.horizontal, 20)
             }
             Spacer()
             Rectangle().fill(Theme.line).frame(height: 1)
             HStack(spacing: 8) {
-                Meter(title: "DISCOGS", value: "0/60", color: Theme.text)
-                Meter(title: "LLM COST", value: "$0.00", color: Theme.text)
+                Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
+                    .help("Discogs calls used in the current minute (from Discogs' own rate-limit headers)")
+                Meter(title: "LLM COST", value: String(format: "$%.3f", state.identifier.sessionCostUSD), color: Theme.text)
+                    .help("Vision-model spend this session · \(state.identifier.reads) reads")
                 Meter(title: "REVIEW", value: "\(state.reviewCount)", color: Theme.red)
             }
             .padding(.horizontal, 20).padding(.vertical, 16)
+        }
+        .confirmationDialog(
+            "Delete \u{201C}\(pendingDelete?.title ?? "")\u{201D}?",
+            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { item in
+            Button("Delete Record", role: .destructive) {
+                if let id = item.recordID { Task { await state.scan.delete(id) } }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: { _ in
+            Text("Removes it from the Library with its photos, and from your Discogs collection. This can't be undone.")
         }
     }
 }
@@ -290,10 +356,21 @@ struct RightRail: View {
 struct SessionRow: View {
     @Environment(AppState.self) private var state
     let item: SessionItem
+    var onDelete: () -> Void = {}
     @State private var hovering = false
     var body: some View {
         let color: Color = switch item.tone { case .normal: Theme.text; case .review: Theme.red; case .incomplete: Theme.amber; case .rejected: Theme.red }
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
+            if item.recordID != nil {
+                // Bin on the left, as asked: one click to take a mis-scan out of the Library and Discogs.
+                Button(action: onDelete) {
+                    Image(systemName: "trash").font(.system(size: 12))
+                        .foregroundStyle(hovering ? Theme.red : Theme.muted.opacity(0.45))
+                        .frame(width: 20, height: 26).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Delete this record — from the Library and from your Discogs collection")
+            }
             Group {
                 if let cg = item.thumbnail {
                     Image(decorative: cg, scale: 1).resizable().aspectRatio(contentMode: .fill)
@@ -345,6 +422,7 @@ struct Meter: View {
 
 struct BottomBar: View {
     @Environment(AppState.self) private var state
+    @Environment(\.previewPhase) private var previewPhase
 
     var body: some View {
         @Bindable var camera = state.camera
@@ -358,13 +436,39 @@ struct BottomBar: View {
                 }
                 .labelsHidden().pickerStyle(.menu).fixedSize()
             }
-            Text((state.voice.status == .listening ? "VOICE" : "VOICE OFF · click VOICE in the top bar, then") + " · “capture” · “flip” · “skip” · “review” · “wrong record” · “forty-fives” · “albums” · “undo”")
+            let listening = state.voice.status == .listening
+            let keys = ScanKey.set(for: previewPhase ?? state.scan.phase)
+            // The legend follows the phase: what the keys do right now, and the word that does the same when voice is on.
+            HStack(spacing: 18) {
+                ForEach(keys) { KeyChip(key: $0, voice: listening) }
+            }
+            .animation(.easeOut(duration: 0.15), value: keys)
             Spacer()
+            Text(listening ? "VOICE ON" : "VOICE OFF").lineLimit(1).fixedSize()
+                .foregroundStyle(listening ? Theme.green : Theme.muted)
+                .help(listening ? "Listening — the green words are what to say. Also: “forty-fives”, “albums”, “pause”, “manual mode”."
+                                : "Click VOICE in the top bar to say the green words instead of pressing keys")
             Text("SESSION · \(state.scan.items.count) SHOTS")
         }
         .font(Theme.mono(12)).foregroundStyle(Theme.muted)
         .padding(.horizontal, 24)
         .frame(height: 44)
+    }
+}
+
+/// One legend entry: the key cap, what it does, and the spoken word when voice is listening.
+struct KeyChip: View {
+    let key: ScanKey
+    let voice: Bool
+    var body: some View {
+        HStack(spacing: 7) {
+            Text(key.label).font(Theme.mono(11)).tracking(1).foregroundStyle(Theme.text)
+                .padding(.horizontal, 6).frame(height: 20)
+                .background(Theme.raised).overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+            Text(key.action).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(1)
+            if voice { Text("“\(key.word)”").font(Theme.mono(11)).foregroundStyle(Theme.green.opacity(0.85)).lineLimit(1) }
+        }
+        .fixedSize()
     }
 }
 
@@ -383,6 +487,11 @@ struct AlignmentGuide: View {
             let side = min(rect.width, rect.height)
             let disc = CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)
             ZStack {
+                // Everything outside the analysed region goes dim: the record reads as lined up when
+                // it is the bright part of the picture. Even-odd fill leaves the guide itself clear.
+                Path { p in p.addRect(video); p.addRect(rect) }
+                    .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
+                Rectangle().stroke(color.opacity(0.25), lineWidth: 1).frame(width: rect.width, height: rect.height).position(x: rect.midX, y: rect.midY)
                 Path { p in
                     let l: CGFloat = 36
                     for (x, y, dx, dy) in [(rect.minX, rect.minY, 1.0, 1.0), (rect.maxX, rect.minY, -1.0, 1.0), (rect.minX, rect.maxY, 1.0, -1.0), (rect.maxX, rect.maxY, -1.0, -1.0)] {

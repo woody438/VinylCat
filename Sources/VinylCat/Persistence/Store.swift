@@ -52,6 +52,7 @@ final class Store {
         CREATE INDEX IF NOT EXISTS feedback_record ON feedback(record_id);
         """)
         if !columns("records").contains("verified") { exec("ALTER TABLE records ADD COLUMN verified INTEGER NOT NULL DEFAULT 0") }
+        if !columns("feedback").contains("note") { exec("ALTER TABLE feedback ADD COLUMN note TEXT") }
     }
 
     private func sqlSchema(_ table: String) -> String? {
@@ -133,24 +134,31 @@ final class Store {
     }
 
     /// Records the verdict. The record itself is updated by the caller (status / verified flag).
-    func logFeedback(_ id: UUID, _ v: Verdict) {
-        run("INSERT INTO feedback (id, record_id, verdict, created_at) VALUES (?,?,?,?)",
-            [.text(UUID().uuidString), .text(id.uuidString), .text(v.rawValue), .double(Date().timeIntervalSince1970)])
+    /// A `.fixed` verdict carries the correction: what was typed and which release was right.
+    func logFeedback(_ id: UUID, _ v: Verdict, correction: CorrectionNote? = nil) {
+        run("INSERT INTO feedback (id, record_id, verdict, created_at, note) VALUES (?,?,?,?,?)",
+            [.text(UUID().uuidString), .text(id.uuidString), .text(v.rawValue), .double(Date().timeIntervalSince1970), .optText(correction.map(json))])
         revision += 1
     }
 
     func feedbackCount() -> Int { (query("SELECT COUNT(*) AS n FROM feedback", []).first?["n"] as? Int) ?? 0 }
 
-    /// Latest verdict per record, oldest first.
+    /// Latest verdict per record, oldest first. (SQLite's bare-column rule makes `note` come from
+    /// the same row as the MAX.)
     func feedback() -> [FeedbackEntry] {
-        query("SELECT record_id, verdict, MAX(created_at) AS at FROM feedback GROUP BY record_id ORDER BY at", []).compactMap { row in
+        query("SELECT record_id, verdict, note, MAX(created_at) AS at FROM feedback GROUP BY record_id ORDER BY at", []).compactMap { row in
             guard let id = UUID(uuidString: row["record_id"] as? String ?? ""), let r = fetch(id),
                   let v = Verdict(rawValue: row["verdict"] as? String ?? "") else { return nil }
             return FeedbackEntry(recordID: id, verdict: v, createdAt: Date(timeIntervalSince1970: row["at"] as? Double ?? 0),
                                  artist: r.artist, title: r.title, format: r.format, label: r.label, catalogNumber: r.catalogNumber,
                                  discogsReleaseID: r.discogsReleaseID, confidence: r.confidence,
-                                 photos: r.sortedPhotos.map(\.fileName), evidence: evidence(for: id))
+                                 photos: r.sortedPhotos.map(\.fileName), evidence: evidence(for: id), correction: decode(row["note"]))
         }
+    }
+
+    /// Records linked to a Discogs collection instance, for the pull sync.
+    func existing(discogsInstanceID id: Int) -> VinylRecord? {
+        query("SELECT * FROM records WHERE discogs_instance_id = ? LIMIT 1", [.int(id)]).compactMap(record(from:)).first
     }
 
     /// Writes output/vinylcat_feedback_vN_YYYY-MM-DD.jsonl — one verdict per line with the photos, OCR,

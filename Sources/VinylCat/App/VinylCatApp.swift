@@ -152,8 +152,8 @@ struct TopBar: View {
                 .tourAnchor(.format)
             }
             .fixedSize()
-            // Space bar = capture, from anywhere in the window.
-            Button("") { state.scan.forceCapture() }.keyboardShortcut(.space, modifiers: []).hidden().frame(width: 0, height: 0)
+            // The scan keys (space = capture, and the rest) live in ScanView: a bare-letter shortcut
+            // installed here would also fire while typing in the Library or Review search fields.
         }
         .padding(.horizontal, 24)
         .frame(height: 56)

@@ -191,7 +191,7 @@ private struct ModelStep: View {
                 }
                 HStack(spacing: 12) {
                     SecureField("sk-…", text: $openAI).textFieldStyle(.roundedBorder).frame(width: 360)
-                    WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(openAI, for: .openAI); Task { await test() } }
+                    WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(openAI, for: .openAI); state.identifier.refreshKeys(); Task { await test() } }
                     WizardButton("GET A KEY", style: .quiet) { NSWorkspace.shared.open(URL(string: "https://platform.openai.com/api-keys")!) }
                 }
             } else {
@@ -201,7 +201,7 @@ private struct ModelStep: View {
                 }
                 HStack(spacing: 12) {
                     SecureField("AIza…", text: $gemini).textFieldStyle(.roundedBorder).frame(width: 360)
-                    WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(gemini, for: .gemini); Task { await test() } }
+                    WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(gemini, for: .gemini); state.identifier.refreshKeys(); Task { await test() } }
                     WizardButton("GET A KEY", style: .quiet) { NSWorkspace.shared.open(URL(string: "https://aistudio.google.com/apikey")!) }
                 }
             }

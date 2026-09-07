@@ -15,21 +15,28 @@ struct SettingsView: View {
     @AppStorage("askForFrontOnLP") private var askForFrontOnLP = false
     @AppStorage("askForCoversOnLP") private var askForCoversOnLP = false
     @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = false
-    @AppStorage("steadySeconds") private var steadySecondsDefault = 1.0
     @State private var testResult = ""
+    @Environment(\.staticRender) private var staticRender
 
     var body: some View {
+        // The three columns outgrow a short window; without a scroll container the content pushed
+        // the top bar — and its tabs — off the top of the screen. (`--render-ui` can't draw a
+        // ScrollView, so the headless renderer gets the bare columns.)
+        if staticRender { columns } else { ScrollView { columns } }
+    }
+
+    private var columns: some View {
         @Bindable var identifier = state.identifier
         @Bindable var speaker = state.scan.speaker
-        HStack(alignment: .top, spacing: 40) {
+        return HStack(alignment: .top, spacing: 40) {
             VStack(alignment: .leading, spacing: 32) {
                 Section("IDENTIFICATION") {
                     Picker("", selection: $identifier.provider) {
                         ForEach(ReaderProvider.allCases) { Text($0.title).tag($0) }
                     }
                     .labelsHidden().pickerStyle(.radioGroup)
-                    KeyField(label: "OpenAI API key", text: $openAIKey) { Keychain.set(openAIKey, for: .openAI) }
-                    KeyField(label: "Google AI key", text: $geminiKey) { Keychain.set(geminiKey, for: .gemini) }
+                    KeyField(label: "OpenAI API key", text: $openAIKey) { Keychain.set(openAIKey, for: .openAI); identifier.refreshKeys() }
+                    KeyField(label: "Google AI key", text: $geminiKey) { Keychain.set(geminiKey, for: .gemini); identifier.refreshKeys() }
                     Row("Skip model when barcode hits") { Toggle("", isOn: $identifier.skipModelWhenBarcode).labelsHidden().toggleStyle(.switch) }
                     Row("Spend this session") { Text(String(format: "$%.3f · %d reads", identifier.sessionCostUSD, identifier.reads)).foregroundStyle(Theme.secondary) }
                 }
@@ -42,6 +49,15 @@ struct SettingsView: View {
                         Picker("", selection: $currency) { ForEach(["GBP", "USD", "EUR", "CAD"], id: \.self) { Text($0) } }.labelsHidden().frame(width: 100)
                     }
                     Row("Rate limit") { Text(state.discogs.rateText).foregroundStyle(Theme.green) }
+                    Row("Pull my Collection") {
+                        HStack(spacing: 8) {
+                            Text(state.collectionSync.status).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(2).frame(maxWidth: 220, alignment: .trailing)
+                            Button(state.collectionSync.running ? "…" : "Pull now") { Task { await state.collectionSync.pull(discogs: state.discogs, store: Store.shared) } }
+                                .disabled(state.collectionSync.running)
+                        }
+                    }
+                    Text("Two-way: scans are added to your Discogs collection as they are saved, and a pull brings the rest of the collection into the Library (once at launch, and from here or the Library tab). Records removed on Discogs are unlinked here, never deleted.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .tourAnchor(.settingsDiscogs)
             }
@@ -125,7 +141,7 @@ struct SettingsView: View {
             }
         }
         .padding(.horizontal, 40).padding(.vertical, 28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onChange(of: sharpnessMin) { _, _ in state.scan.applyTuning() }
         .onChange(of: steadySeconds) { _, _ in state.scan.applyTuning() }
         .onChange(of: sceneDeltaMin) { _, _ in state.scan.applyTuning() }

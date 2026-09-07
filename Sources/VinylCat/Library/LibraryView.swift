@@ -8,6 +8,7 @@ struct LibraryView: View {
     @State private var selected: UUID?
     @State private var exportMessage = ""
     @State private var pendingDelete: VinylRecord?
+    @State private var adding = false
     private let store = Store.shared
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -22,12 +23,26 @@ struct LibraryView: View {
         let rows = filtered(everything)
         HStack(spacing: 0) {
             VStack(spacing: 0) {
+                // Two rows: search + add on the first, the filter chips on the second. On one row the
+                // seven chips plus the search box outran the column at the minimum window width.
+                VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
                         TextField("Search artist, title, label, cat no…", text: $search).textFieldStyle(.plain).font(Theme.mono(13))
                     }
-                    .padding(.horizontal, 8).frame(width: 300, height: 30).overlay(Rectangle().stroke(Theme.raised, lineWidth: 1))
+                    .padding(.horizontal, 8).frame(maxWidth: 360).frame(height: 30).overlay(Rectangle().stroke(Theme.raised, lineWidth: 1))
+                    Spacer()
+                    // Typed-in records: no camera, no review-queue detour.
+                    Text("+ ADD RECORD").font(Theme.mono(12)).tracking(1).lineLimit(1).fixedSize()
+                        .foregroundStyle(adding ? Theme.bg : Theme.green)
+                        .padding(.horizontal, 12).frame(height: 30)
+                        .background(adding ? Theme.green : .clear)
+                        .overlay(Rectangle().stroke(Theme.green, lineWidth: 1))
+                        .contentShape(Rectangle()).onTapGesture { adding.toggle(); if adding { selected = nil } }
+                        .help("Add a record by typing what you know and picking the Discogs release")
+                }
+                HStack(spacing: 8) {
                     ForEach(Filter.allCases) { f in
                         let n = count(f, in: everything)
                         // One line, one height: "INCOMPLETE · 0" was wrapping and making its chip
@@ -41,7 +56,8 @@ struct LibraryView: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 24).padding(.vertical, 16)
+                }
+                .padding(.horizontal, 24).padding(.vertical, 12)
                 Rectangle().fill(Theme.line).frame(height: 1)
                 header
                 Rectangle().fill(Theme.line).frame(height: 1)
@@ -49,7 +65,7 @@ struct LibraryView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(rows) { r in
                             LibraryRow(record: r, selected: selected == r.id, onDelete: { pendingDelete = r })
-                                .onTapGesture { selected = r.id }
+                                .onTapGesture { selected = r.id; adding = false }
                         }
                     }
                 }
@@ -63,12 +79,22 @@ struct LibraryView: View {
                         Button("EXPORT FEEDBACK") { exportFeedback() }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
                     }
                     Button("OPEN PHOTOS FOLDER") { NSWorkspace.shared.open(PhotoStore.shared.root) }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
+                    Button(state.collectionSync.running ? "PULLING…" : "PULL FROM DISCOGS") {
+                        Task { await state.collectionSync.pull(discogs: state.discogs, store: store); exportMessage = state.collectionSync.status.uppercased() }
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Theme.secondary).disabled(state.collectionSync.running)
+                    .help("Bring in everything in your Discogs collection that isn't here yet")
                 }
                 .font(Theme.mono(12)).foregroundStyle(Theme.muted).padding(.horizontal, 24).frame(height: 44)
             }
             Rectangle().fill(Theme.line).frame(width: 1)
-            RecordDetail(record: everything.first { $0.id == selected }, onDelete: { r in pendingDelete = r })
-                .frame(width: 400)
+            if adding {
+                ManualEntryView(onSaved: { id in adding = false; selected = id; filter = .all; search = "" }, onCancel: { adding = false })
+                    .frame(width: 400)
+            } else {
+                RecordDetail(record: everything.first { $0.id == selected }, onDelete: { r in pendingDelete = r })
+                    .frame(width: 400)
+            }
         }
         .confirmationDialog(
             "Delete \u{201C}\(pendingDelete?.title ?? "")\u{201D} by \(pendingDelete?.artist ?? "")?",
@@ -253,7 +279,10 @@ struct RecordDetail: View {
             .onAppear { notes = r.notes }
             .onChange(of: r.id) { _, _ in notes = r.notes }
         } else {
-            VStack { Caption("SELECT A RECORD") }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 8) {
+                Caption("SELECT A RECORD")
+                Text("or + ADD RECORD above to type one in").font(Theme.mono(11)).foregroundStyle(Theme.muted.opacity(0.7))
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

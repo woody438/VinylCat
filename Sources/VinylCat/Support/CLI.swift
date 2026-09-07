@@ -120,6 +120,7 @@ enum CLI {
         for (name, tab) in [("library", AppTab.library), ("review", .review), ("settings", .settings)] {
             state.tab = tab
             let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
+                .environment(\.staticRender, true)
             if render(view, to: out.appendingPathComponent("\(name).png")) { written += 1 }
         }
         // Every callout of the first-run tour, on the tab it belongs to.
@@ -140,6 +141,9 @@ enum CLI {
             .frame(width: 1040).background(Theme.bg).preferredColorScheme(.dark)
             if render(view, to: out.appendingPathComponent("library-rows.png")) { written += 1 }
         }
+        // The Library's typed-entry panel (its results list scrolls, so only the form renders).
+        if render(ManualEntryView(onSaved: { _ in }, onCancel: {}).frame(width: 400, height: 640).background(Theme.bg).environment(state).preferredColorScheme(.dark),
+                  to: out.appendingPathComponent("library-add.png")) { written += 1 }
         // Three separate items: SessionItem's id is fixed at init, so copies would collapse in a ForEach.
         let thumbs = Store.shared.all().first.map { r -> [SessionItem] in [
             SessionItem(recordID: r.id, thumbnail: nil, title: "The Jam — Going Underground", meta: "1980 · 7\" · POLYDOR POSP 113 · 1 shot", tone: .normal),
@@ -523,6 +527,16 @@ extension CLI {
         print("records: \(store.count()) · review: \(store.reviewCount()) · discogs \(state.discogs.rateText)")
         try? FileManager.default.removeItem(at: tmp)
         return failures == 0 ? 0 : 1
+    }
+}
+
+/// True under `--render-ui`: ImageRenderer draws nothing inside a ScrollView, so views that scroll
+/// in the app lay themselves out flat for the renderer.
+struct StaticRenderKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var staticRender: Bool {
+        get { self[StaticRenderKey.self] }
+        set { self[StaticRenderKey.self] = newValue }
     }
 }
 

@@ -34,8 +34,25 @@ enum ShotKind: String, Codable, CaseIterable, Sendable {
 enum RecordStatus: String, Codable, Sendable { case matched, needsReview, manual, duplicate, rejected }
 enum SyncState: String, Codable, Sendable { case off, pending, synced, failed }
 
-/// Thumbs up / down on a match.
-enum Verdict: String, Codable, Sendable { case up, down }
+/// Thumbs up / down on a match, or `fixed`: a scan the loop couldn't finish (not found, wrong
+/// record, or an error) that the operator then resolved by hand in Review or the Library.
+enum Verdict: String, Codable, Sendable { case up, down, fixed }
+
+/// What it took to fix a scan by hand — the other half of the tuning signal. The evidence saved at
+/// scan time says what the readers and the ranker saw; this says what the operator had to add and
+/// which release was right.
+struct CorrectionNote: Codable, Sendable {
+    /// "review" (the queue), "library" (typed in from scratch), "manual" (saved without Discogs).
+    var source: String
+    /// What the operator typed to find it.
+    var typed: String = ""
+    /// The release chosen, and the one the scan had picked (if it had picked one).
+    var chosenReleaseID: Int?
+    var previousReleaseID: Int?
+    var previousStatus: String?
+    /// How the record was found on Discogs in the end, e.g. "catno", "barcode", "artist+title", "text".
+    var foundBy: String?
+}
 
 /// What the identifier and matcher saw when a record was saved — the training signal behind a verdict.
 struct ScanEvidence: Codable, Sendable {
@@ -75,6 +92,7 @@ struct FeedbackEntry: Codable, Sendable {
     var confidence: Double
     var photos: [String]
     var evidence: ScanEvidence?
+    var correction: CorrectionNote?
 }
 
 struct Track: Codable, Sendable, Equatable { var position: String; var title: String; var duration: String? }

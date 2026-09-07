@@ -22,11 +22,16 @@ final class Identifier {
     private(set) var reads = 0
     /// True once a scan ran without any model key — the HUD nudges the user to add one.
     private(set) var modelSkippedForMissingKey = false
-    var hasAnyKey: Bool { Keychain.get(.openAI) != nil || Keychain.get(.gemini) != nil }
+    /// Cached: the HUD reads this on every frame, and each Keychain query is a round trip to
+    /// securityd. Settings calls `refreshKeys()` after a save.
+    private(set) var hasAnyKey = false
 
     init() {
         provider = ReaderProvider(rawValue: UserDefaults.standard.string(forKey: "readerProvider") ?? "") ?? .luna
+        refreshKeys()
     }
+
+    func refreshKeys() { hasAnyKey = Keychain.get(.openAI) != nil || Keychain.get(.gemini) != nil }
 
     struct Outcome: Sendable {
         var local: LocalReading
@@ -34,6 +39,24 @@ final class Identifier {
         var provider: String?
         /// Best merged view of what's on the record.
         var reading: SleeveReading
+        /// Set when the model was asked and failed; the scan carried on with OCR alone.
+        var modelError: String?
+
+        /// One line for the HUD and the review queue: what the record was read as, and by whom.
+        /// The model's reading is what the search actually ran on, so it comes first; the OCR
+        /// lines only show when that is all there was.
+        var readSummary: String {
+            if let m = model {
+                let who = [m.artist, m.title].compactMap { $0 }.joined(separator: " — ")
+                let what = [m.label, m.catalogNumber].compactMap { $0 }.joined(separator: " ")
+                let parts = [who, what, m.year.map(String.init) ?? ""].filter { !$0.isEmpty }
+                return "Model read: " + (parts.isEmpty ? "nothing it was sure of" : parts.joined(separator: " · "))
+            }
+            let ocr = local.lines.prefix(4).joined(separator: " · ")
+            var s = ocr.isEmpty ? "Nothing readable in that shot" : "OCR read: \(ocr)"
+            if let e = modelError { s = "Model failed (\(e)) · " + s }
+            return s
+        }
     }
 
     func identify(_ image: CGImage, sessionFormat: String, expectLabel: Bool, onStep: @MainActor (String) -> Void) async throws -> Outcome {
@@ -52,10 +75,18 @@ final class Identifier {
         onStep("\(provider.title) reading")
         let hints = ReadHints(ocrText: local.text, barcodes: local.barcodes, sessionFormat: sessionFormat, expectLabel: expectLabel, closeUps: local.closeUps)
         let r: ReaderResult
-        do { r = try await provider.reader.read(image, hints: hints) } catch ReaderError.missingKey {
-            // No model key yet: OCR-only guess (catalogue number does most of the work anyway).
-            onStep("no model key — OCR only")
-            modelSkippedForMissingKey = true
+        do { r = try await provider.reader.read(image, hints: hints) } catch {
+            // The model is the stronger reader, but a failed call must not cost the scan: carry on
+            // with OCR alone, say so, and let the HUD show why (the review queue keeps the note).
+            var reason: String?
+            if case ReaderError.missingKey = error {
+                onStep("no model key — OCR only")
+                modelSkippedForMissingKey = true
+            } else {
+                reason = FriendlyError.describe(error, context: provider.title)
+                Log.scan.error("model failed: \(error) — \(reason ?? "")")
+                onStep("model failed — OCR only")
+            }
             // Without a model we can't see the shape; singles are nearly always label shots, and label-ish words settle the rest.
             let labelWords = ["RPM", "SIDE A", "SIDE B", "SIDE 1", "SIDE 2", "SIDE ONE", "SIDE TWO", "MADE IN", "℗", "(P)"]
             merged.isLabelShot = expectLabel || sessionFormat.contains("seven") || sessionFormat.contains("twelve")
@@ -65,7 +96,7 @@ final class Identifier {
             merged.artist = words.dropFirst(2).first ?? words.first
             merged.label = words.first
             merged.confidence = 0.3
-            return Outcome(local: local, model: nil, provider: nil, reading: merged)
+            return Outcome(local: local, model: nil, provider: nil, reading: merged, modelError: reason)
         }
         sessionCostUSD += r.usage.costUSD
         reads += 1

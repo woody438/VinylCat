@@ -65,6 +65,50 @@ final class DiscogsClient {
 
     struct Identity: Decodable, Sendable { var username: String }
 
+    /// One instance in the user's collection, as listed by the folder endpoint. `basic_information`
+    /// carries enough to make a record without a second call per release.
+    struct CollectionInstance: Decodable, Sendable {
+        struct Basic: Decodable, Sendable {
+            var id: Int
+            var title: String
+            var year: Int?
+            var artists: [Release.Artist]?
+            var labels: [Release.Label]?
+            var formats: [Release.Format]?
+            var genres: [String]?
+            var styles: [String]?
+            var cover_image: String?
+            var thumb: String?
+            var master_id: Int?
+            var resource_url: String?
+        }
+        var instance_id: Int
+        var id: Int
+        var folder_id: Int?
+        var date_added: String?
+        var basic_information: Basic
+    }
+    private struct CollectionPage: Decodable {
+        struct Pagination: Decodable { var pages: Int; var page: Int }
+        var pagination: Pagination
+        var releases: [CollectionInstance]
+    }
+
+    /// Every instance in the user's collection (folder 0 = all folders), 100 per call.
+    func collection(username: String, progress: ((Int, Int) -> Void)? = nil) async throws -> [CollectionInstance] {
+        var all: [CollectionInstance] = []
+        var page = 1, pages = 1
+        repeat {
+            let p: CollectionPage = try await get("/users/\(username)/collection/folders/0/releases",
+                                                  query: [.init(name: "per_page", value: "100"), .init(name: "page", value: "\(page)"), .init(name: "sort", value: "added")])
+            all += p.releases
+            pages = p.pagination.pages
+            progress?(page, pages)
+            page += 1
+        } while page <= pages
+        return all
+    }
+
     enum DiscogsError: LocalizedError {
         case noToken, http(Int, String)
         var errorDescription: String? {
