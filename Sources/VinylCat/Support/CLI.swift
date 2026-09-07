@@ -144,7 +144,7 @@ enum CLI {
         let thumbs = Store.shared.all().first.map { r -> [SessionItem] in [
             SessionItem(recordID: r.id, thumbnail: nil, title: "The Jam — Going Underground", meta: "1980 · 7\" · POLYDOR POSP 113 · 1 shot", tone: .normal),
             SessionItem(recordID: r.id, thumbnail: nil, title: "The Specials — Ghost Town", meta: "1981 · 7\" · 2 TONE CHS TT 17 · 2 shots", tone: .normal, verdict: .up),
-            SessionItem(recordID: r.id, thumbnail: nil, title: "Station C — The Way To Paradise", meta: "wrong record · kept for tuning", tone: .rejected, verdict: .down),
+            SessionItem(recordID: r.id, thumbnail: nil, title: "Station C — The Way To Paradise", meta: "wrong record · REVIEW QUEUE", tone: .rejected, verdict: .down),
         ] } ?? []
         if !thumbs.isEmpty {
             let view = VStack(alignment: .leading, spacing: 10) { ForEach(thumbs) { SessionRow(item: $0) } }
@@ -469,10 +469,12 @@ extension CLI {
             let rej = store.fetch(open.id)
             check(rej?.status == .rejected && scan.current == nil && store.count() == before - 1, "“wrong record” rejects it, closes it, drops it from the count (\(before) → \(store.count()))")
             check(scan.items.first?.tone == .rejected && scan.items.first?.verdict == .down, "session row shows the thumbs-down")
+            check(store.reviewCount() == 1 && store.all().filter({ $0.status == .needsReview || $0.status == .rejected }).map(\.id) == [open.id],
+                  "it lands in the review queue (review \(store.reviewCount()))")
             check(store.live().allSatisfy { $0.id != open.id } && (store.fetch(open.id)?.photos.count ?? 0) == 1, "kept out of the catalogue but photos retained")
             check(store.feedbackCount() == 1 && store.feedback().first?.evidence != nil, "feedback logged with evidence")
             scan.verdict(open.id, .up)
-            check(store.fetch(open.id)?.status == .matched && store.fetch(open.id)?.verified == true, "thumbs-up restores it as verified")
+            check(store.fetch(open.id)?.status == .matched && store.fetch(open.id)?.verified == true && store.reviewCount() == 0, "thumbs-up restores it as verified and clears the queue")
             check(scan.items.first?.verdict == .up, "session row flips to thumbs-up")
             _ = try? FileManager.default.removeItem(at: tmp.appendingPathComponent("fb"))
             let fb = try? store.exportFeedback(to: tmp.appendingPathComponent("fb"))

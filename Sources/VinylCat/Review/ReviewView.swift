@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Finish records the scan loop couldn't: add details, re-search Discogs, pick a candidate.
+/// Finish records the scan loop couldn't, and fix the ones it got wrong: add details, re-search
+/// Discogs, pick a candidate. The queue is `needsReview` (nothing found) plus `rejected` (thumbed down).
 struct ReviewView: View {
     @Environment(AppState.self) private var state
     @State private var selected: UUID?
@@ -16,7 +17,7 @@ struct ReviewView: View {
     var body: some View {
         let _ = store.revision
         let all = store.all()
-        let queue = all.filter { $0.status == .needsReview }
+        let queue = all.filter { $0.status == .needsReview || $0.status == .rejected }
         let incomplete = all.filter { $0.status != .needsReview && $0.isLive && !$0.isComplete }
         let current = all.first { $0.id == selected } ?? queue.first ?? incomplete.first
         HStack(spacing: 0) {
@@ -25,7 +26,10 @@ struct ReviewView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     Caption("REVIEW QUEUE · \(queue.count)").padding(16)
-                    ForEach(queue) { r in queueRow(r, active: current?.id == r.id, meta: "not found · \(r.photos.count) shot · \(r.createdAt.formatted(date: .omitted, time: .shortened))") }
+                    ForEach(queue) { r in
+                        queueRow(r, active: current?.id == r.id,
+                                 meta: "\(r.status == .rejected ? "wrong match" : "not found") · \(r.photos.count) shot\(r.photos.count == 1 ? "" : "s") · \(r.createdAt.formatted(date: .omitted, time: .shortened))")
+                    }
                     Caption("INCOMPLETE SHOTS · \(incomplete.count)").padding(16)
                     ForEach(incomplete.prefix(8)) { r in queueRow(r, active: current?.id == r.id, meta: "\(r.photos.count)/\(r.expectedShots.count) shots · needs \(r.missingShots.map { $0.title.lowercased() }.joined(separator: ", "))") }
                 }
@@ -86,11 +90,18 @@ struct ReviewView: View {
                     .frame(width: 440)
             }
             VStack(alignment: .leading, spacing: 18) {
+                let heading = switch r.status { case .needsReview: "NOT FOUND"; case .rejected: "WRONG MATCH"; default: "INCOMPLETE" }
                 HStack(spacing: 14) {
-                    Text(r.status == .needsReview ? "NOT FOUND" : "INCOMPLETE").font(Theme.display(22)).tracking(3).foregroundStyle(r.status == .needsReview ? Theme.red : Theme.amber)
+                    Text(heading).font(Theme.display(22)).tracking(3).foregroundStyle(r.status == .matched || r.status == .manual ? Theme.amber : Theme.red)
                     Text("captured \(r.createdAt.formatted(date: .abbreviated, time: .shortened))").font(Theme.mono(12)).foregroundStyle(Theme.muted)
                 }
-                if r.status != .needsReview {
+                if r.status == .rejected {
+                    // The scan matched this, the operator thumbed it down. Show what it was matched to
+                    // (struck through, so nobody re-picks it by eye) and hand over to the search below.
+                    Text(r.displayTitle.uppercased()).font(Theme.display(36)).strikethrough(color: Theme.red)
+                    Text("Thumbed down as the wrong record\(r.discogsReleaseID.map { " (Discogs r\($0))" } ?? ""). Search again below — that release is left out of the candidates — or save it as a manual entry.")
+                        .font(Theme.mono(13)).foregroundStyle(Theme.secondary)
+                } else if r.status != .needsReview {
                     Text(r.displayTitle.uppercased()).font(Theme.display(36))
                     Text("Missing: \(r.missingShots.map(\.title).joined(separator: ", ")). Go to SCAN, say “label” / “back cover” / “flip” with this record open — or take them in a second pass.")
                         .font(Theme.mono(13)).foregroundStyle(Theme.secondary)
@@ -141,8 +152,15 @@ struct ReviewView: View {
         status = "Searching Discogs…"
         do {
             var reading = SleeveReading()
-            reading.artist = r.artist.nilIfEmpty; reading.title = r.title.nilIfEmpty
-            reading.label = r.label; reading.catalogNumber = r.catalogNumber; reading.barcode = r.barcode; reading.year = r.year
+            if r.status == .rejected, let ev = store.evidence(for: r.id) {
+                // A rejected record's fields came from the wrong release. Start again from what
+                // the readers actually saw on the sleeve.
+                reading = ev.mergedReading
+            } else {
+                reading.artist = r.artist.nilIfEmpty; reading.title = r.title.nilIfEmpty
+                reading.label = r.label; reading.catalogNumber = r.catalogNumber; reading.barcode = r.barcode; reading.year = r.year
+            }
+            let rejectedRelease = r.status == .rejected ? r.discogsReleaseID : nil
             let q = extra.trimmingCharacters(in: .whitespaces)
             var pool: [DiscogsClient.SearchResult] = []
             if !q.isEmpty {
@@ -156,9 +174,10 @@ struct ReviewView: View {
                 reading.title = q
             } else {
                 let (_, ranked) = try await Matcher(discogs: state.discogs).find(reading: reading, sessionFormat: nil)
-                candidates = ranked; status = ranked.isEmpty ? "No hits — add more detail above." : ""; return
+                candidates = ranked.filter { $0.result.id != rejectedRelease }
+                status = candidates.isEmpty ? "No hits — add more detail above." : ""; return
             }
-            candidates = CandidateRanker.rank(pool, reading: reading, sessionFormat: nil)
+            candidates = CandidateRanker.rank(pool, reading: reading, sessionFormat: nil).filter { $0.result.id != rejectedRelease }
             status = candidates.isEmpty ? "No hits — try the catalogue number or label." : ""
         } catch { status = "Search failed: \(error.localizedDescription)" }
     }

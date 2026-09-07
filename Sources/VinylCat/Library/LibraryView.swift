@@ -215,7 +215,7 @@ struct RecordDetail: View {
                         row("Genre", (r.genres + r.styles).joined(separator: ", "))
                         row("Value", r.valueLow.map { "from \(r.currency ?? "") \(String(format: "%.2f", $0)) · \(r.numForSale ?? 0) for sale" } ?? "—")
                         row("Discogs", r.discogsReleaseID.map { "r\($0) · \(r.sync.rawValue)" } ?? "—")
-                        row("Status", (r.status == .rejected ? "REJECTED — wrong record, kept for tuning" : r.verified ? "\(r.status.rawValue) · verified" : r.status.rawValue)
+                        row("Status", (r.status == .rejected ? "REJECTED — wrong record, in the review queue" : r.verified ? "\(r.status.rawValue) · verified" : r.status.rawValue)
                             + " · \(r.photos.count)/\(r.expectedShots.count) shots" + (r.isComplete ? "" : " · missing \(r.missingShots.map(\.title).joined(separator: ", "))"))
                         row("Added", r.createdAt.formatted(date: .abbreviated, time: .shortened))
                         row("Confidence", String(format: "%.2f", r.confidence))

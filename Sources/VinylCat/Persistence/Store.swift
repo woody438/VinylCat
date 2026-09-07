@@ -118,7 +118,8 @@ final class Store {
     func live() -> [VinylRecord] { all().filter(\.isLive) }
 
     func count() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status != 'rejected'", []).first?["n"] as? Int) ?? 0 }
-    func reviewCount() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status = 'needsReview'", []).first?["n"] as? Int) ?? 0 }
+    /// The Review tab's queue: scans nothing was found for, plus matches thumbed down as the wrong record.
+    func reviewCount() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status IN ('needsReview', 'rejected')", []).first?["n"] as? Int) ?? 0 }
 
     // MARK: - Evidence & feedback
 

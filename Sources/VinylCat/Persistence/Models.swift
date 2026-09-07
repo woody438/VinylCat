@@ -28,8 +28,9 @@ enum ShotKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// `rejected` = the operator gave the match a thumbs-down: kept (with its photos and evidence) for
-/// tuning the reader and ranker, but out of the catalogue, the value total, the export and Discogs.
+/// `rejected` = the operator gave the match a thumbs-down: out of the catalogue, the value total, the
+/// export and Discogs, but kept (with its photos and evidence) for tuning the reader and ranker, and
+/// queued in the Review tab so the right release can be picked by hand.
 enum RecordStatus: String, Codable, Sendable { case matched, needsReview, manual, duplicate, rejected }
 enum SyncState: String, Codable, Sendable { case off, pending, synced, failed }
 

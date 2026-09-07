@@ -61,6 +61,13 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - Thumbs-down (session row, Library detail "WRONG RECORD", or voice "wrong record") sets `status = .rejected`: the record
   and photos stay for tuning, it leaves the Discogs collection (`DiscogsClient.removeFromCollection`), and it drops out of
   the Library counts, value, CSV and the duplicate check. Thumbs-up / "RESTORE" flips it back and marks it `verified`.
+- Rejected records sit in the Review tab's queue as WRONG MATCH (`Store.reviewCount` counts `needsReview` + `rejected`).
+  Its re-search seeds from the saved evidence's `mergedReading` (the record's own fields came from the wrong release) and
+  drops that release from the candidates; USE / SAVE AS MANUAL ENTRY bring it back into the catalogue. The feedback JSONL
+  then carries the down verdict with the wrong `chosenReleaseID` in the evidence and the corrected `discogsReleaseID` on
+  the record — the best tuning signal there is.
+- The Discogs removal after a thumbs-down runs in a Task: it must re-fetch before writing (a thumbs-up or delete may have
+  landed meanwhile; writing the stale `rejected` copy back resurrected deleted records as ghosts in the queue).
 - Library delete also removes the Discogs collection instance when there is one (`ScanController.delete`).
 
 ## Conventions

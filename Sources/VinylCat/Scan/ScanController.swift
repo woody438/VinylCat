@@ -390,7 +390,8 @@ final class ScanController {
     // MARK: - Verdicts
 
     /// Thumbs up / down on a saved match. Down keeps the record (photos, OCR, candidates) as a
-    /// rejected example for tuning, pulls it from the Discogs collection, and closes it if open.
+    /// rejected example for tuning, pulls it from the Discogs collection, closes it if open, and
+    /// puts it in the review queue so the right release can be picked.
     func verdict(_ id: UUID, _ v: Verdict) {
         guard var rec = store.fetch(id) else { speaker.say("Nothing to mark"); return }
         store.logFeedback(id, v)
@@ -407,15 +408,27 @@ final class ScanController {
         case .down:
             rec.status = .rejected; rec.verified = false
             store.update(rec)                                    // status lands first so an in-flight enrich sees it
-            if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = .rejected; items[i].meta = "wrong record · kept for tuning" }
+            if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = .rejected; items[i].meta = "wrong record · REVIEW QUEUE" }
             if current?.id == id {
                 current = nil; pending = []; manualKind = nil
                 phase = .armed(reason: "wrong record")
                 Task { await engine.setHold(false); await engine.rearm(); await engine.setMode(.identify) }
             }
             if lastClosedRecordID == id { lastClosedRecordID = nil }
-            speaker.say("Wrong record. Noted, and off Discogs.")
-            Task { var r = rec; await unsync(&r); store.update(r) }
+            speaker.say("Wrong record. Sent to the review queue.")
+            Task {
+                var r = rec
+                await unsync(&r)
+                // Never write the stale copy back: a thumbs-up or a delete may have landed meanwhile,
+                // and a resurrected `rejected` row would sit in the review queue as a ghost.
+                guard var fresh = store.fetch(id) else { return }
+                fresh.sync = r.sync; fresh.discogsInstanceID = r.discogsInstanceID
+                if fresh.status != .rejected, fresh.sync == .off, syncToCollection, UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true {
+                    fresh.sync = .pending                                // restored while we were removing it: put it back
+                }
+                store.update(fresh)
+                if fresh.sync == .pending { enrich(id) }
+            }
         }
         appState?.reviewCount = store.reviewCount()
     }
