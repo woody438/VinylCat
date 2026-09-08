@@ -84,9 +84,12 @@ final class AppState {
             // The wizard's Dictation check may have left the recogniser running; launch state is "off" unless asked for.
             if voiceOnLaunch { await voice.start() } else if voice.status == .listening { voice.stop() }
         }
-        // The pull half of the Discogs sync: anything added to the collection elsewhere shows up in the Library.
-        if UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true, Keychain.get(.discogsToken)?.nilIfEmpty != nil {
-            Task { await collectionSync.pull(discogs: discogs, store: Store.shared); reviewCount = Store.shared.reviewCount() }
+        // Prices follow the currency set on the Discogs profile; then the pull half of the sync.
+        Task {
+            await discogs.adoptProfileCurrency()
+            if UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true, Keychain.get(.discogsToken)?.nilIfEmpty != nil {
+                await collectionSync.pull(discogs: discogs, store: Store.shared); reviewCount = Store.shared.reviewCount()
+            }
         }
     }
     let collectionSync = CollectionSync()

@@ -42,8 +42,12 @@ struct SettingsView: View {
                     KeyField(label: "Personal token", text: $discogsToken) { Keychain.set(discogsToken, for: .discogsToken) }
                     Row("Add matches to my Collection") { Toggle("", isOn: $discogsSync).labelsHidden().toggleStyle(.switch) }
                     Row("Valuation currency") {
-                        Picker("", selection: $currency) { ForEach(["GBP", "USD", "EUR", "CAD"], id: \.self) { Text($0) } }.labelsHidden().frame(width: 100)
+                        HStack(spacing: 8) {
+                            if UserDefaults.standard.bool(forKey: "currencyFromProfile") { Text("from your Discogs profile").font(Theme.mono(11)).foregroundStyle(Theme.muted) }
+                            Picker("", selection: $currency) { ForEach(["GBP", "USD", "EUR", "CAD", "AUD", "JPY", "CHF", "SEK", "NZD", "MXN", "ZAR", "BRL"], id: \.self) { Text($0) } }.labelsHidden().frame(width: 100)
+                        }
                     }
+                    .help("Follows the currency on your Discogs profile at launch; change it here for this session only.")
                     Row("Rate limit") { Text(state.discogs.rateText).foregroundStyle(Theme.green) }
                     Row("Pull my Collection") {
                         HStack(spacing: 8) {

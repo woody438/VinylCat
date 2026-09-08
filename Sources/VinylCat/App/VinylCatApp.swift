@@ -134,7 +134,8 @@ struct TopBar: View {
                 SwitchChip(title: "CAPTURE", state: state.autoCapture ? "AUTO" : "MANUAL", stateWidth: 74,
                            isOn: state.autoCapture, tint: state.autoCapture ? Theme.green : Theme.amber,
                            help: state.autoCapture ? "Auto-capture: fires when the record is held steady. Space bar still forces a shot."
-                                                   : "Manual: nothing fires on its own — say “capture” or press space.") {
+                                                   : (state.voice.status == .listening ? "Manual: nothing fires on its own — say “capture” or press space."
+                                                                                          : "Manual: nothing fires on its own — press space (or turn VOICE on and say “capture”).")) {
                     state.autoCapture.toggle()
                 }
                 .tourAnchor(.capture)

@@ -213,7 +213,7 @@ struct HUDLook {
             state = "PAUSED"; headline = "AUTO MODE OFF"; hint = "Say “resume” or click AUTO MODE"
         case .armed(let reason):
             state = "ARMED"; meta = "record #\(recordNumber) · \(reason)"
-            headline = manual ? "LINE IT UP · SAY “CAPTURE” OR PRESS SPACE" : "HOLD UP A RECORD"
+            headline = manual ? (voiceOff ? "LINE IT UP · PRESS SPACE TO CAPTURE" : "LINE IT UP · SAY “CAPTURE” OR PRESS SPACE") : "HOLD UP A RECORD"
             headlineSize = manual ? 48 : 64
             hint = manual ? "Manual capture · the ring fills when the shot would be sharp" : "Line it up in the guide and hold still for a second · SPACE forces a shot"
             if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only" }
@@ -222,7 +222,7 @@ struct HUDLook {
             else if voiceOff { hint = "Voice off — click VOICE in the top bar to use spoken commands · " + hint }
         case .steady(let p):
             color = Theme.green; state = manual ? "READY" : "STEADY"; meta = "record #\(recordNumber)"
-            headline = manual ? (p >= 1 ? "SAY “CAPTURE” OR PRESS SPACE" : "HOLD IT…") : "HOLD IT…"; ring = p; ringLabel = manual ? "GO" : "HOLD"; gauges = true
+            headline = manual ? (p >= 1 ? (voiceOff ? "PRESS SPACE TO CAPTURE" : "SAY “CAPTURE” OR PRESS SPACE") : "HOLD IT…") : "HOLD IT…"; ring = p; ringLabel = manual ? "GO" : "HOLD"; gauges = true
         case .captured:
             color = Theme.green; state = "CAPTURED"; meta = "photo saved"
             headline = "GOT IT"; ring = 1; ringLabel = "SHOT"; hint = "Lift the record away to arm the next shot"

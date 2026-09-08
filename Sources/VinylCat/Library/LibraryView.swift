@@ -135,7 +135,7 @@ struct LibraryView: View {
             Text("YEAR").frame(width: 50, alignment: .leading)
             Text("FMT").frame(width: 50, alignment: .leading)
             Text("LABEL · CAT NO.").frame(maxWidth: .infinity, alignment: .leading)
-            Text("VALUE").frame(width: 70, alignment: .leading)
+            Text("VALUE").frame(width: 84, alignment: .leading)
             Text("PHOTOS").frame(width: 50, alignment: .leading)
             Text("DISCOGS").frame(width: 80, alignment: .leading)
             // Height matters: with only a width this was a flexible view, and the VStack handed it
@@ -170,8 +170,7 @@ struct LibraryView: View {
 
     private func estValue(_ all: [VinylRecord]) -> String {
         let total = all.compactMap { $0.valueMedian ?? $0.valueLow }.reduce(0, +)
-        let cur = all.first?.currency ?? state.discogs.currency
-        return "\(cur) \(Int(total)) (DISCOGS LOWEST)"
+        return "\(Money.format(total, state.discogs.currency)) (DISCOGS LOWEST)"
     }
 
     private func export() {
@@ -202,7 +201,7 @@ struct LibraryRow: View {
             Text(r.year.map(String.init) ?? "—").foregroundStyle(Theme.muted).frame(width: 50, alignment: .leading)
             Text(r.discCount > 1 ? "\(r.discCount)×\(r.format)" : r.format).frame(width: 50, alignment: .leading)
             Text([r.label, r.catalogNumber].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(Theme.secondary).frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
-            Text(r.valueLow.map { "\($0 < 10 ? String(format: "%.2f", $0) : String(Int($0)))" } ?? "—").frame(width: 70, alignment: .leading)
+            Text(r.valueLow.map { Money.format($0, r.currency ?? UserDefaults.standard.string(forKey: "currency") ?? "GBP") } ?? "—").frame(width: 84, alignment: .leading)
             Text(r.photos.isEmpty ? "—" : "\(r.photos.count)").foregroundStyle(Theme.muted).frame(width: 50, alignment: .leading)
             Text(sync.0).foregroundStyle(sync.1).frame(width: 80, alignment: .leading)
             Button(action: onDelete) {
@@ -244,7 +243,7 @@ struct RecordDetail: View {
                         row("Label", [r.label, r.catalogNumber].compactMap { $0 }.joined(separator: " · "))
                         row("Released", [r.year.map(String.init), r.country].compactMap { $0 }.joined(separator: " · "))
                         row("Genre", (r.genres + r.styles).joined(separator: ", "))
-                        row("Value", r.valueLow.map { "from \(r.currency ?? "") \(String(format: "%.2f", $0)) · \(r.numForSale ?? 0) for sale" } ?? "—")
+                        row("Value", r.valueLow.map { "from \(Money.format($0, r.currency ?? state.discogs.currency, decimals: true)) · \(r.numForSale ?? 0) for sale" } ?? "—")
                         row("Discogs", r.discogsReleaseID.map { "r\($0) · \(r.sync.rawValue)" } ?? "—")
                         row("Status", (r.status == .rejected ? "REJECTED — wrong record, in the review queue" : r.verified ? "\(r.status.rawValue) · verified" : r.status.rawValue)
                             + " · \(r.photos.count) photo\(r.photos.count == 1 ? "" : "s")")

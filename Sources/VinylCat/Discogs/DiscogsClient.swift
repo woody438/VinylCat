@@ -64,6 +64,8 @@ final class DiscogsClient {
     }
 
     struct Identity: Decodable, Sendable { var username: String }
+    /// The bits of the user profile the app cares about: the marketplace currency set on Discogs.
+    struct Profile: Decodable, Sendable { var username: String; var curr_abbr: String? }
 
     /// One instance in the user's collection, as listed by the folder endpoint. `basic_information`
     /// carries enough to make a record without a second call per release.
@@ -140,6 +142,20 @@ final class DiscogsClient {
     }
 
     func identity() async throws -> Identity { try await get("/oauth/identity", query: []) }
+    func profile(username: String) async throws -> Profile { try await get("/users/\(username)", query: []) }
+
+    /// Makes the app's valuation currency follow the Discogs profile. Returns the code it landed on.
+    @discardableResult
+    func adoptProfileCurrency() async -> String? {
+        guard Keychain.get(.discogsToken)?.nilIfEmpty != nil else { return nil }
+        var user = UserDefaults.standard.string(forKey: "discogsUsername") ?? ""
+        if user.isEmpty, let me = try? await identity() { user = me.username; UserDefaults.standard.set(user, forKey: "discogsUsername") }
+        guard !user.isEmpty, let p = try? await profile(username: user), let cur = p.curr_abbr?.uppercased().nilIfEmpty else { return nil }
+        if cur != currency { Log.discogs.info("currency \(self.currency) → \(cur) from the Discogs profile") }
+        UserDefaults.standard.set(cur, forKey: "currency")
+        UserDefaults.standard.set(true, forKey: "currencyFromProfile")
+        return cur
+    }
 
     /// Adds a release to the user's collection (folder 1 = Uncategorized). Returns the instance id.
     func addToCollection(releaseID: Int, username: String, folder: Int = 1) async throws -> Int {
@@ -162,7 +178,8 @@ final class DiscogsClient {
             let me = try await identity()
             UserDefaults.standard.set(me.username, forKey: "discogsUsername")
             let r = try await search(catno: "POSP 113", format: "7\"")
-            return "OK — signed in as \(me.username); POSP 113 → \(r.count) results, first: \(r.first?.title ?? "—") · \(rateText)"
+            let cur = await adoptProfileCurrency()
+            return "OK — signed in as \(me.username)\(cur.map { ", prices in \($0)" } ?? ""); POSP 113 → \(r.count) results, first: \(r.first?.title ?? "—") · \(rateText)"
         } catch { return "Failed: \(error.localizedDescription)" }
     }
 
