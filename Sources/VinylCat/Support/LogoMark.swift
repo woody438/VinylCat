@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The VinylCat mark: a plain black record with a burnt-orange label, and two fine whiskers
-/// reaching out from either side of the label — the cat is implied, nothing more. Drawn, not an
+/// The VinylCat mark: a plain black record with a burnt-orange label, and two fine whiskers in the
+/// label's deeper orange reaching out from either side of it — the cat is implied, nothing more.
+/// (The whiskers were cream until 2026-09-07; Woody: the white looked cheap.) Drawn, not an
 /// asset, so it is crisp at any size; `scripts/make-icon.swift` draws the same geometry for the
 /// .icns. Proportions live in `LogoGeometry` (unit square, y down) so both renderers agree.
 struct LogoMark: View {
@@ -9,7 +10,7 @@ struct LogoMark: View {
     /// The disc colour. Near-black on the icon's plate; on the app's dark bar a lighter grey so the
     /// disc still reads as a shape.
     var disc: Color = LogoGeometry.disc
-    var whisker: Color = LogoGeometry.cream
+    var whisker: Color = LogoGeometry.burntOrangeDeep
     var body: some View {
         GeometryReader { geo in
             let s = min(geo.size.width, geo.size.height)

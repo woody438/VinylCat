@@ -1,4 +1,4 @@
-// Draws the VinylCat app icon — a plain black record, burnt-orange label, two fine whiskers a side:
+// Draws the VinylCat app icon — a plain black record, burnt-orange label, two fine dark-orange whiskers a side:
 // the design from Woody's 2026-09-07 logo chat; `Support/LogoMark.swift` draws the same geometry
 // in SwiftUI for the top bar — and writes
 // Resources/AppIcon.icns plus a 1024 preview PNG. No Xcode, no asset catalogue:
@@ -51,7 +51,7 @@ func draw(size: CGFloat, plate: Bool = true) -> CGImage {
     ctx.setFillColor(disc); ctx.fillEllipse(in: CGRect(x: c.x - holeR, y: c.y - holeR, width: holeR * 2, height: holeR * 2))
 
     // Two fine whiskers a side, splayed 7° and bowed a touch outward.
-    ctx.setStrokeColor(cream); ctx.setLineWidth(max(0.6, markSize * 0.0075)); ctx.setLineCap(.round)
+    ctx.setStrokeColor(orangeDeep); ctx.setLineWidth(max(0.6, markSize * 0.0075)); ctx.setLineCap(.round)
     for side in [CGFloat(-1), 1] {
         for (lift, angle) in [(CGFloat(0.13), CGFloat(7)), (CGFloat(-0.13), CGFloat(-7))] {
             let x0 = c.x + side * (labelR + r * 0.10), y0 = c.y - lift * labelR
