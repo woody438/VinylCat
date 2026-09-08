@@ -61,7 +61,12 @@ struct Matcher {
         let runnerUp = distinct.dropFirst().first
         let clearWinner = runnerUp.map { $0.score < top.score - 0.1 || (top.sameMaster($0) && top.isStrong) } ?? true
         if (top.score >= autoAccept || top.isStrong) && clearWinner { return (.match(top), distinct) }
-        if top.score >= askAbove || top.isStrong { return (.ambiguous(Array(distinct.prefix(3))), distinct) }
+        if top.score >= askAbove || top.isStrong {
+            // Everything close to the top, up to nine (the number keys): a fourth variant that scores
+            // as well as the third is just as likely the one in hand.
+            let close = distinct.prefix(while: { $0.score >= top.score - 0.25 })
+            return (.ambiguous(Array(close.prefix(max(3, min(9, close.count))))), distinct)
+        }
         return (.none, distinct)
     }
 }

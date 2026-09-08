@@ -19,8 +19,7 @@ struct ReviewView: View {
         let _ = store.revision
         let all = store.all()
         let queue = all.filter { $0.status == .needsReview || $0.status == .rejected }
-        let incomplete = all.filter { $0.status != .needsReview && $0.isLive && !$0.isComplete }
-        let current = all.first { $0.id == selected } ?? queue.first ?? incomplete.first
+        let current = all.first { $0.id == selected } ?? queue.first
         HStack(spacing: 0) {
             // The queue can run to dozens of rows. Without a scroll container the column grew past
             // the window and pushed the top bar — and its tabs — off screen: no scroll, no way back.
@@ -31,8 +30,6 @@ struct ReviewView: View {
                         queueRow(r, active: current?.id == r.id,
                                  meta: "\(r.status == .rejected ? "wrong match" : "not found") · \(r.photos.count) shot\(r.photos.count == 1 ? "" : "s") · \(r.createdAt.formatted(date: .omitted, time: .shortened))")
                     }
-                    Caption("INCOMPLETE SHOTS · \(incomplete.count)").padding(16)
-                    ForEach(incomplete.prefix(8)) { r in queueRow(r, active: current?.id == r.id, meta: "\(r.photos.count)/\(r.expectedShots.count) shots · needs \(r.missingShots.map { $0.title.lowercased() }.joined(separator: ", "))") }
                 }
             }
             .frame(width: 320)
@@ -92,7 +89,7 @@ struct ReviewView: View {
                     .frame(width: 440)
             }
             VStack(alignment: .leading, spacing: 18) {
-                let heading = switch r.status { case .needsReview: "NOT FOUND"; case .rejected: "WRONG MATCH"; default: "INCOMPLETE" }
+                let heading = r.status == .rejected ? "WRONG MATCH" : "NOT FOUND"
                 HStack(spacing: 14) {
                     Text(heading).font(Theme.display(22)).tracking(3).foregroundStyle(r.status == .matched || r.status == .manual ? Theme.amber : Theme.red)
                     Text("captured \(r.createdAt.formatted(date: .abbreviated, time: .shortened))").font(Theme.mono(12)).foregroundStyle(Theme.muted)
@@ -102,10 +99,6 @@ struct ReviewView: View {
                     // (struck through, so nobody re-picks it by eye) and hand over to the search below.
                     Text(r.displayTitle.uppercased()).font(Theme.display(36)).strikethrough(color: Theme.red)
                     Text("Thumbed down as the wrong record\(r.discogsReleaseID.map { " (Discogs r\($0))" } ?? ""). Search again below — that release is left out of the candidates — or save it as a manual entry.")
-                        .font(Theme.mono(13)).foregroundStyle(Theme.secondary)
-                } else if r.status != .needsReview {
-                    Text(r.displayTitle.uppercased()).font(Theme.display(36))
-                    Text("Missing: \(r.missingShots.map(\.title).joined(separator: ", ")). Go to SCAN, say “label” / “back cover” / “flip” with this record open — or take them in a second pass.")
                         .font(Theme.mono(13)).foregroundStyle(Theme.secondary)
                 }
                 if r.notes.hasPrefix("Scan error:") {
@@ -206,8 +199,6 @@ struct ReviewView: View {
             var rec = ScanController.record(from: release, sessionID: old.sessionID)
             rec.id = old.id; rec.createdAt = old.createdAt; rec.photos = old.photos; rec.readText = old.readText; rec.notes = old.notes
             rec.confidence = c.score; rec.status = .matched
-            rec.expectedShots = CaptureProfile.load().expected(format: rec.format, discCount: rec.discCount, descriptors: rec.formatDescriptors,
-                                                             hadPictureSleeve: old.photos.first?.kind == .coverFront && rec.format == "7\"")
             rec.sync = UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true ? .pending : .off
             store.update(rec)
             // The other half of the tuning signal: what it took to find it by hand.
@@ -229,7 +220,7 @@ struct ReviewView: View {
             if parts.count >= 2 { rec.artist = parts[0]; rec.title = parts[1...].joined(separator: " - ") } else { rec.title = q }
         }
         if rec.artist.isEmpty && rec.title.isEmpty { status = "Type at least “Artist - Title” first."; return }
-        rec.status = .manual; rec.expectedShots = rec.photos.map(\.kind)
+        rec.status = .manual
         store.update(rec)
         store.logFeedback(rec.id, .fixed, correction: CorrectionNote(source: "manual", typed: q, previousReleaseID: r.discogsReleaseID, previousStatus: r.status.rawValue))
         state.reviewCount = store.reviewCount(); selected = nil; extra = ""

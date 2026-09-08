@@ -292,37 +292,20 @@ enum SelfTest {
         let inside = TourLayout.place(anchor: CGRect(x: 0, y: 57, width: 1100, height: 800), placement: .inside, in: win)
         check(inside.container == CGRect(x: 0, y: 57, width: 1100, height: 800) && inside.alignment == .center, "inside placement centres on the region")
 
-        print("capture profile")
-        let plain = CaptureProfile()
-        check(plain.expected(format: "LP", discCount: 2, descriptors: ["Gatefold"], hadPictureSleeve: false) == [], "default LP: nothing beyond the identifying shot, even for a gatefold 2×LP")
-        var front = CaptureProfile(); front.frontOnLP = true
-        check(front.expected(format: "LP", discCount: 1, descriptors: [], hadPictureSleeve: false) == [.coverFront], "front on: front cover (a no-op when the ID shot was the cover)")
-        check(plain.expected(format: "7\"", discCount: 1, descriptors: [], hadPictureSleeve: true) == [] && plain.expected(format: "12\"", discCount: 1, descriptors: [], hadPictureSleeve: false) == [], "default singles: no extra shots")
-        var covers = CaptureProfile(); covers.coversOnLP = true
-        check(covers.expected(format: "LP", discCount: 1, descriptors: [], hadPictureSleeve: false) == [.coverBack], "back on: back cover only")
-        check(covers.expected(format: "LP", discCount: 2, descriptors: ["Gatefold"], hadPictureSleeve: false) == [.coverBack, .gatefold], "back on: gatefold from Discogs, no labels")
-        var labels = CaptureProfile(); labels.labelsOnLP = true
-        check(labels.expected(format: "LP", discCount: 1, descriptors: [], hadPictureSleeve: false) == [.labelA], "labels on: one label")
-        check(labels.expected(format: "LP", discCount: 2, descriptors: [], hadPictureSleeve: false) == [.labelA, .labelC], "labels on: a label per disc on a 2×LP")
-        var both = CaptureProfile(); both.frontOnLP = true; both.coversOnLP = true; both.labelsOnLP = true; both.seven = [.labelA, .labelB]
-        check(both.expected(format: "LP", discCount: 2, descriptors: ["Gatefold"], hadPictureSleeve: false) == [.coverFront, .coverBack, .gatefold, .labelA, .labelC], "all on: covers first, then labels")
-        check(both.expected(format: "7\"", discCount: 1, descriptors: [], hadPictureSleeve: true) == [.coverFront, .labelA, .labelB], "B-side on + picture sleeve: cover first")
-
         print("store round-trip")
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-selftest-\(UUID().uuidString).sqlite")
         let store = Store(url: tmp)
         var rec = VinylRecord(artist: "The Jam", title: "Going Underground", format: "7\"", sessionID: UUID())
         rec.discogsReleaseID = 2413807; rec.year = 1980; rec.genres = ["Rock"]; rec.tracks = [Track(position: "A", title: "Going Underground", duration: "2:58")]
-        rec.expectedShots = [.labelA, .labelB]
         rec.photos = [ScanPhoto(recordID: rec.id, fileName: "x.jpg", kind: .labelA, order: 0)]
         store.insert(rec)
         let back = store.fetch(rec.id)
         check(back != nil, "fetch after insert")
         check(back?.discogsReleaseID == 2413807 && back?.tracks.first?.duration == "2:58" && back?.genres == ["Rock"], "fields and JSON columns survive")
-        check(back?.photos.count == 1 && back?.missingShots == [.labelB] && back?.isComplete == false, "photos + expected shots")
+        check(back?.photos.count == 1 && back?.photos.first?.kind == .labelA, "photo survives")
         check(store.existing(discogsReleaseID: 2413807)?.id == rec.id, "duplicate lookup by release id")
         rec.photos.append(ScanPhoto(recordID: rec.id, fileName: "y.jpg", kind: .labelB, order: 1)); store.update(rec)
-        check(store.fetch(rec.id)?.isComplete == true, "update adds photo → complete")
+        check(store.fetch(rec.id)?.photos.count == 2, "update adds photo")
         check(store.count() == 1, "count")
         let csv = try? store.exportCSV(to: tmp.deletingLastPathComponent())
         check(csv != nil && ((try? String(contentsOf: csv!, encoding: .utf8))?.contains("Going Underground") ?? false), "csv export")

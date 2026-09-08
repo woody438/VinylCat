@@ -9,7 +9,7 @@ import SwiftUI
 enum TourAnchor: String, CaseIterable, Hashable {
     case tabs, preview, banner, format, capture, voice, rail, bottomBar
     case library, review
-    case settingsIdentification, settingsDiscogs, settingsVoice, settingsCapture, settingsShots, settingsTests
+    case settingsIdentification, settingsDiscogs, settingsVoice, settingsCapture, settingsTests
 }
 
 struct TourStep: Identifiable, Equatable {
@@ -51,8 +51,6 @@ struct TourStep: Identifiable, Equatable {
                  body: "Choose the microphone, whether matches are read aloud, the speech rate and the voice. LISTEN FROM LAUNCH turns the recogniser on every time the app opens; otherwise use the VOICE switch in the top bar."),
         TourStep(anchor: .settingsCapture, tab: .settings, placement: .leading, title: "CAPTURE",
                  body: "Camera, rotation and mirroring for the preview, saved per camera. The sliders set how steady, sharp and changed the scene must be before auto-capture fires — LIVE NUMBERS shows what the camera sees right now. Relearn the empty scene after moving the Mac."),
-        TourStep(anchor: .settingsShots, tab: .settings, placement: .leading, title: "EXTRA SHOTS",
-                 body: "A confident match needs one photo — Discogs already knows the B-side, the sleeve and the disc count. One photo, cover or label, closes the record; turn these on to photograph the front, the back or a label as well; gatefolds and double albums are detected from Discogs and get their extra shots automatically."),
         TourStep(anchor: .settingsTests, tab: .settings, placement: .leading, title: "TESTS & DO-OVERS",
                  body: "Check the Discogs token and the model key from here. RUN SETUP AGAIN brings back the wizard; SHOW THE TOUR AGAIN brings back these callouts. That is the tour — DONE returns you to SCAN."),
     ]

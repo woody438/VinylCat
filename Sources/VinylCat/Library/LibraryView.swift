@@ -12,7 +12,7 @@ struct LibraryView: View {
     private let store = Store.shared
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "ALL", seven = "7\"", twelve = "12\"", lp = "LP", incomplete = "INCOMPLETE", review = "REVIEW", rejected = "REJECTED"
+        case all = "ALL", seven = "7\"", twelve = "12\"", lp = "LP", review = "REVIEW", rejected = "REJECTED"
         var id: String { rawValue }
     }
 
@@ -132,7 +132,7 @@ struct LibraryView: View {
             Text("FMT").frame(width: 50, alignment: .leading)
             Text("LABEL · CAT NO.").frame(maxWidth: .infinity, alignment: .leading)
             Text("VALUE").frame(width: 70, alignment: .leading)
-            Text("SHOTS").frame(width: 50, alignment: .leading)
+            Text("PHOTOS").frame(width: 50, alignment: .leading)
             Text("DISCOGS").frame(width: 80, alignment: .leading)
             Color.clear.frame(width: 24)
         }
@@ -158,7 +158,6 @@ struct LibraryView: View {
         case .seven: return r.format == "7\""
         case .twelve: return r.format == "12\""
         case .lp: return r.format == "LP"
-        case .incomplete: return !r.isComplete && r.status != .needsReview
         case .review: return r.status == .needsReview
         }
     }
@@ -198,7 +197,7 @@ struct LibraryRow: View {
             Text(r.discCount > 1 ? "\(r.discCount)×\(r.format)" : r.format).frame(width: 50, alignment: .leading)
             Text([r.label, r.catalogNumber].compactMap { $0 }.joined(separator: " · ")).foregroundStyle(Theme.secondary).frame(maxWidth: .infinity, alignment: .leading).lineLimit(1)
             Text(r.valueLow.map { "\($0 < 10 ? String(format: "%.2f", $0) : String(Int($0)))" } ?? "—").frame(width: 70, alignment: .leading)
-            Text("\(r.photos.count)/\(max(r.expectedShots.count, r.photos.count))").foregroundStyle(r.isComplete ? Theme.muted : Theme.amber).frame(width: 50, alignment: .leading)
+            Text(r.photos.isEmpty ? "—" : "\(r.photos.count)").foregroundStyle(Theme.muted).frame(width: 50, alignment: .leading)
             Text(sync.0).foregroundStyle(sync.1).frame(width: 80, alignment: .leading)
             Button(action: onDelete) {
                 Image(systemName: "trash")
@@ -242,7 +241,7 @@ struct RecordDetail: View {
                         row("Value", r.valueLow.map { "from \(r.currency ?? "") \(String(format: "%.2f", $0)) · \(r.numForSale ?? 0) for sale" } ?? "—")
                         row("Discogs", r.discogsReleaseID.map { "r\($0) · \(r.sync.rawValue)" } ?? "—")
                         row("Status", (r.status == .rejected ? "REJECTED — wrong record, in the review queue" : r.verified ? "\(r.status.rawValue) · verified" : r.status.rawValue)
-                            + " · \(r.photos.count)/\(r.expectedShots.count) shots" + (r.isComplete ? "" : " · missing \(r.missingShots.map(\.title).joined(separator: ", "))"))
+                            + " · \(r.photos.count) photo\(r.photos.count == 1 ? "" : "s")")
                         row("Added", r.createdAt.formatted(date: .abbreviated, time: .shortened))
                         row("Confidence", String(format: "%.2f", r.confidence))
                     }

@@ -37,7 +37,7 @@ struct SessionItem: Identifiable, Sendable {
     var meta: String
     var tone: Tone
     var verdict: Verdict?
-    enum Tone: Sendable { case normal, review, incomplete, rejected }
+    enum Tone: Sendable { case normal, review, rejected }
 }
 
 /// Drives the whole scan loop: capture → identify → match → extra shots → save, plus voice commands.
@@ -269,7 +269,6 @@ final class ScanController {
                 dup.photos = [ScanPhoto(recordID: dup.id, fileName: photo, kind: kind, order: 0)]
                 dup.readText = outcome.local.text
                 dup.confidence = c.score
-                if !dup.expectedShots.contains(kind) { dup.expectedShots.insert(kind, at: 0) }
                 store.update(dup)
                 store.saveEvidence(Self.evidence(for: dup, outcome: outcome, candidates: lastCandidates, chosen: c))
                 lastClosedRecordID = dup.id
@@ -299,29 +298,24 @@ final class ScanController {
             rec.readText = outcome.local.text
             let firstKind: ShotKind = (outcome.reading.isLabelShot ?? false) || expectLabel ? .labelA : .coverFront
             rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: firstKind, order: 0)]
-            rec.expectedShots = CaptureProfile.load().expected(format: rec.format, discCount: rec.discCount, descriptors: rec.formatDescriptors,
-                                                             hadPictureSleeve: firstKind == .coverFront && rec.format == "7\"")
-            // The identifying shot always counts, whatever it was: with every extra off the plan is just that one photo.
-            if !rec.expectedShots.contains(firstKind) { rec.expectedShots.insert(firstKind, at: 0) }
             rec.sync = syncToCollection && (UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true) ? .pending : .off
             store.insert(rec)
             store.saveEvidence(Self.evidence(for: rec, outcome: outcome, candidates: lastCandidates, chosen: c))
             current = rec
-            pending = rec.missingShots
+            pending = []
             expectLabel = false
             retried = false
             let detail = [rec.year.map(String.init), rec.discCount > 1 ? "\(rec.discCount)×\(rec.format)" : rec.format,
                           rec.label.map { "\($0.uppercased()) \(rec.catalogNumber ?? "")" }, rec.country?.uppercased()].compactMap { $0 }.joined(separator: " · ")
             phase = .matched(title: rec.displayTitle.uppercased(), detail: detail, meta: String(format: "%.2f · r%d · %@", c.score, release.id, c.reasons.joined(separator: " ")))
             Chime.matched.play()
-            items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: rec.displayTitle, meta: detail, tone: pending.isEmpty ? .normal : .incomplete), at: 0)
+            items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: rec.displayTitle, meta: detail, tone: .normal), at: 0)
             var line = "\(rec.artist), \(rec.title)"
             if let y = rec.year { line += ", \(y)" }
             line += ", \(Self.spoken(format: rec.format, discs: rec.discCount))."
-            if let next = pending.first { line += " \(next.prompt)." }
             speaker.say(line)
             enrich(rec.id)
-            if pending.isEmpty { finishRecord(announce: false) } else { await engine.setMode(.shot); showPrompt() }
+            finishRecord(announce: false)
         } catch {
             // The release lookup failed after a good match: park the photo with what we know so it
             // can be finished from Review once Discogs is back.
@@ -334,7 +328,7 @@ final class ScanController {
     private func showPrompt() {
         guard let rec = current, let kind = pending.first else { return }
         let taken = rec.photos.count
-        phase = .awaitingShot(kind: kind.hud, index: taken + 1, total: rec.expectedShots.count, header: "\(rec.displayTitle) · \(rec.format)")
+        phase = .awaitingShot(kind: kind.hud, index: taken + 1, total: taken + pending.count, header: "\(rec.displayTitle) · \(rec.format)")
     }
 
     private func nextPrompt() {
@@ -347,9 +341,8 @@ final class ScanController {
     }
 
     private func finishRecord(announce: Bool) {
-        if let rec = current, let idx = items.firstIndex(where: { $0.recordID == rec.id }) {
-            items[idx].tone = rec.isComplete ? .normal : .incomplete
-            items[idx].meta += " · \(rec.photos.count) shot\(rec.photos.count == 1 ? "" : "s")"
+        if let rec = current, let idx = items.firstIndex(where: { $0.recordID == rec.id }), rec.photos.count > 1 {
+            items[idx].meta += " · \(rec.photos.count) shots"
         }
         if announce { Chime.matched.play(); speaker.say("Done. Next record.") }
         retried = false
@@ -450,7 +443,7 @@ final class ScanController {
             rec.verified = true
             if rec.status == .rejected { rec.status = .matched; if rec.sync == .off, syncToCollection, UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true { rec.sync = .pending } }
             store.update(rec)
-            if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = rec.isComplete ? .normal : .incomplete }
+            if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = .normal }
             if current?.id == id { current = rec }
             if rec.sync == .pending { enrich(id) }
             speaker.say("Marked correct")
@@ -557,6 +550,11 @@ final class ScanController {
                 current = nil; pending = []
                 speaker.say("Deleted"); phase = .armed(reason: "deleted")
                 Task { await delete(rec.id); await engine.rearm(); await engine.setMode(.identify) }
+            } else if let id = lastClosedRecordID, var rec = store.fetch(id), rec.photos.count > 1, let last = rec.sortedPhotos.last {
+                // The record closed on its own after an extra shot ("back cover", P): undo steps back
+                // that shot first; only the next undo takes the record.
+                store.deletePhoto(last.id); rec.photos.removeAll { $0.id == last.id }
+                speaker.say("Removed the \(last.kind.title.lowercased())")
             } else if let first = items.first, let rid = first.recordID {
                 speaker.say("Deleted \(first.title)")
                 Task { await delete(rid) }
@@ -570,8 +568,8 @@ final class ScanController {
             expectLabel = false; retried = false; ambiguity = nil
             speaker.say("Go again"); phase = .armed(reason: "again")
             Task { await engine.setHold(false); await engine.rearm(); await engine.setMode(.identify) }
-        case .one, .two, .three:
-            choose(command == .one ? 0 : command == .two ? 1 : 2)
+        case .one, .two, .three, .four, .five, .six, .seven, .eight, .nine:
+            choose([VoiceCommand.one, .two, .three, .four, .five, .six, .seven, .eight, .nine].firstIndex(of: command) ?? 0)
         case .none:
             guard let amb = ambiguity else { speaker.say("Nothing to choose"); return }
             ambiguity = nil
@@ -619,8 +617,7 @@ final class ScanController {
         manualKind = kind
         pending.removeAll { $0 == kind }
         speaker.say(say)
-        if var rec = current, !rec.expectedShots.contains(kind) { rec.expectedShots.append(kind); store.update(rec); current = rec }
-        phase = .awaitingShot(kind: kind.hud, index: (current?.photos.count ?? 0) + 1, total: current?.expectedShots.count ?? 1, header: current?.displayTitle ?? "")
+        phase = .awaitingShot(kind: kind.hud, index: (current?.photos.count ?? 0) + 1, total: (current?.photos.count ?? 0) + 1 + pending.count, header: current?.displayTitle ?? "")
         Task { await engine.setMode(.shot) }
     }
 

@@ -210,7 +210,7 @@ final class Store {
          .text(json(r.genres)), .text(json(r.styles)), .text(json(r.tracks)), .optText(r.coverArtURL), .text(r.status.rawValue), .double(r.confidence),
          .optDouble(r.valueLow), .optDouble(r.valueMedian), .optDouble(r.valueHigh), .optInt(r.numForSale), .optText(r.currency),
          .optDouble(r.valuedAt?.timeIntervalSince1970), .text(r.sync.rawValue), .optInt(r.discogsInstanceID), .text(r.notes), .text(r.readText),
-         .double(r.createdAt.timeIntervalSince1970), .text(r.sessionID.uuidString), .text(json(r.expectedShots.map(\.rawValue))),
+         .double(r.createdAt.timeIntervalSince1970), .text(r.sessionID.uuidString), .text("[]"),   // expected_shots: column kept, shot plans are gone
          .int(r.verified ? 1 : 0)]
     }
 
@@ -246,7 +246,6 @@ final class Store {
         r.notes = row["notes"] as? String ?? ""
         r.readText = row["read_text"] as? String ?? ""
         r.createdAt = Date(timeIntervalSince1970: row["created_at"] as? Double ?? 0)
-        r.expectedShots = (decode(row["expected_shots"]) as [String]?)?.compactMap(ShotKind.init) ?? []
         r.photos = query("SELECT * FROM photos WHERE record_id = ? ORDER BY ord", [.text(ids)]).compactMap { p in
             guard let pid = UUID(uuidString: p["id"] as? String ?? "") else { return nil }
             return ScanPhoto(id: pid, recordID: id, fileName: p["file_name"] as? String ?? "",

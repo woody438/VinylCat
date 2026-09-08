@@ -417,13 +417,13 @@ extension CLI {
               let allModCons = still("label-jam-pold5008") else { return 1 }
         await scan.inject(still: jam)
         check(scan.current == nil && store.count() == 1, "confident match closes the record immediately (phase \(phaseName(scan.phase)))")
-        check(store.all().first?.discogsReleaseID != nil && store.all().first?.isComplete == true, "record saved with Discogs id \(store.all().first?.discogsReleaseID ?? 0), complete")
+        check(store.all().first?.discogsReleaseID != nil && store.all().first?.photos.count == 1, "record saved with Discogs id \(store.all().first?.discogsReleaseID ?? 0), one photo")
         scan.handle(command: .flip)
         check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "B-SIDE LABEL" } else { return false } }(), "“flip” reopens the last record and asks for the B-side (phase \(phaseName(scan.phase)))")
         await scan.inject(still: jam)
         check(scan.current == nil, "after B-side: record closed again (phase \(phaseName(scan.phase)))")
         let r1 = store.all().first
-        check(r1?.photos.count == 2 && r1?.isComplete == true && r1?.photos.map(\.kind) == [.labelA, .labelB], "2 photos tagged A/B, complete")
+        check(r1?.photos.count == 2 && r1?.photos.map(\.kind) == [.labelA, .labelB], "2 photos tagged A/B")
         check(r1?.artist == "The Jam" && r1?.format == "7\"" && r1?.catalogNumber?.uppercased() == "POSP 113", "fields: \(r1?.artist ?? "") · \(r1?.format ?? "") · \(r1?.catalogNumber ?? "")")
 
         print("scenario · duplicate → add anyway")
@@ -445,28 +445,23 @@ extension CLI {
         check(store.all().first?.photos.count == 2 && store.all().first?.photos.last?.kind == .other, "“add photo” attaches an extra shot to the last record")
         scan.handle(command: .done)
 
-        print("scenario · album, default prefs → one shot closes the record")
+        print("scenario · album → one shot closes the record")
         state.format = .lp
-        let lpPrefs = ["askForFrontOnLP", "askForCoversOnLP", "askForLabelsOnLP"]
-        let savedPrefs = lpPrefs.map { UserDefaults.standard.object(forKey: $0) }
-        defer { for (k, v) in zip(lpPrefs, savedPrefs) { UserDefaults.standard.set(v, forKey: k) } }
-        for k in lpPrefs { UserDefaults.standard.set(false, forKey: k) }
         await scan.inject(still: clash)
         let clashRec0 = store.all().first
-        check(scan.current == nil && clashRec0?.format == "LP" && clashRec0?.expectedShots == [.coverFront] && clashRec0?.isComplete == true,
-              "LP with the extras off: the identifying shot only, closed (phase \(phaseName(scan.phase)), shots \(clashRec0?.expectedShots.map(\.rawValue) ?? []))")
+        check(scan.current == nil && clashRec0?.format == "LP" && clashRec0?.photos.map(\.kind) == [.coverFront],
+              "LP from its cover: the identifying shot only, closed (phase \(phaseName(scan.phase)), photos \(clashRec0?.photos.map(\.kind.rawValue) ?? []))")
         if let r = clashRec0 { await scan.delete(r.id) }
         await scan.inject(still: allModCons)
         let amc = store.all().first
-        check(scan.current == nil && amc?.title == "All Mod Cons" && amc?.format == "LP" && amc?.photos.map(\.kind) == [.labelA] && amc?.expectedShots == [.labelA] && amc?.isComplete == true,
-              "LP identified from its label: no front cover asked, closed (phase \(phaseName(scan.phase)), got \(amc?.title ?? "nil") · shots \(amc?.expectedShots.map(\.rawValue) ?? []))")
+        check(scan.current == nil && amc?.title == "All Mod Cons" && amc?.format == "LP" && amc?.photos.map(\.kind) == [.labelA],
+              "LP identified from its label: no front cover asked, closed (phase \(phaseName(scan.phase)), got \(amc?.title ?? "nil"))")
         if let r = amc { await scan.delete(r.id) }
 
-        print("scenario · album with the extras on → front/back/label → undo → done")
-        for k in lpPrefs { UserDefaults.standard.set(true, forKey: k) }
+        print("scenario · album, then “back cover” by hand → undo → done")
         await scan.inject(still: clash)
-        let clashRec = scan.current
-        print("scenario · thumbs-down on an open record")
+        let clashRec = store.all().first
+        print("scenario · thumbs-down on a just-scanned record")
         if let open = clashRec {
             let before = store.count()
             scan.handle(command: .wrong)
@@ -487,16 +482,15 @@ extension CLI {
             check(store.fetch(open.id) == nil && !scan.items.contains { $0.recordID == open.id }, "delete removes the record and its session row")
         }
         await scan.inject(still: clash)
-        let clashRec2 = scan.current
-        print("  info phase after Clash: \(scan.phase) · current \(clashRec?.displayTitle ?? "nil") · last candidates \(scan.lastCandidates.prefix(2).map { "\($0.result.title) \($0.score)" })")
-        check(clashRec2?.title == "London Calling" && clashRec2?.format == "LP" && clashRec2?.expectedShots == [.coverFront, .coverBack, .labelA] + ((clashRec2?.discCount ?? 1) >= 2 ? [.labelC] : []), "LP profile (\(clashRec2?.discCount ?? 0) discs): \(clashRec2?.expectedShots.map(\.rawValue) ?? [])")
-        check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "BACK COVER" } else { return false } }(), "asks for the back cover")
+        let clashRec2 = store.all().first
+        print("  info phase after Clash: \(phaseName(scan.phase)) · last candidates \(scan.lastCandidates.prefix(2).map { "\($0.result.title) \($0.score)" })")
+        check(clashRec2?.title == "London Calling" && clashRec2?.format == "LP" && scan.current == nil, "LP matched and closed")
+        scan.handle(command: .backCover)
+        check({ if case .awaitingShot(let k, _, _, _) = scan.phase { return k == "BACK COVER" } else { return false } }() && scan.current?.id == clashRec2?.id, "“back cover” reopens it and asks for the back cover")
         await scan.inject(still: clash)
-        check(scan.current?.photos.count == 2, "back cover attached")
+        check(scan.current == nil && clashRec2.map { store.fetch($0.id)?.photos.map(\.kind) } == [.coverFront, .coverBack], "back cover attached, record closed again")
         scan.handle(command: .undo)
-        check(scan.current?.photos.count == 1, "undo removes it and re-asks")
-        scan.handle(command: .done)
-        check(scan.current == nil, "done")
+        check(clashRec2.map { store.fetch($0.id)?.photos.count } == 1 && clashRec2.map { store.fetch($0.id) != nil } == true, "undo removes that photo, keeps the record")
 
         print("scenario · unreadable → label → try again → review")
         state.format = .seven

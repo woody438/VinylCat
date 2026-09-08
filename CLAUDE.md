@@ -14,7 +14,7 @@ $B --diagnose                      # permissions, cameras, keys, Discogs reachab
 $B --render-ui <dir>               # every screen/state → PNG (AppKit controls show as placeholders; no ScrollView in views you want to check)
 $B --make-test-images <dir>        # synthetic label/cover photos
 $B --pipeline-test <dir>/*.png     # OCR → Discogs → rank, no model
-$B --scenario <dir>                # end-to-end ScanController run in a temp store (match, B-side, duplicate, skip, LP, undo, thumbs-down, review)
+$B --scenario <dir>                # end-to-end ScanController run in a temp store (match, B-side, duplicate, extra photo, LP, undo, thumbs-down, review)
 $B --ocr-eval [n] [--model]        # LocalReader over the real photos in the live store, scored against each record's catno (see below);
                                    #   --model also scores the vision model (~$0.001/photo). Env: VINYLCAT_EVAL_VERBOSE=1 prints OCR lines
                                    #   for ranked misses, VINYLCAT_EVAL_DUMP=<dir> writes the zoom close-ups, VINYLCAT_MODEL_PLAIN=1 sends
@@ -51,7 +51,7 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   Settings / Library "PULL FROM DISCOGS"; imports collection instances as photo-less records under `importSession`, adopts the
   instance id for local records of the same release, unlinks — never deletes — local records whose instance has gone from
   Discogs, skipping anything under ten minutes old). A scan that matches a photo-less imported record attaches its photo to it
-  instead of reporting a duplicate.
+  instead of reporting a duplicate. Imported records are not valued (Woody: valuation stays on Discogs; RE-VALUE per record if wanted).
 - `Scan/` — `ScanController` (the loop: capture → identify → match → extra shots → save; voice command handling), `ScanView` (HUD,
   plus `ScanKey`: the keyboard table — SPACE capture, F flip, U undo, W wrong record, P add photo, S skip, D done, R review, N none,
   1–3 pick, RETURN add anyway, ESC start over — per phase; the bottom-bar legend shows exactly `ScanKey.set(for:)`, with the
@@ -94,7 +94,16 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - Model replies: `max_output_tokens` is 2500 (reasoning tokens count against it; at 600 Luna ran out mid-JSON, which surfaced
   as "The data couldn't be read because it isn't in the correct format"). An `incomplete` status or unparseable JSON throws
   `ReaderError.badResponse` with the reason, and `Identifier` carries on OCR-only.
-- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`, `askForBSide`, `askForFrontOnLP`, `askForCoversOnLP`, `askForLabelsOnLP`,
+- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`,
   `voiceOnLaunch` — default off: the speech recogniser only runs once VOICE is clicked, `setupCompleted`, `tourCompleted`).
+- One photo per record, the identifying one. There is no shot plan any more (the SHOTS settings, `CaptureProfile`, `expectedShots`,
+  `isComplete` and the INCOMPLETE filter went on 2026-09-07 at Woody's call): extra photos are only ever asked for by hand — F / "flip",
+  P / "add photo", "back cover", "gatefold", "disc two" — and the record closes again after each one. "undo" with nothing open removes
+  the last extra photo first, then the record. The `expected_shots` column is still in the schema, written as `[]`.
+- Ambiguous matches list every distinct variant within 0.25 of the top score, three to nine; keys 1–9 and voice "one"…"nine"
+  ("number four" / "number seven": bare "four" and "seven" clash with "for" and "seven inch"). More than three rows go compact
+  and scroll inside the banner.
+- Settings → ABOUT shows `BuildInfo`: version from Info.plist, and `VinylCatBuild` (date · time · commit) stamped by
+  `scripts/build-app.sh`; the bare `.build/debug` binary reports a dev build.
 - Exports go to `output/` as `vinylcat_export_vN_YYYY-MM-DD.csv` and `vinylcat_feedback_vN_YYYY-MM-DD.jsonl`. Reference docs go in `input/`.
 - Keep `design/mockups/build.mjs` as the single source for mockup changes; re-seed and republish the same canvas.

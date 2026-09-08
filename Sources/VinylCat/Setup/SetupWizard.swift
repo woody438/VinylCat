@@ -224,10 +224,6 @@ private struct ModelStep: View {
 private struct PreferencesStep: View {
     @Environment(AppState.self) private var state
     @AppStorage("currency") private var currency = "GBP"
-    @AppStorage("askForBSide") private var askForBSide = false
-    @AppStorage("askForFrontOnLP") private var askForFrontOnLP = false
-    @AppStorage("askForCoversOnLP") private var askForCoversOnLP = false
-    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = false
     @AppStorage("autoCapture") private var autoCapture = true
     @AppStorage("defaultFormat") private var defaultFormat = VinylFormat.seven.rawValue
 
@@ -271,10 +267,6 @@ private struct PreferencesStep: View {
                 }
             }
             Toggle(isOn: $autoCapture) { Text("Auto-capture when a record is held steady (off = say “capture” or press space)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
-            Toggle(isOn: $askForBSide) { Text("Also photograph both labels on singles (off: Discogs already knows the B-side)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
-            Toggle(isOn: $askForFrontOnLP) { Text("Also photograph the front cover on albums (off: the shot it was identified from is enough)").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
-            Toggle(isOn: $askForCoversOnLP) { Text("Also photograph the back cover on albums").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
-            Toggle(isOn: $askForLabelsOnLP) { Text("Also photograph a label on albums").font(Theme.mono(13)) }.toggleStyle(.switch).tint(Theme.green)
             Text("Gatefolds and double albums are detected from Discogs: with the extras on, they get an inside shot and a label per disc. Everything here can be changed later in Settings.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
         }
         .onAppear { state.camera.refreshDevices(); state.voice.refreshInputs() }

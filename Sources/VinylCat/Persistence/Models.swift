@@ -146,60 +146,12 @@ struct VinylRecord: Identifiable, Sendable, Equatable {
     var readText = ""
     var createdAt = Date()
     var sessionID: UUID
-    var expectedShots: [ShotKind] = []
+    /// One record, one identifying photo; anything more is asked for by hand (F, P, "back cover", "disc two").
     var photos: [ScanPhoto] = []
 
     var takenKinds: Set<ShotKind> { Set(photos.map(\.kind)) }
-    var missingShots: [ShotKind] { expectedShots.filter { !takenKinds.contains($0) } }
-    var isComplete: Bool { missingShots.isEmpty }
     var sortedPhotos: [ScanPhoto] { photos.sorted { $0.order < $1.order } }
     var displayTitle: String { "\(artist) — \(title)" }
     /// In the catalogue (not thumbed down).
     var isLive: Bool { status != .rejected }
-}
-
-/// Which shots to ask for per format. Discogs metadata (2×LP, gatefold) extends the list.
-struct CaptureProfile: Sendable {
-    /// Once a release is matched, Discogs already knows the tracklist, the sleeve and the disc count — so by default every
-    /// format needs just the one identifying shot. The B-side is only asked for when a match is ambiguous; the extras
-    /// below are opt-in and can always be asked for by voice ("back cover", "gatefold", "disc two", "add photo").
-    var seven: [ShotKind] = []
-    var twelve: [ShotKind] = []
-    var lp: [ShotKind] = []
-    /// Front cover on albums (when the identifying shot was the label).
-    var frontOnLP = false
-    /// Back cover on albums, plus the gatefold when Discogs says there is one.
-    var coversOnLP = false
-    /// A label on albums, one per disc when Discogs says there are several.
-    var labelsOnLP = false
-
-    static func load() -> CaptureProfile {
-        var p = CaptureProfile()
-        let d = UserDefaults.standard
-        p.frontOnLP = d.object(forKey: "askForFrontOnLP") as? Bool == true
-        p.coversOnLP = d.object(forKey: "askForCoversOnLP") as? Bool == true
-        p.labelsOnLP = d.object(forKey: "askForLabelsOnLP") as? Bool == true
-        if d.object(forKey: "askForBSide") as? Bool == true { p.seven = [.labelA, .labelB]; p.twelve = [.labelA, .labelB] }
-        return p
-    }
-
-    func expected(format: String, discCount: Int, descriptors: [String], hadPictureSleeve: Bool) -> [ShotKind] {
-        var shots: [ShotKind]
-        switch format {
-        case "7\"": shots = seven; if hadPictureSleeve, !shots.isEmpty { shots.insert(.coverFront, at: 0) }
-        case "12\"": shots = twelve
-        default:
-            shots = lp
-            if frontOnLP { shots.append(.coverFront) }
-            if coversOnLP {
-                shots.append(.coverBack)
-                if descriptors.contains(where: { $0.localizedCaseInsensitiveContains("gatefold") }) { shots.append(.gatefold) }
-            }
-            if labelsOnLP {
-                shots.append(.labelA)
-                if discCount >= 2 { shots.append(.labelC) }
-            }
-        }
-        return shots
-    }
 }

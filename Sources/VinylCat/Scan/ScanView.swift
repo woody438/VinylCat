@@ -34,7 +34,7 @@ struct ScanKey: Identifiable, Equatable {
     static let skip = ScanKey(key: "s", label: "S", action: "skip · to the review queue", word: "skip", command: .skip)
     static let skipShot = ScanKey(key: "s", label: "S", action: "skip this shot", word: "skip", command: .skip)
     static let done = ScanKey(key: "d", label: "D", action: "done", word: "done", command: .done)
-    static let undo = ScanKey(key: "u", label: "U", action: "undo · forget the last scan", word: "undo", command: .undo)
+    static let undo = ScanKey(key: "u", label: "U", action: "undo · last photo, then the scan", word: "undo", command: .undo)
     static let retake = ScanKey(key: "u", label: "U", action: "retake the last shot", word: "undo", command: .undo)
     static let wrong = ScanKey(key: "w", label: "W", action: "wrong record", word: "wrong record", command: .wrong)
     static let flip = ScanKey(key: "f", label: "F", action: "flip · B-side", word: "flip", command: .flip)
@@ -44,7 +44,7 @@ struct ScanKey: Identifiable, Equatable {
     static let addAnyway = ScanKey(key: .return, label: "RETURN", action: "add anyway · second copy", word: "add anyway", command: .addAnyway)
     static let addPhoto = ScanKey(key: "p", label: "P", action: "add a photo to the last record", word: "add photo", command: .addPhoto)
     /// Legend-only stand-in for the number keys, which `ScanKeys` installs one by one.
-    static let pick = ScanKey(key: "1", label: "1–3", action: "pick a match", word: "one, two, three", command: .one)
+    static let pick = ScanKey(key: "1", label: "1–9", action: "pick a match", word: "one, two…", command: .one)
 
     /// What is worth doing from the keyboard in each phase — the legend shows exactly this list.
     static func set(for phase: ScanPhase) -> [ScanKey] {
@@ -153,17 +153,21 @@ struct HUDOverlay: View {
             Spacer()
             StateBanner(color: look.color, state: look.state, meta: look.meta) {
                 if case .ambiguous(let cands) = previewPhase ?? scan.phase {
-                    VStack(alignment: .leading, spacing: 10) {
+                    // Up to nine variants. Three fit at full size; more than that get a tighter row
+                    // and a scrolling list capped at about four rows, so the banner never eats the preview.
+                    let compact = cands.count > 3
+                    let rows = VStack(alignment: .leading, spacing: compact ? 6 : 10) {
                         ForEach(Array(cands.enumerated()), id: \.offset) { i, c in
                             HStack(alignment: .firstTextBaseline, spacing: 18) {
-                                Text("\(i + 1)").font(Theme.display(44)).foregroundStyle(Theme.orange).frame(width: 40, alignment: .leading)
+                                Text("\(i + 1)").font(Theme.display(compact ? 30 : 44)).foregroundStyle(Theme.orange).frame(width: 40, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(c.title).font(Theme.display(30)).lineLimit(1).minimumScaleFactor(0.6)
-                                    Text(c.detail).font(Theme.mono(14)).foregroundStyle(Theme.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                                    Text(c.title).font(Theme.display(compact ? 22 : 30)).lineLimit(1).minimumScaleFactor(0.6)
+                                    Text(c.detail).font(Theme.mono(compact ? 12 : 14)).foregroundStyle(Theme.secondary).lineLimit(1).minimumScaleFactor(0.7)
                                 }
                             }
                         }
                     }
+                    if compact { ScrollView(.vertical) { rows }.frame(maxHeight: 200) } else { rows }
                 } else {
                     Text(look.headline).font(Theme.display(look.headlineSize)).lineLimit(1).minimumScaleFactor(0.5)
                 }
@@ -231,7 +235,7 @@ struct HUDLook {
             color = Theme.green; state = "MATCHED"; meta = m
             headline = title; subline = detail; ring = 1; ringLabel = "OK"; hint = ""
         case .ambiguous(let cands):
-            color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "press 1–\(cands.count) · N for none · or say the number"
+            color = Theme.orange; state = "\(cands.count) MATCHES"; meta = "press 1–\(cands.count) · N for none · or say the number" + (cands.count > 4 ? " · scroll for the rest" : "")
             headline = ""
             ring = 1; ringLabel = "\(cands.count)"; hint = "Scanning is paused until you answer · F then SPACE shoots the B-side, which usually settles it · R parks it for review"
         case .needLabel(let guess):
@@ -359,7 +363,7 @@ struct SessionRow: View {
     var onDelete: () -> Void = {}
     @State private var hovering = false
     var body: some View {
-        let color: Color = switch item.tone { case .normal: Theme.text; case .review: Theme.red; case .incomplete: Theme.amber; case .rejected: Theme.red }
+        let color: Color = switch item.tone { case .normal: Theme.text; case .review: Theme.red; case .rejected: Theme.red }
         HStack(spacing: 10) {
             if item.recordID != nil {
                 // Bin on the left, as asked: one click to take a mis-scan out of the Library and Discogs.
@@ -491,6 +495,8 @@ struct AlignmentGuide: View {
                 // it is the bright part of the picture. Even-odd fill leaves the guide itself clear.
                 Path { p in p.addRect(video); p.addRect(rect) }
                     .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
+                Path { p in p.addRect(video); p.addRect(rect) }
+                    .fill(color.opacity(0.10), style: FillStyle(eoFill: true))
                 Rectangle().stroke(color.opacity(0.25), lineWidth: 1).frame(width: rect.width, height: rect.height).position(x: rect.midX, y: rect.midY)
                 Path { p in
                     let l: CGFloat = 36

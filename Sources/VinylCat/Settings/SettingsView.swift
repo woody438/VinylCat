@@ -11,10 +11,6 @@ struct SettingsView: View {
     @AppStorage("sharpnessMin") private var sharpnessMin = 60.0
     @AppStorage("steadySeconds") private var steadySeconds = 1.0
     @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0
-    @AppStorage("askForBSide") private var askForBSide = false
-    @AppStorage("askForFrontOnLP") private var askForFrontOnLP = false
-    @AppStorage("askForCoversOnLP") private var askForCoversOnLP = false
-    @AppStorage("askForLabelsOnLP") private var askForLabelsOnLP = false
     @State private var testResult = ""
     @Environment(\.staticRender) private var staticRender
 
@@ -119,15 +115,10 @@ struct SettingsView: View {
                 .tourAnchor(.settingsCapture)
             }
             VStack(alignment: .leading, spacing: 32) {
-                Section("SHOTS") {
-                    Row("Also photograph both labels on singles") { Toggle("", isOn: $askForBSide).labelsHidden().toggleStyle(.switch) }
-                    Row("Also photograph the front cover on albums") { Toggle("", isOn: $askForFrontOnLP).labelsHidden().toggleStyle(.switch) }
-                    Row("Also photograph the back cover on albums") { Toggle("", isOn: $askForCoversOnLP).labelsHidden().toggleStyle(.switch) }
-                    Row("Also photograph a label on albums") { Toggle("", isOn: $askForLabelsOnLP).labelsHidden().toggleStyle(.switch) }
-                    Text("After a confident match Discogs already knows the tracklist, the sleeve and the disc count, so the one photo it was identified from — cover or label — is enough for any format; the B-side is only asked for when a match is ambiguous. With these on, gatefolds get an inside shot and double albums a label per disc — both detected from Discogs. Say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” for anything extra.")
+                Section("PHOTOS") {
+                    Text("One photo per record — the one it was identified from. Discogs already knows the tracklist, the sleeve and the disc count. For anything extra press F (B-side) or P (add a photo), or say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” with the record just scanned.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
-                .tourAnchor(.settingsShots)
                 Section("TESTS") {
                     HStack(spacing: 12) {
                         Button("Test Discogs") { Task { testResult = await state.discogs.selfTest() } }
@@ -138,6 +129,10 @@ struct SettingsView: View {
                     Text(testResult).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(6).fixedSize(horizontal: false, vertical: true)
                 }
                 .tourAnchor(.settingsTests)
+                Section("ABOUT") {
+                    Row("Version") { Text(BuildInfo.version).foregroundStyle(Theme.secondary) }
+                    Row("Build") { Text(BuildInfo.build).foregroundStyle(Theme.secondary).font(Theme.mono(11)) }
+                }
             }
         }
         .padding(.horizontal, 40).padding(.vertical, 28)

@@ -13,6 +13,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/VinylCat"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# Stamp the build (shown in Settings → ABOUT): date, time and commit; CFBundleVersion counts up as yyyymmdd.hhmm.
+STAMP="$(date '+%Y-%m-%d %H:%M') · $(git rev-parse --short HEAD 2>/dev/null || echo nogit)$(git diff --quiet 2>/dev/null || echo '+')"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date '+%Y%m%d.%H%M')" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :VinylCatBuild string $STAMP" "$APP/Contents/Info.plist" 2>/dev/null \
+  || /usr/libexec/PlistBuddy -c "Set :VinylCatBuild $STAMP" "$APP/Contents/Info.plist"
 # Bundle any resources SwiftPM produced (sounds, fonts) next to the binary.
 BUNDLE_DIR="$(dirname "$BIN")/VinylCat_VinylCat.bundle"
 [[ -d "$BUNDLE_DIR" ]] && cp -R "$BUNDLE_DIR" "$APP/Contents/Resources/"
