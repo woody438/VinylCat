@@ -134,7 +134,9 @@ struct LibraryView: View {
             Text("VALUE").frame(width: 70, alignment: .leading)
             Text("PHOTOS").frame(width: 50, alignment: .leading)
             Text("DISCOGS").frame(width: 80, alignment: .leading)
-            Color.clear.frame(width: 24)
+            // Height matters: with only a width this was a flexible view, and the VStack handed it
+            // half the column — the "blank space above the list".
+            Color.clear.frame(width: 24, height: 1)
         }
         .font(Theme.mono(11)).tracking(1.5).foregroundStyle(Theme.muted)
         .padding(.horizontal, 16).padding(.vertical, 10)

@@ -22,9 +22,8 @@ $B --ocr-eval [n] [--model]        # LocalReader over the real photos in the liv
 $B --export-feedback [dir]         # thumbs-up/down verdicts + evidence → output/vinylcat_feedback_vN_date.jsonl
 ```
 Run `--self-test` and `--scenario` after any change to Scan/, Readers/, Discogs/ or Persistence/.
-A freshly built `.build/debug/VinylCat` blocks on the Keychain's "allow access?" dialog the first time it reads a key
-(SecurityAgent, nobody there to click): run the headless harnesses with `VINYLCAT_NO_KEYCHAIN=1` (keys read as missing;
-`--scenario` then runs OCR-only against unauthenticated Discogs at 25/min, which is what its docstring promises anyway).
+`VINYLCAT_NO_KEYCHAIN=1` makes every key read as missing: `--scenario` then runs OCR-only against unauthenticated Discogs
+at 25/min (what its docstring promises), and nothing is spent on the model.
 Run `--ocr-eval` before and after any change to `LocalReader` / `CatalogueNumber` / `Matcher` and quote the
 numbers. 2026-09-06, after the zoom pass (92 photos): catno-in-candidates 91% (was 84%, 75% before that), exact 86%,
 first candidate usable 49% (was 39%), 0.65s/photo (was 0.36s; the zoom pass adds ~3.6 magnified crops per photo).
@@ -41,7 +40,10 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 ## Layout
 
 - `Capture/` — `CameraSession` (AVFoundation, Continuity Camera included), `CaptureEngine` (actor: sharpness/motion/scene-delta/phash
-  state machine, modes `.identify` vs `.shot`), `FrameAnalysis`, `PhotoStore` (JPEGs in `~/Library/Application Support/VinylCat/Photos`).
+  state machine, modes `.identify` vs `.shot`), `FrameAnalysis`, `PhotoStore` (JPEGs in `~/Library/Application Support/VinylCat/Photos`),
+  `SignalGauges` (SHARP / STILL / RECORD colour bars — red/amber/green against `CaptureTuning.fromDefaults()`, the Settings sliders;
+  shown in the HUD banner while armed/steady and, with numbers, in Settings → CAPTURE. The raw "sharp · motion · scene" text is gone
+  from the HUD at Woody's request: too technical).
 - `Readers/` — `LocalReader` (Vision barcode + OCR in three orientations, then a zoom pass: the smallest print cropped, magnified 2–4× and
   read again; `closeUps` are those crops, sent to the model), `CatalogueNumber` (regex + shape scoring; the `--ocr-eval` rank list drives
   every rule in `shapeScore`), `SleeveReader` protocol + `LunaReader` (OpenAI Responses,
@@ -51,7 +53,8 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   Settings / Library "PULL FROM DISCOGS"; imports collection instances as photo-less records under `importSession`, adopts the
   instance id for local records of the same release, unlinks — never deletes — local records whose instance has gone from
   Discogs, skipping anything under ten minutes old). A scan that matches a photo-less imported record attaches its photo to it
-  instead of reporting a duplicate. Imported records are not valued (Woody: valuation stays on Discogs; RE-VALUE per record if wanted).
+  instead of reporting a duplicate. After a pull, `valueUnvalued` prices every catalogue record with no `valuedAt` (imports, and
+  scans whose price call failed), one call every 2.2 s so scanning keeps most of the rate limit.
 - `Scan/` — `ScanController` (the loop: capture → identify → match → extra shots → save; voice command handling), `ScanView` (HUD,
   plus `ScanKey`: the keyboard table — SPACE capture, F flip, U undo, W wrong record, P add photo, S skip, D done, R review, N none,
   1–3 pick, RETURN add anyway, ESC start over — per phase; the bottom-bar legend shows exactly `ScanKey.set(for:)`, with the
@@ -94,7 +97,11 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - Model replies: `max_output_tokens` is 2500 (reasoning tokens count against it; at 600 Luna ran out mid-JSON, which surfaced
   as "The data couldn't be read because it isn't in the correct format"). An `incomplete` status or unparseable JSON throws
   `ReaderError.badResponse` with the reason, and `Identifier` carries on OCR-only.
-- Secrets only in Keychain. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`,
+- Secrets (`Secrets`, alias `Keychain`) live in `~/Library/Application Support/VinylCat/keys.json`, mode 0600 — NOT the login
+  keychain any more (2026-09-07, Woody's call). The keychain pins each item to the storing build's code hash via the
+  `partition_id` ACL entry; without an Apple team identity that cannot be widened or stripped (tested: "allow all
+  applications" only covers the application list; removing the entry prompts too), so every rebuild re-prompted once per key.
+  Legacy keychain items are read once on first access, copied to the file and deleted. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`,
   `voiceOnLaunch` — default off: the speech recogniser only runs once VOICE is clicked, `setupCompleted`, `tourCompleted`).
 - One photo per record, the identifying one. There is no shot plan any more (the SHOTS settings, `CaptureProfile`, `expectedShots`,
   `isComplete` and the INCOMPLETE filter went on 2026-09-07 at Woody's call): extra photos are only ever asked for by hand — F / "flip",

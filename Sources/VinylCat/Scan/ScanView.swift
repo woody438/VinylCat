@@ -151,7 +151,7 @@ struct HUDOverlay: View {
             }
             .padding(20)
             Spacer()
-            StateBanner(color: look.color, state: look.state, meta: look.meta) {
+            StateBanner(color: look.color, state: look.state, meta: look.meta, gauges: look.gauges ? scan.signal?.metrics : nil, showGauges: look.gauges) {
                 if case .ambiguous(let cands) = previewPhase ?? scan.phase {
                     // Up to nine variants. Three fit at full size; more than that get a tighter row
                     // and a scrolling list capped at about four rows, so the banner never eats the preview.
@@ -198,30 +198,29 @@ struct HUDLook {
     var hint = ""
     var ring: Double = 0
     var ringLabel = "READY"
+    /// Show the SHARP / STILL / RECORD gauges in the banner (the phases where the camera numbers matter).
+    var gauges = false
 
     init(phase: ScanPhase, recordNumber: Int, signal: CaptureSignal?, noModelKey: Bool? = nil, voiceProblem: String? = nil, manual: Bool = false, voiceOff: Bool = false) {
         // Coarse buckets: the exact numbers change every frame and made the hint line shimmer.
-        let metrics = signal.map { String(format: "sharp %.0f · motion %.0f · scene %.0f",
-                                          ($0.metrics.sharpness / 10).rounded() * 10,
-                                          $0.metrics.motion.rounded(),
-                                          ($0.metrics.sceneDelta / 5).rounded() * 5) } ?? "camera starting"
         switch phase {
         case .learning:
             state = "LEARNING"; meta = "keep the camera view empty for a second"
-            headline = "HOLD ON…"; hint = "Learning what an empty scene looks like · " + metrics
+            headline = "HOLD ON…"; hint = "Learning what an empty scene looks like"; gauges = true
         case .paused:
             state = "PAUSED"; headline = "AUTO MODE OFF"; hint = "Say “resume” or click AUTO MODE"
         case .armed(let reason):
             state = "ARMED"; meta = "record #\(recordNumber) · \(reason)"
             headline = manual ? "LINE IT UP · SAY “CAPTURE” OR PRESS SPACE" : "HOLD UP A RECORD"
             headlineSize = manual ? 48 : 64
-            hint = (manual ? "Manual capture · the ring fills when the shot would be sharp · " : "Line it up in the guide and hold still for a second · say “capture” or press space to force · ") + metrics
-            if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only · " + metrics }
+            hint = manual ? "Manual capture · the ring fills when the shot would be sharp" : "Line it up in the guide and hold still for a second · SPACE forces a shot"
+            if let noKey = noModelKey, noKey { hint = "No vision-model key yet (Settings) — running on OCR + catalogue numbers only" }
+            gauges = true
             if let vp = voiceProblem { hint = "Voice off — \(vp) · " + hint }
             else if voiceOff { hint = "Voice off — click VOICE in the top bar to use spoken commands · " + hint }
         case .steady(let p):
             color = Theme.green; state = manual ? "READY" : "STEADY"; meta = "record #\(recordNumber)"
-            headline = manual ? (p >= 1 ? "SAY “CAPTURE” OR PRESS SPACE" : "HOLD IT…") : "HOLD IT…"; ring = p; ringLabel = manual ? "GO" : "HOLD"; hint = metrics
+            headline = manual ? (p >= 1 ? "SAY “CAPTURE” OR PRESS SPACE" : "HOLD IT…") : "HOLD IT…"; ring = p; ringLabel = manual ? "GO" : "HOLD"; gauges = true
         case .captured:
             color = Theme.green; state = "CAPTURED"; meta = "photo saved"
             headline = "GOT IT"; ring = 1; ringLabel = "SHOT"; hint = "Lift the record away to arm the next shot"
@@ -285,6 +284,8 @@ struct StateBanner<Content: View>: View {
     let color: Color
     let state: String
     let meta: String
+    var gauges: FrameMetrics? = nil
+    var showGauges = false
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -292,6 +293,8 @@ struct StateBanner<Content: View>: View {
             HStack(spacing: 14) {
                 Text(state).font(Theme.display(22)).tracking(3).foregroundStyle(color)
                 Text(meta).font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                Spacer()
+                if showGauges { SignalGauges(metrics: gauges) }
             }
             content
         }

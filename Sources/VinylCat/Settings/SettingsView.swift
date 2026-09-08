@@ -107,10 +107,17 @@ struct SettingsView: View {
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
                     Row("Steady for") { HStack { Slider(value: $steadySeconds, in: 0.3...1.5).frame(width: 140); Text(String(format: "%.1f s", steadySeconds)).frame(width: 44) } }
-                    Row("Sharpness needed") { HStack { Slider(value: $sharpnessMin, in: 20...200).frame(width: 140); Text("\(Int(sharpnessMin))").frame(width: 44) } }
-                    Row("Scene change needed") { HStack { Slider(value: $sceneDeltaMin, in: 5...40).frame(width: 140); Text("\(Int(sceneDeltaMin))").frame(width: 44) } }
+                    Row("Sharpness needed") { HStack { Slider(value: $sharpnessMin, in: 20...200).frame(width: 140); Text("\(Int(sharpnessMin)) focus").frame(width: 80, alignment: .trailing) } }
+                    Row("Scene change needed") { HStack { Slider(value: $sceneDeltaMin, in: 5...40).frame(width: 140); Text("\(Int(sceneDeltaMin)) of 255").frame(width: 80, alignment: .trailing) } }
+                    Text("Focus is the edge-contrast score of the frame (blurry < 40, crisp > 120); scene change is how far the picture is from the empty scene on a 0–255 grey scale. The gauges below turn green once each number clears its slider.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
-                    Row("Live numbers") { Text(state.scan.signal.map { String(format: "sharp %.0f · motion %.1f · scene %.0f · %@", $0.metrics.sharpness, $0.metrics.motion, $0.metrics.sceneDelta, $0.reason) } ?? "—").foregroundStyle(Theme.secondary) }
+                    Row("Live from the camera") {
+                        HStack(spacing: 14) {
+                            Text(state.scan.signal?.reason ?? "—").font(Theme.mono(11)).foregroundStyle(Theme.secondary)
+                            SignalGauges(metrics: state.scan.signal?.metrics, tuning: CaptureTuning.fromDefaults(), showNumbers: true)
+                        }
+                    }
                 }
                 .tourAnchor(.settingsCapture)
             }

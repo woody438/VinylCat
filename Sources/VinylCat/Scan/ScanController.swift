@@ -109,11 +109,7 @@ final class ScanController {
 
     /// Reads the capture tunables from UserDefaults (Settings sliders) and pushes them to the engine.
     func applyTuning() {
-        var t = CaptureTuning()
-        let d = UserDefaults.standard
-        if let v = d.object(forKey: "sharpnessMin") as? Double { t.sharpnessMin = v }
-        if let v = d.object(forKey: "steadySeconds") as? Double { t.steadySeconds = v }
-        if let v = d.object(forKey: "sceneDeltaMin") as? Double { t.sceneDeltaMin = v }
+        let t = CaptureTuning.fromDefaults()
         Task { await engine.setTuning(t) }
     }
     func relearnBaseline() { Task { await engine.relearnBaseline() } }

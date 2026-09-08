@@ -10,6 +10,7 @@ import Observation
 @Observable
 final class CollectionSync {
     private(set) var running = false
+    private(set) var valuing = false
     private(set) var status = ""
     private(set) var lastRun: Date?
     /// Records created by a pull share one session id so they can be told apart from scans.
@@ -62,12 +63,38 @@ final class CollectionSync {
             status = summary.text
             lastRun = Date()
             Log.discogs.info("pull: \(summary.text)")
+            Task { await valueUnvalued(discogs: discogs, store: store) }
             return summary
         } catch {
             status = "Pull failed: \(FriendlyError.describe(error, context: "Discogs"))"
             Log.discogs.error("pull failed: \(error)")
             return nil
         }
+    }
+
+    /// Prices for every catalogue record that has none yet (imports, and scans whose price call failed).
+    /// One Discogs call per record, spaced out to leave the scan loop most of the rate limit.
+    func valueUnvalued(discogs: DiscogsClient, store: Store) async {
+        guard !valuing else { return }
+        let todo = store.live().filter { $0.discogsReleaseID != nil && $0.valuedAt == nil }
+        guard !todo.isEmpty else { return }
+        valuing = true; defer { valuing = false }
+        var done = 0
+        for r in todo {
+            status = "Valuing \(done + 1) of \(todo.count)…"
+            guard var rec = store.fetch(r.id), let rid = rec.discogsReleaseID else { continue }
+            if let stats = try? await discogs.priceStats(rid) {
+                rec.valueLow = stats.lowest_price?.value
+                rec.numForSale = stats.num_for_sale
+                rec.currency = stats.lowest_price?.currency ?? discogs.currency
+                rec.valuedAt = Date()          // set even with nothing for sale, so it isn't asked again
+                store.update(rec)
+                done += 1
+            }
+            try? await Task.sleep(for: .seconds(2.2))   // ~27/min, leaving room for scans
+        }
+        status = "Valued \(done) of \(todo.count) records"
+        Log.discogs.info("valued \(done)/\(todo.count)")
     }
 
     static func record(from inst: DiscogsClient.CollectionInstance) -> VinylRecord {
