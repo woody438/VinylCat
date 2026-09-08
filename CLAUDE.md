@@ -70,6 +70,13 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - `Library/` (+ `ManualEntry`: "+ ADD RECORD" in the detail column — type what is known, search Discogs at 50 per query, pick a
   release or save without one), `Review/` (search box focused per record, every candidate listed), `Settings/` (scrolls; under
   `--render-ui` the `staticRender` environment flag lays it flat, since ImageRenderer draws nothing inside a ScrollView).
+- `Support/Coffee.swift` — the tip jar (2026-09-07, Woody's call: free app, own keys, Ko-fi at 0% — `Coffee.url`). The ask grows
+  with `Store.scannedCount()` (live records with a photo; Discogs pulls and typed-in records don't count): a strip at 25, a card at
+  100 and 250, a launch-time sheet from 500 and every 500 after. It lives above the Library footer and on the Scan rail only while
+  `.paused`; never in the HUD, never blocking a capture. "Later" (label gets ruder per rung) hides it until the next milestone
+  (`coffeeDismissedAt`); "I've bought one" gets one cheeky confirm, then `coffeeBought` silences everything for good and a COFFEE
+  meter appears on the rail. Settings → SUPPORT can undo it. `--render-ui` writes every rung as `coffee-*.png`; the self-test
+  covers the ladder.
 - `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
   `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
   `--render-ui` writes every step as `tour-NN-<anchor>.png`.

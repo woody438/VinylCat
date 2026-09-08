@@ -288,6 +288,7 @@ private struct ReadyStep: View {
                     Bullet("Voice starts off. Click VOICE in the top bar when you want to talk to it (Settings → LISTEN FROM LAUNCH keeps it on).")
                     Bullet("Listen: it reads the match back, then asks for the B-side or back cover. Flip, hold, chime, next record.")
                     Bullet("Can't identify it? It's parked in REVIEW with the photo — finish it later by voice or typing.")
+                    Bullet("VinylCat is free and runs on your own keys. As the catalogue grows it will ask, now and then, for a coffee — \(Coffee.handle). Saying no is allowed. Saying yes ends the asking.")
                 }
                 Text("The bottom bar always lists the words that work right now.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
             }

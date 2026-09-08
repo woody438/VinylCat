@@ -94,4 +94,6 @@ final class AppState {
     let discogs = DiscogsClient()
     let voice = SpeechCommands()
     let tour = TourState()
+    /// The tip jar: free app, own keys, an ask that grows with the catalogue (see `Coffee`).
+    let coffee = Coffee()
 }

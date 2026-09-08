@@ -309,6 +309,7 @@ struct StateBanner<Content: View>: View {
 
 struct RightRail: View {
     @Environment(AppState.self) private var state
+    @Environment(\.previewPhase) private var previewPhase
     @State private var pendingDelete: SessionItem?
 
     var body: some View {
@@ -335,6 +336,10 @@ struct RightRail: View {
                 .padding(.horizontal, 20)
             }
             Spacer()
+            // The coffee ask only while auto mode is off: never between records, never over the HUD.
+            if case .paused = previewPhase ?? scan.phase {
+                CoffeeAsk(sizes: [.card, .sheet], narrow: true).padding(.horizontal, 20).padding(.bottom, 16)
+            }
             Rectangle().fill(Theme.line).frame(height: 1)
             HStack(spacing: 8) {
                 Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", unit: "per min", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
@@ -342,6 +347,8 @@ struct RightRail: View {
                 Meter(title: "LLM COST", value: String(format: "$%.3f", state.identifier.sessionCostUSD), color: Theme.text)
                     .help("Vision-model spend this session · \(state.identifier.reads) reads")
                 Meter(title: "REVIEW", value: "\(state.reviewCount)", color: Theme.red)
+                // Supporters get a quiet fourth meter. It rewards the honest and gives everyone else something to look at.
+                if state.coffee.supporter { Meter(title: "COFFEE", value: "BOUGHT", color: Theme.green).help("Thank you. Settings → SUPPORT to undo.") }
             }
             .padding(.horizontal, 20).padding(.vertical, 16)
         }

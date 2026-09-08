@@ -36,6 +36,8 @@ struct RootView: View {
     @Environment(AppState.self) private var state
     @AppStorage("setupCompleted") private var setupCompleted = false
     @Environment(\.previewSetupStep) private var previewSetupStep
+    /// The coffee sheet due at launch (500 scanned records and every 500 after), nil otherwise.
+    @State private var coffeeSheet: Int?
 
     var body: some View {
         if !setupCompleted || previewSetupStep != nil {
@@ -43,6 +45,10 @@ struct RootView: View {
         } else {
             mainView
         }
+    }
+
+    private var coffeeSheetShown: Binding<Bool> {
+        Binding(get: { coffeeSheet != nil }, set: { if !$0 { coffeeSheet = nil } })
     }
 
     private var mainView: some View {
@@ -61,6 +67,22 @@ struct RootView: View {
         // First-run callouts: anchors are collected from the whole tree, the overlay draws above it.
         .overlayPreferenceValue(TourAnchorKey.self) { TourHost(anchors: $0) }
         .task { await state.tour.autoStartIfNeeded() }
+        // The big ask is a launch-time thing only: mid-session the 500th record gets the card, not this.
+        .task {
+            let store = Store.shared
+            if state.coffee.sheetDue(in: store), let m = state.coffee.due(in: store) {
+                state.coffee.sheetOfferedThisLaunch = true
+                coffeeSheet = m
+            }
+        }
+        .sheet(isPresented: coffeeSheetShown) {
+            if let m = coffeeSheet {
+                CoffeeSheet(milestone: m, count: state.coffee.count(in: Store.shared),
+                            value: Coffee.valueText(in: Store.shared, fallbackCurrency: state.discogs.currency),
+                            onClose: { coffeeSheet = nil })
+                    .environment(state)
+            }
+        }
     }
 }
 

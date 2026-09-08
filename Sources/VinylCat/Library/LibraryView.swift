@@ -70,6 +70,10 @@ struct LibraryView: View {
                     }
                 }
                 Rectangle().fill(Theme.line).frame(height: 1)
+                // The coffee ask sits between the list and the footer: a slim strip from 25 scanned
+                // records, a card from 100. Draws nothing once dismissed or bought. (The footer itself
+                // is full; anything added there squeezes the record count onto two lines.)
+                CoffeeAsk()
                 HStack(spacing: 28) {
                     Text("\(all.count) RECORDS · EST. VALUE \(estValue(all))")
                     Text(exportMessage).foregroundStyle(Theme.green)

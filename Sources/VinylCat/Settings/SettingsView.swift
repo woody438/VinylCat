@@ -56,6 +56,7 @@ struct SettingsView: View {
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .tourAnchor(.settingsDiscogs)
+                Section("SUPPORT") { CoffeeSettings() }
             }
             VStack(alignment: .leading, spacing: 24) {
                 Section("CAPTURE") {

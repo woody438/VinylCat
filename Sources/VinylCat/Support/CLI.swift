@@ -131,6 +131,28 @@ enum CLI {
             if render(view, to: out.appendingPathComponent(String(format: "tour-%02d-%@.png", i + 1, TourStep.all[i].anchor.rawValue))) { written += 1 }
         }
         state.tour.hide()
+        // Every rung of the coffee ladder: the footer line at 25, the card at 100 and 250, the card
+        // again at 500 (the launch sheet is drawn flat below), and the narrow card on the paused rail.
+        // The setters persist, so keep the real answers and put them back afterwards.
+        let (savedDismissed, savedSupporter) = (state.coffee.dismissedAt, state.coffee.supporter)
+        state.coffee.dismissedAt = 0
+        state.coffee.supporter = false
+        for n in [25, 100, 250, 512] {
+            state.coffee.previewCount = n
+            state.tab = .library
+            let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
+                .environment(\.staticRender, true)
+            if render(view, to: out.appendingPathComponent("coffee-library-\(n).png")) { written += 1 }
+        }
+        state.coffee.previewCount = 250
+        state.tab = .scan
+        if render(RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
+                    .environment(\.previewPhase, .paused), to: out.appendingPathComponent("coffee-scan-paused.png")) { written += 1 }
+        if render(CoffeeSheet(milestone: 500, count: 512, value: "GBP 4,180").environment(state), to: out.appendingPathComponent("coffee-sheet-500.png")) { written += 1 }
+        if render(CoffeeSheet(milestone: 1000, count: 1043, value: nil).environment(state), to: out.appendingPathComponent("coffee-sheet-1000.png")) { written += 1 }
+        state.coffee.previewCount = nil
+        state.coffee.dismissedAt = savedDismissed
+        state.coffee.supporter = savedSupporter
         state.tab = .scan
         // Rows live in a ScrollView, which ImageRenderer leaves blank; render a few directly.
         let rows = Array(Store.shared.all().prefix(4))

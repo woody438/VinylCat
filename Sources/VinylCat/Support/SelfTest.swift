@@ -329,6 +329,18 @@ enum SelfTest {
         check(drift.nudgeDented, "easing the sleeve sideways costs half the ring, not all of it (\(String(format: "%.2f → %.2f", drift.nudgeBefore, drift.nudgeLow)))")
         check(drift.slideNeverFired, "a record sliding through never fires")
 
+        print("coffee")
+        check(Coffee.milestone(reached: 24) == nil, "no ask below 25 scanned records")
+        check(Coffee.milestone(reached: 25) == 25 && Coffee.milestone(reached: 99) == 25, "25–99 → the 25 rung")
+        check(Coffee.milestone(reached: 100) == 100 && Coffee.milestone(reached: 249) == 100, "100–249 → the 100 rung")
+        check(Coffee.milestone(reached: 250) == 250 && Coffee.milestone(reached: 499) == 250, "250–499 → the 250 rung")
+        check(Coffee.milestone(reached: 500) == 500 && Coffee.milestone(reached: 999) == 500, "500–999 → the 500 rung")
+        check(Coffee.milestone(reached: 1000) == 1000 && Coffee.milestone(reached: 1499) == 1000 && Coffee.milestone(reached: 1500) == 1500, "then every 500")
+        check(Coffee.size(for: 25) == .line && Coffee.size(for: 100) == .card && Coffee.size(for: 250) == .card && Coffee.size(for: 500) == .sheet && Coffee.size(for: 2000) == .sheet, "line at 25, card at 100/250, sheet from 500")
+        check(Coffee.laterLabel(for: 25) == "Not now" && Coffee.laterLabel(for: 500) == "I am a monster", "the Later button gets ruder")
+        check(Coffee.line(for: 100, count: 112, value: "GBP 1,240").contains("GBP 1,240"), "the 100 rung quotes the collection value")
+        check(Coffee.line(for: 1000, count: 1043, value: nil).hasPrefix("1043."), "the 1000 rung concedes")
+
         print("\(passed) passed, \(failures) failed")
         return failures == 0 ? 0 : 1
     }

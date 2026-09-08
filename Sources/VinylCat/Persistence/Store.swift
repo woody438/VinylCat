@@ -119,6 +119,11 @@ final class Store {
     func live() -> [VinylRecord] { all().filter(\.isLive) }
 
     func count() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status != 'rejected'", []).first?["n"] as? Int) ?? 0 }
+    /// Live records with at least one photo — what the camera has catalogued. Drives the coffee milestones,
+    /// so a Discogs pull of 2,000 photo-less records does not count.
+    func scannedCount() -> Int {
+        (query("SELECT COUNT(DISTINCT r.id) AS n FROM records r JOIN photos p ON p.record_id = r.id WHERE r.status != 'rejected'", []).first?["n"] as? Int) ?? 0
+    }
     /// The Review tab's queue: scans nothing was found for, plus matches thumbed down as the wrong record.
     func reviewCount() -> Int { (query("SELECT COUNT(*) AS n FROM records WHERE status IN ('needsReview', 'rejected')", []).first?["n"] as? Int) ?? 0 }
 
