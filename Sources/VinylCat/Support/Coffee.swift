@@ -230,8 +230,8 @@ struct CoffeeButtons: View {
     }
 
     @ViewBuilder private var pills: some View {
-        pill("BUY ME A COFFEE", fill: true) { state.coffee.open() }
-        pill("I'VE BOUGHT ONE", fill: false) { checking = true }
+        CoffeePill("BUY ME A COFFEE", fill: true, compact: compact) { state.coffee.open() }
+        CoffeePill("I'VE BOUGHT ONE", fill: false, compact: compact) { checking = true }
     }
 
     private var later: some View {
@@ -239,8 +239,58 @@ struct CoffeeButtons: View {
             .buttonStyle(.plain).font(Theme.mono(11)).tracking(1).foregroundStyle(Theme.muted).lineLimit(1).fixedSize()
             .help("Ask again at the next milestone")
     }
+}
 
-    private func pill(_ title: String, fill: Bool, action: @escaping () -> Void) -> some View {
+/// Settings → SUPPORT. Always available, whatever the count: the way in for anyone who wants to
+/// donate early, and the way back for anyone who pressed "Hand on heart" by mistake. Dressed like
+/// the Library card so it is obviously the same thing.
+struct CoffeeSettings: View {
+    @Environment(AppState.self) private var state
+    @State private var checking = false
+    var body: some View {
+        let coffee = state.coffee
+        // Compact: Settings has to keep fitting the default window without scrolling.
+        VStack(alignment: .leading, spacing: 8) {
+            Caption("☕ BUY ME A COFFEE", color: Theme.amber)
+            Text(coffee.supporter ? "Coffee bought. Thank you — the asking has stopped."
+                                  : "Free, and runs on your own keys. If it has saved you an afternoon, buy the developer a coffee.")
+                .font(Theme.display(18, weight: .semibold)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
+            Text("\(Coffee.handle) · \(coffee.count(in: Store.shared)) records scanned so far")
+                .font(Theme.mono(11)).foregroundStyle(Theme.muted)
+            HStack(spacing: 10) {
+                CoffeePill("BUY ME A COFFEE", fill: true) { coffee.open() }
+                if coffee.supporter {
+                    Button("UNDO") { coffee.supporter = false }
+                        .buttonStyle(.plain).font(Theme.mono(11)).tracking(1).foregroundStyle(Theme.muted)
+                        .help("Start the asking again")
+                } else {
+                    CoffeePill("I'VE BOUGHT ONE", fill: false) { checking = true }
+                }
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.amberBg)
+        .overlay(alignment: .leading) { Rectangle().fill(Theme.amber).frame(width: 4) }
+        .alert("Hand on heart, coffee actually bought?", isPresented: $checking) {
+            Button("Hand on heart") { coffee.supporter = true }
+            Button("…fine, take me to Ko-fi") { coffee.open() }
+        } message: {
+            Text("The app can't check. It just trusts you. Which is more than Discogs does.")
+        }
+    }
+}
+
+/// The amber pill every coffee placement uses: filled for the main action, outlined for the rest.
+struct CoffeePill: View {
+    let title: String
+    var fill: Bool
+    var compact = false
+    let action: () -> Void
+    init(_ title: String, fill: Bool, compact: Bool = false, action: @escaping () -> Void) {
+        self.title = title; self.fill = fill; self.compact = compact; self.action = action
+    }
+    var body: some View {
         Button(action: action) {
             Text(title).font(Theme.mono(compact ? 11 : 12)).tracking(1).lineLimit(1).fixedSize()
                 .foregroundStyle(fill ? Theme.bg : Theme.amber)
@@ -250,35 +300,5 @@ struct CoffeeButtons: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// Settings → SUPPORT. Always available, whatever the count: the way in for anyone who wants to
-/// donate early, and the way back for anyone who pressed "Hand on heart" by mistake.
-struct CoffeeSettings: View {
-    @Environment(AppState.self) private var state
-    @State private var checking = false
-    var body: some View {
-        let coffee = state.coffee
-        VStack(alignment: .leading, spacing: 10) {
-            Text("VinylCat is free and runs on your own keys. If it has saved you an afternoon, buy the developer a coffee — \(Coffee.handle).")
-                .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 12) {
-                Button("Open Ko-fi") { coffee.open() }
-                if coffee.supporter {
-                    Text("☕ COFFEE BOUGHT · THANK YOU").font(Theme.mono(12)).tracking(1).foregroundStyle(Theme.green)
-                    Button("Undo") { coffee.supporter = false }.buttonStyle(.plain).font(Theme.mono(11)).foregroundStyle(Theme.muted)
-                } else {
-                    Button("I've bought one") { checking = true }
-                    Text("Scanned: \(coffee.count(in: Store.shared))").font(Theme.mono(11)).foregroundStyle(Theme.muted)
-                }
-            }
-        }
-        .alert("Hand on heart, coffee actually bought?", isPresented: $checking) {
-            Button("Hand on heart") { coffee.supporter = true }
-            Button("…fine, take me to Ko-fi") { coffee.open() }
-        } message: {
-            Text("The app can't check. It just trusts you. Which is more than Discogs does.")
-        }
     }
 }
