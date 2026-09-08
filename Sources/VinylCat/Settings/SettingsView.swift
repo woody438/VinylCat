@@ -56,7 +56,6 @@ struct SettingsView: View {
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .tourAnchor(.settingsDiscogs)
-                Section("SUPPORT") { CoffeeSettings() }
             }
             VStack(alignment: .leading, spacing: 24) {
                 Section("CAPTURE") {
@@ -100,6 +99,8 @@ struct SettingsView: View {
                     .padding(.vertical, 8)
                 }
                 .tourAnchor(.settingsCapture)
+                // Under the gauges: the shortest column, so the card never pushes Settings into scrolling.
+                Section("SUPPORT") { CoffeeSettings() }
             }
             VStack(alignment: .leading, spacing: 24) {
                 Section("VOICE") {
