@@ -1,6 +1,6 @@
-// Draws the VinylCat app icon — a record that is also a cat's head (ears above the disc, burnt-orange
-// label), the design from Woody's 2026-09-07 logo chat; `Support/LogoMark.swift` draws the same
-// geometry in SwiftUI for the top bar — and writes
+// Draws the VinylCat app icon — a plain black record, burnt-orange label, two fine whiskers a side:
+// the design from Woody's 2026-09-07 logo chat; `Support/LogoMark.swift` draws the same geometry
+// in SwiftUI for the top bar — and writes
 // Resources/AppIcon.icns plus a 1024 preview PNG. No Xcode, no asset catalogue:
 //   swift scripts/make-icon.swift
 // Colours are Theme's (design/mockups/build.mjs, direction A).
@@ -12,7 +12,8 @@ let bg = CGColor(red: 0x0E / 255, green: 0x10 / 255, blue: 0x12 / 255, alpha: 1)
 let panel = CGColor(red: 0x1B / 255, green: 0x1F / 255, blue: 0x23 / 255, alpha: 1)
 let orange = CGColor(red: 0xCC / 255, green: 0x6A / 255, blue: 0x3C / 255, alpha: 1)      // burnt orange (LogoGeometry.burntOrange)
 let orangeDeep = CGColor(red: 0x9E / 255, green: 0x4F / 255, blue: 0x2A / 255, alpha: 1)
-let disc = CGColor(red: 0x0A / 255, green: 0x0B / 255, blue: 0x0C / 255, alpha: 1)
+let disc = CGColor(red: 0x0E / 255, green: 0x10 / 255, blue: 0x12 / 255, alpha: 1)
+let cream = CGColor(red: 0xF2 / 255, green: 0xEF / 255, blue: 0xE8 / 255, alpha: 1)
 
 func draw(size: CGFloat, plate: Bool = true) -> CGImage {
     let cs = CGColorSpaceCreateDeviceRGB()
@@ -22,50 +23,44 @@ func draw(size: CGFloat, plate: Bool = true) -> CGImage {
     ctx.translateBy(x: 0, y: size); ctx.scaleBy(x: 1, y: -1)
 
     if plate {
-        // Rounded-square plate, inset like a standard macOS icon.
+        // Rounded-square plate, inset like a standard macOS icon; a flat, slightly lifted charcoal.
         let inset = size * 56 / 1024
         let plateRect = CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
         let corner = size * 205 / 1024
         ctx.addPath(CGPath(roundedRect: plateRect, cornerWidth: corner, cornerHeight: corner, transform: nil)); ctx.clip()
-        let grad = CGGradient(colorsSpace: cs, colors: [panel, bg] as CFArray, locations: [0, 1])!
-        ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size), options: [])
+        ctx.setFillColor(panel); ctx.fill(plateRect)
     }
 
-    // The mark, on the inner 80% of the plate.
-    let markSize = plate ? size * 0.80 : size
+    // The mark, on the inner 78% of the plate. Same numbers as LogoGeometry.
+    let markSize = plate ? size * 0.78 : size
     let origin = (size - markSize) / 2
-    let c = CGPoint(x: origin + markSize * 0.5, y: origin + markSize * 0.56)
-    let r = markSize * 0.40
-    func point(_ deg: CGFloat, _ radius: CGFloat) -> CGPoint { let a = deg * .pi / 180; return CGPoint(x: c.x + radius * cos(a), y: c.y - radius * sin(a)) }
+    let c = CGPoint(x: origin + markSize * 0.5, y: origin + markSize * 0.5)
+    let r = markSize * 0.46
+    let labelR = r * 0.30, holeR = r * 0.035
 
-    // Ears: triangular with a softened tip, base on the disc's edge (same angles as LogoGeometry.ear).
+    // Flat black disc, grooves barely there.
     ctx.setFillColor(disc)
-    for left in [true, false] {
-        let a0: CGFloat = left ? 113 : 67, a1: CGFloat = left ? 151 : 29, tipA: CGFloat = left ? 128 : 52
-        let b0 = point(a0, r * 0.98), b1 = point(a1, r * 0.98), tip = point(tipA, r * 1.58)
-        let k: CGFloat = 0.14
-        let t0 = CGPoint(x: tip.x + (b0.x - tip.x) * k, y: tip.y + (b0.y - tip.y) * k)
-        let t1 = CGPoint(x: tip.x + (b1.x - tip.x) * k, y: tip.y + (b1.y - tip.y) * k)
-        ctx.move(to: b0); ctx.addLine(to: t0); ctx.addQuadCurve(to: t1, control: tip); ctx.addLine(to: b1); ctx.closePath(); ctx.fillPath()
-    }
-
-    // The record: near-black disc with a faint sheen and grooves.
     ctx.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-    ctx.saveGState()
-    ctx.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)); ctx.clip()
-    let sheen = CGGradient(colorsSpace: cs, colors: [CGColor(gray: 1, alpha: 0.10), CGColor(gray: 1, alpha: 0)] as CFArray, locations: [0, 1])!
-    ctx.drawLinearGradient(sheen, start: CGPoint(x: c.x - r, y: c.y - r), end: CGPoint(x: c.x + r * 0.4, y: c.y + r), options: [])
-    ctx.setLineWidth(max(0.6, markSize * 0.012)); ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.10))
-    for i in 0..<5 { let rr = r * (0.52 + CGFloat(i) * 0.09); ctx.strokeEllipse(in: CGRect(x: c.x - rr, y: c.y - rr, width: rr * 2, height: rr * 2)) }
-    ctx.restoreGState()
+    ctx.setLineWidth(max(0.5, markSize * 0.006)); ctx.setStrokeColor(CGColor(gray: 1, alpha: 0.05))
+    for i in 0..<3 { let rr = r * (0.60 + CGFloat(i) * 0.12); ctx.strokeEllipse(in: CGRect(x: c.x - rr, y: c.y - rr, width: rr * 2, height: rr * 2)) }
 
-    // Burnt-orange label with a deeper rim, and the spindle hole.
-    let R = r * 0.36
-    ctx.setFillColor(orange); ctx.fillEllipse(in: CGRect(x: c.x - R, y: c.y - R, width: R * 2, height: R * 2))
-    ctx.setStrokeColor(orangeDeep); ctx.setLineWidth(max(0.6, markSize * 0.018))
-    ctx.strokeEllipse(in: CGRect(x: c.x - R, y: c.y - R, width: R * 2, height: R * 2))
-    let hole = r * 0.05
-    ctx.setFillColor(disc); ctx.fillEllipse(in: CGRect(x: c.x - hole, y: c.y - hole, width: hole * 2, height: hole * 2))
+    // Burnt-orange label with a thin deeper rim, and the spindle hole.
+    ctx.setFillColor(orange); ctx.fillEllipse(in: CGRect(x: c.x - labelR, y: c.y - labelR, width: labelR * 2, height: labelR * 2))
+    ctx.setStrokeColor(orangeDeep); ctx.setLineWidth(max(0.5, markSize * 0.008))
+    ctx.strokeEllipse(in: CGRect(x: c.x - labelR, y: c.y - labelR, width: labelR * 2, height: labelR * 2))
+    ctx.setFillColor(disc); ctx.fillEllipse(in: CGRect(x: c.x - holeR, y: c.y - holeR, width: holeR * 2, height: holeR * 2))
+
+    // Two fine whiskers a side, splayed 7° and bowed a touch outward.
+    ctx.setStrokeColor(cream); ctx.setLineWidth(max(0.6, markSize * 0.0075)); ctx.setLineCap(.round)
+    for side in [CGFloat(-1), 1] {
+        for (lift, angle) in [(CGFloat(0.13), CGFloat(7)), (CGFloat(-0.13), CGFloat(-7))] {
+            let x0 = c.x + side * (labelR + r * 0.10), y0 = c.y - lift * labelR
+            let len = r * 0.55, a = angle * .pi / 180
+            let x1 = x0 + side * len * cos(a), y1 = y0 - len * sin(a)
+            let cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 - (lift > 0 ? 1 : -1) * r * 0.035
+            ctx.move(to: CGPoint(x: x0, y: y0)); ctx.addQuadCurve(to: CGPoint(x: x1, y: y1), control: CGPoint(x: cx, y: cy)); ctx.strokePath()
+        }
+    }
     return ctx.makeImage()!
 }
 

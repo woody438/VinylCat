@@ -85,7 +85,7 @@ struct TopBar: View {
         @Bindable var state = state
         HStack(spacing: 20) {
             HStack(spacing: 10) {
-                LogoMark(head: Color(hex: 0x3A4047)).frame(width: 36, height: 36)
+                LogoMark(disc: Color(hex: 0x2A2F34)).frame(width: 34, height: 34)
                 Text("VINYLCAT").font(Theme.display(26)).tracking(1.5)
             }
             HStack(spacing: 4) {
