@@ -110,6 +110,10 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - Ambiguous matches list every distinct variant within 0.25 of the top score, three to nine; keys 1–9 and voice "one"…"nine"
   ("number four" / "number seven": bare "four" and "seven" clash with "for" and "seven inch"). More than three rows go compact
   and scroll inside the banner.
+- The logo (2026-09-07, from Woody's logo chat: the record *is* the cat's head — ears above the disc edge, burnt-orange label)
+  is drawn, not an asset: `Support/LogoMark.swift` (SwiftUI, top bar and wizard header) and `scripts/make-icon.swift`
+  (CoreGraphics → `Resources/AppIcon.icns`) share the numbers in `LogoGeometry`; change both together. The chat's visuals were
+  hidden in the share, so this is a rendering of its description — swap in the real file if Woody exports one.
 - Settings → ABOUT shows `BuildInfo`: version from Info.plist, and `VinylCatBuild` (date · time · commit) stamped by
   `scripts/build-app.sh`; the bare `.build/debug` binary reports a dev build.
 - Exports go to `output/` as `vinylcat_export_vN_YYYY-MM-DD.csv` and `vinylcat_feedback_vN_YYYY-MM-DD.jsonl`. Reference docs go in `input/`.

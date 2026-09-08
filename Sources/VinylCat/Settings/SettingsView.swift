@@ -112,12 +112,16 @@ struct SettingsView: View {
                     Text("Focus is the edge-contrast score of the frame (blurry < 40, crisp > 120); scene change is how far the picture is from the empty scene on a 0–255 grey scale. The gauges below turn green once each number clears its slider.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
-                    Row("Live from the camera") {
-                        HStack(spacing: 14) {
+                    // Its own block, not a Row: squeezed into a Row's trailing slot the labels wrapped one letter per line.
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Live from the camera").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            Spacer()
                             Text(state.scan.signal?.reason ?? "—").font(Theme.mono(11)).foregroundStyle(Theme.secondary)
-                            SignalGauges(metrics: state.scan.signal?.metrics, tuning: CaptureTuning.fromDefaults(), showNumbers: true)
                         }
+                        SignalGauges(metrics: state.scan.signal?.metrics, tuning: CaptureTuning.fromDefaults(), showNumbers: true, stacked: true)
                     }
+                    .padding(.vertical, 8)
                 }
                 .tourAnchor(.settingsCapture)
             }
@@ -127,11 +131,12 @@ struct SettingsView: View {
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Section("TESTS") {
-                    HStack(spacing: 12) {
-                        Button("Test Discogs") { Task { testResult = await state.discogs.selfTest() } }
-                        Button("Test model") { Task { testResult = await testModel() } }
-                        Button("Run setup again") { UserDefaults.standard.set(false, forKey: "setupCompleted") }
-                        Button("Show the tour again") { state.tour.show(0) }
+                    // A grid, so the buttons wrap in a narrow window instead of truncating to "Run setup ag…".
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 12)], alignment: .leading, spacing: 10) {
+                        Button("Test Discogs") { Task { testResult = await state.discogs.selfTest() } }.frame(maxWidth: .infinity)
+                        Button("Test model") { Task { testResult = await testModel() } }.frame(maxWidth: .infinity)
+                        Button("Run setup again") { UserDefaults.standard.set(false, forKey: "setupCompleted") }.frame(maxWidth: .infinity)
+                        Button("Show the tour again") { state.tour.show(0) }.frame(maxWidth: .infinity)
                     }
                     Text(testResult).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(6).fixedSize(horizontal: false, vertical: true)
                 }

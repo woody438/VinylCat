@@ -26,6 +26,8 @@ struct ScanKey: Identifiable, Equatable {
     let action: String
     /// The spoken phrase that does the same thing.
     let word: String
+    /// What the legend falls back to when the window is narrow: the part before " · ".
+    var shortAction: String { action.components(separatedBy: " · ").first ?? action }
     let command: VoiceCommand
     var id: String { label + action }
     static func == (a: ScanKey, b: ScanKey) -> Bool { a.id == b.id }
@@ -335,7 +337,7 @@ struct RightRail: View {
             Spacer()
             Rectangle().fill(Theme.line).frame(height: 1)
             HStack(spacing: 8) {
-                Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
+                Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", unit: "per min", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
                     .help("Discogs calls used in the current minute (from Discogs' own rate-limit headers)")
                 Meter(title: "LLM COST", value: String(format: "$%.3f", state.identifier.sessionCostUSD), color: Theme.text)
                     .help("Vision-model spend this session · \(state.identifier.reads) reads")
@@ -417,11 +419,16 @@ struct SessionRow: View {
 }
 
 struct Meter: View {
-    let title: String, value: String, color: Color
+    let title: String, value: String
+    var unit: String = ""
+    let color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Caption(title)
-            Text(value).font(Theme.mono(16)).foregroundStyle(color)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value).font(Theme.mono(16)).foregroundStyle(color)
+                if !unit.isEmpty { Text(unit).font(Theme.mono(10)).foregroundStyle(Theme.muted) }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -446,8 +453,11 @@ struct BottomBar: View {
             let listening = state.voice.status == .listening
             let keys = ScanKey.set(for: previewPhase ?? state.scan.phase)
             // The legend follows the phase: what the keys do right now, and the word that does the same when voice is on.
-            HStack(spacing: 18) {
-                ForEach(keys) { KeyChip(key: $0, voice: listening) }
+            // Narrow window: the legend drops to short labels, then loses the voice words, rather than clipping.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 18) { ForEach(keys) { KeyChip(key: $0, voice: listening) } }
+                HStack(spacing: 14) { ForEach(keys) { KeyChip(key: $0, voice: listening, short: true) } }
+                HStack(spacing: 12) { ForEach(keys) { KeyChip(key: $0, voice: false, short: true) } }
             }
             .animation(.easeOut(duration: 0.15), value: keys)
             Spacer()
@@ -467,12 +477,13 @@ struct BottomBar: View {
 struct KeyChip: View {
     let key: ScanKey
     let voice: Bool
+    var short = false
     var body: some View {
         HStack(spacing: 7) {
             Text(key.label).font(Theme.mono(11)).tracking(1).foregroundStyle(Theme.text)
                 .padding(.horizontal, 6).frame(height: 20)
                 .background(Theme.raised).overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
-            Text(key.action).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(1)
+            Text(short ? key.shortAction : key.action).font(Theme.mono(12)).foregroundStyle(Theme.secondary).lineLimit(1)
             if voice { Text("“\(key.word)”").font(Theme.mono(11)).foregroundStyle(Theme.green.opacity(0.85)).lineLimit(1) }
         }
         .fixedSize()

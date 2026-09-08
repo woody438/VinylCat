@@ -8,6 +8,8 @@ struct SignalGauges: View {
     var tuning: CaptureTuning = .fromDefaults()
     /// Settings shows the raw number under each bar; the HUD keeps them to bars and labels.
     var showNumbers = false
+    /// One gauge per line, bar stretched across — Settings. Off: three side by side — the HUD.
+    var stacked = false
 
     struct Gauge: Identifiable {
         let id: String
@@ -41,6 +43,30 @@ struct SignalGauges: View {
     }
 
     var body: some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(gauges) { g in
+                    HStack(spacing: 12) {
+                        Text(g.id).font(Theme.mono(11)).tracking(1.5).foregroundStyle(Theme.muted).frame(width: 64, alignment: .leading)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Theme.raised)
+                                Rectangle().fill(g.color).frame(width: max(2, geo.size.width * g.fill))
+                            }
+                        }
+                        .frame(height: 8)
+                        Text(g.number).font(Theme.mono(12)).foregroundStyle(g.color).frame(width: 48, alignment: .trailing)
+                    }
+                    .help(g.help)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: gauges.map(\.fill))
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 14) {
             ForEach(gauges) { g in
                 VStack(alignment: .leading, spacing: 3) {

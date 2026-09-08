@@ -84,7 +84,10 @@ struct TopBar: View {
     var body: some View {
         @Bindable var state = state
         HStack(spacing: 20) {
-            Text("VINYLCAT").font(Theme.display(26)).tracking(1.5)
+            HStack(spacing: 10) {
+                LogoMark(head: Color(hex: 0x3A4047)).frame(width: 36, height: 36)
+                Text("VINYLCAT").font(Theme.display(26)).tracking(1.5)
+            }
             HStack(spacing: 4) {
                 ForEach(AppTab.allCases) { tab in
                     let active = state.tab == tab
