@@ -25,7 +25,7 @@ struct SettingsView: View {
         @Bindable var identifier = state.identifier
         @Bindable var speaker = state.scan.speaker
         return HStack(alignment: .top, spacing: 40) {
-            VStack(alignment: .leading, spacing: 32) {
+            VStack(alignment: .leading, spacing: 24) {
                 Section("IDENTIFICATION") {
                     Picker("", selection: $identifier.provider) {
                         ForEach(ReaderProvider.allCases) { Text($0.title).tag($0) }
@@ -52,12 +52,55 @@ struct SettingsView: View {
                                 .disabled(state.collectionSync.running)
                         }
                     }
-                    Text("Two-way: scans are added to your Discogs collection as they are saved, and a pull brings the rest of the collection into the Library (once at launch, and from here or the Library tab). Records removed on Discogs are unlinked here, never deleted.")
+                    Text("Two-way: scans go up as they are saved; a pull (at launch, here, or in the Library) brings the rest down. Removed on Discogs = unlinked here, never deleted.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .tourAnchor(.settingsDiscogs)
             }
-            VStack(alignment: .leading, spacing: 32) {
+            VStack(alignment: .leading, spacing: 24) {
+                Section("CAPTURE") {
+                    Row("Camera") {
+                        @Bindable var camera = state.camera
+                        Picker("", selection: $camera.selectedDeviceID) {
+                            ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
+                        }.labelsHidden().frame(width: 240)
+                    }
+                    Row("Camera rotation") {
+                        @Bindable var camera = state.camera
+                        Picker("", selection: $camera.rotationOverride) {
+                            Text("Auto").tag(Int?.none)
+                            ForEach([0, 90, 180, 270], id: \.self) { Text("\($0)°").tag(Optional($0)) }
+                        }.labelsHidden().frame(width: 240)
+                    }
+                    Row("Mirror preview") {
+                        @Bindable var camera = state.camera
+                        Toggle("", isOn: $camera.mirrorPreview).labelsHidden().toggleStyle(.switch)
+                    }
+                    Text("Mirror affects the preview only, never the saved photo. Label on its side from an iPhone? Set 90° or 270°. Both saved per camera.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .help("Mirroring makes a sleeve moved left move left on screen — what you want from a camera pointing back at you. On by default for built-in and USB cameras, off for a Continuity iPhone aimed at the records. An iPhone on Continuity Camera sends a landscape picture whichever way it is held.")
+                    Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
+                    Row("Steady for") { HStack { Slider(value: $steadySeconds, in: 0.3...1.5).frame(width: 140); Text(String(format: "%.1f s", steadySeconds)).frame(width: 44) } }
+                    Row("Sharpness needed") { HStack { Slider(value: $sharpnessMin, in: 20...200).frame(width: 140); Text("\(Int(sharpnessMin)) focus").frame(width: 80, alignment: .trailing) } }
+                    Row("Scene change needed") { HStack { Slider(value: $sceneDeltaMin, in: 5...40).frame(width: 140); Text("\(Int(sceneDeltaMin)) of 255").frame(width: 80, alignment: .trailing) } }
+                    Text("The gauges below go green once each number clears its slider.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        .help("Focus is the edge-contrast score of the frame (blurry < 40, crisp > 120). Scene change is how far the picture is from the empty scene on a 0–255 grey scale.")
+                    Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
+                    // Its own block, not a Row: squeezed into a Row's trailing slot the labels wrapped one letter per line.
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Live from the camera").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            Spacer()
+                            Text(state.scan.signal?.reason ?? "—").font(Theme.mono(11)).foregroundStyle(Theme.secondary)
+                        }
+                        SignalGauges(metrics: state.scan.signal?.metrics, tuning: CaptureTuning.fromDefaults(), showNumbers: true, stacked: true)
+                    }
+                    .padding(.vertical, 8)
+                }
+                .tourAnchor(.settingsCapture)
+            }
+            VStack(alignment: .leading, spacing: 24) {
                 Section("VOICE") {
                     Row("Microphone") {
                         @Bindable var voice = state.voice
@@ -83,51 +126,8 @@ struct SettingsView: View {
                     Row("Test") { Button("Say something") { state.scan.speaker.say("VinylCat ready. Hold up a record.") } }
                 }
                 .tourAnchor(.settingsVoice)
-                Section("CAPTURE") {
-                    Row("Camera") {
-                        @Bindable var camera = state.camera
-                        Picker("", selection: $camera.selectedDeviceID) {
-                            ForEach(camera.devices, id: \.uniqueID) { Text($0.localizedName).tag(Optional($0.uniqueID)) }
-                        }.labelsHidden().frame(width: 240)
-                    }
-                    Row("Camera rotation") {
-                        @Bindable var camera = state.camera
-                        Picker("", selection: $camera.rotationOverride) {
-                            Text("Auto").tag(Int?.none)
-                            ForEach([0, 90, 180, 270], id: \.self) { Text("\($0)°").tag(Optional($0)) }
-                        }.labelsHidden().frame(width: 240)
-                    }
-                    Row("Mirror preview") {
-                        @Bindable var camera = state.camera
-                        Toggle("", isOn: $camera.mirrorPreview).labelsHidden().toggleStyle(.switch)
-                    }
-                    Text("Mirroring makes a sleeve moved left move left on screen, which is what you want from a camera pointing back at you. It affects the preview only — saved photos are never mirrored. On by default for built-in and USB cameras, off for a Continuity iPhone aimed at the records. Saved per camera.")
-                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                    Text("An iPhone on Continuity Camera sends a landscape picture whichever way it is held. If the label comes out on its side, set 90° or 270°. Saved per camera.")
-                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                    Row("Relearn empty scene") { Button("Relearn now") { state.scan.relearnBaseline() } }
-                    Row("Steady for") { HStack { Slider(value: $steadySeconds, in: 0.3...1.5).frame(width: 140); Text(String(format: "%.1f s", steadySeconds)).frame(width: 44) } }
-                    Row("Sharpness needed") { HStack { Slider(value: $sharpnessMin, in: 20...200).frame(width: 140); Text("\(Int(sharpnessMin)) focus").frame(width: 80, alignment: .trailing) } }
-                    Row("Scene change needed") { HStack { Slider(value: $sceneDeltaMin, in: 5...40).frame(width: 140); Text("\(Int(sceneDeltaMin)) of 255").frame(width: 80, alignment: .trailing) } }
-                    Text("Focus is the edge-contrast score of the frame (blurry < 40, crisp > 120); scene change is how far the picture is from the empty scene on a 0–255 grey scale. The gauges below turn green once each number clears its slider.")
-                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
-                    Row("Photos folder") { Text(PhotoStore.shared.root.path).foregroundStyle(Theme.secondary).font(Theme.mono(11)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 260) }
-                    // Its own block, not a Row: squeezed into a Row's trailing slot the labels wrapped one letter per line.
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Live from the camera").font(Theme.mono(13)).foregroundStyle(Theme.muted)
-                            Spacer()
-                            Text(state.scan.signal?.reason ?? "—").font(Theme.mono(11)).foregroundStyle(Theme.secondary)
-                        }
-                        SignalGauges(metrics: state.scan.signal?.metrics, tuning: CaptureTuning.fromDefaults(), showNumbers: true, stacked: true)
-                    }
-                    .padding(.vertical, 8)
-                }
-                .tourAnchor(.settingsCapture)
-            }
-            VStack(alignment: .leading, spacing: 32) {
                 Section("PHOTOS") {
-                    Text("One photo per record — the one it was identified from. Discogs already knows the tracklist, the sleeve and the disc count. For anything extra press F (B-side) or P (add a photo), or say “flip”, “add photo”, “back cover”, “gatefold” or “disc two” with the record just scanned.")
+                    Text("One photo per record, the one it was identified from. For more, press F (B-side) or P (add a photo), or say “flip”, “back cover”, “gatefold” or “disc two” after a scan.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Section("TESTS") {
@@ -147,7 +147,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .padding(.horizontal, 40).padding(.vertical, 28)
+        .padding(.horizontal, 40).padding(.vertical, 22)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .onChange(of: sharpnessMin) { _, _ in state.scan.applyTuning() }
         .onChange(of: steadySeconds) { _, _ in state.scan.applyTuning() }
@@ -186,7 +186,7 @@ private struct Row<Content: View>: View {
             Spacer()
             content.font(Theme.mono(13))
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
     }
 }
