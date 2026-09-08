@@ -59,12 +59,24 @@ scripts/test.sh                      # 35 self-checks (ranker, catalogue numbers
 ## Sharing the app
 
 ```bash
-scripts/package.sh      # release build → output/VinylCat_vN_YYYY-MM-DD.zip
+scripts/package.sh      # release build → output/VinylCat_vN_YYYY-MM-DD.dmg (app + Applications shortcut + "Read me first.txt")
 ```
 
-The recipient needs macOS 15 or later. The app is signed locally, not notarised, so on first launch they must
-**right-click VinylCat.app → Open** (or System Settings → Privacy & Security → Open Anyway). Their own Discogs token and
-model key go in via the wizard; nothing of yours is in the zip.
+The recipient needs macOS 15 or later on an Apple silicon Mac (the build is arm64 only; add `--arch arm64 --arch x86_64`
+to the `swift build` calls in `scripts/build-app.sh` for an Intel Mac). The app is signed locally, not notarised, so
+macOS blocks the first launch. Steps for the recipient:
+
+1. Open the DMG and drag **VinylCat** onto the **Applications** folder in the window.
+2. Double-click it. macOS says "Apple could not verify VinylCat is free of malware" — click **Done**.
+   (Right-click → Open no longer bypasses this on macOS 15.)
+3. Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway**, then **Open Anyway** again.
+4. VinylCat launches. The setup wizard asks for Camera, Microphone and Speech Recognition and checks Dictation is on;
+   click ALLOW on each. This is a one-time step.
+5. Enter their own Discogs token and model key in the wizard; nothing of yours is in the zip.
+
+Updates: send a new DMG, replace the app in Applications. Their database and photos live in their own Application
+Support folder and survive the swap. Keep building on the Mac with the "VinylCat Local Signing" certificate so the
+signature stays the same and the permissions carry over to the new version.
 
 ## Where things live
 

@@ -1,0 +1,30 @@
+VINYLCAT — INSTALLING
+
+You need macOS 15 or later on an Apple silicon Mac.
+
+1. Drag VinylCat onto the Applications folder in this window.
+
+2. Open Applications and double-click VinylCat. macOS will say
+   "Apple could not verify VinylCat is free of malware". Click Done.
+   (This happens because the app is not notarised with Apple. Right-click → Open
+   does not get around it on macOS 15.)
+
+3. Open System Settings → Privacy & Security. Scroll to the bottom and click
+   Open Anyway, then Open Anyway again in the confirmation.
+
+4. VinylCat launches. The setup wizard asks for Camera, Microphone and Speech
+   Recognition and checks that Dictation is switched on. Click ALLOW on each.
+   You only do this once.
+
+5. Enter your own Discogs token and your OpenAI or Gemini key in the wizard.
+   The wizard says where to get them. Identifying a record costs about a tenth
+   of a cent, so the model account needs billing set up.
+
+UPDATING
+
+Drag the new VinylCat over the old one in Applications and replace it. Your
+catalogue and photos are kept in your own Library folder and are not touched.
+
+WHERE YOUR DATA LIVES
+
+~/Library/Application Support/VinylCat/

@@ -1,11 +1,22 @@
 #!/bin/zsh
-# Release build → output/VinylCat_vN_YYYY-MM-DD.zip, ready to send to someone else.
-# Recipient: macOS 15+, unzip, right-click VinylCat.app → Open (first launch only; the app is not notarised).
+# Release build → output/VinylCat_vN_YYYY-MM-DD.dmg, ready to send to someone else.
+# The image opens as a window with VinylCat.app, an Applications folder to drag it onto, and "Read me first.txt"
+# (Resources/Read me first.txt: the recipient's install steps — the app is signed locally, not notarised, so macOS 15
+# blocks the first launch until they click Open Anyway in Privacy & Security).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 scripts/build-app.sh release >/dev/null
+
 DATE=$(date +%F); N=1
-while [[ -e "output/VinylCat_v${N}_${DATE}.zip" ]]; do N=$((N+1)); done
+while [[ -e "output/VinylCat_v${N}_${DATE}.dmg" ]]; do N=$((N+1)); done
+DMG="output/VinylCat_v${N}_${DATE}.dmg"
 mkdir -p output
-ditto -c -k --keepParent build/VinylCat.app "output/VinylCat_v${N}_${DATE}.zip"
-echo "output/VinylCat_v${N}_${DATE}.zip  ($(du -h "output/VinylCat_v${N}_${DATE}.zip" | cut -f1))"
+
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
+cp -R build/VinylCat.app "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+cp "Resources/Read me first.txt" "$STAGE/"
+
+hdiutil create -volname "VinylCat" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov -quiet "$DMG"
+echo "$DMG  ($(du -h "$DMG" | cut -f1))"
