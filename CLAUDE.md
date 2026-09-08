@@ -20,6 +20,9 @@ $B --ocr-eval [n] [--model]        # LocalReader over the real photos in the liv
                                    #   for ranked misses, VINYLCAT_EVAL_DUMP=<dir> writes the zoom close-ups, VINYLCAT_MODEL_PLAIN=1 sends
                                    #   the model the old single 1024px frame (A/B for the close-ups)
 $B --export-feedback [dir]         # thumbs-up/down verdicts + evidence → output/vinylcat_feedback_vN_date.jsonl
+$B --import <dir> [7|12|lp]        # every photo in the folder through the scan pipeline into the LIVE store (matches land in the
+                                   #   catalogue and, if sync is on, the Discogs collection): one line per photo, exit 1 if anything
+                                   #   parked or errored. Same run as the Library's "+ IMPORT PHOTOS"; VINYLCAT_NO_KEYCHAIN=1 → OCR-only.
 ```
 Run `--self-test` and `--scenario` after any change to Scan/, Readers/, Discogs/ or Persistence/.
 `VINYLCAT_NO_KEYCHAIN=1` makes every key read as missing: `--scenario` then runs OCR-only against unauthenticated Discogs
@@ -55,7 +58,12 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   Discogs, skipping anything under ten minutes old). A scan that matches a photo-less imported record attaches its photo to it
   instead of reporting a duplicate. After a pull, `valueUnvalued` prices every catalogue record with no `valuedAt` (imports, and
   scans whose price call failed), one call every 2.2 s so scanning keeps most of the rate limit.
-- `Scan/` — `ScanController` (the loop: capture → identify → match → extra shots → save; voice command handling), `ScanView` (HUD,
+- `Scan/` — `ScanPipeline` (extension on `ScanController`: the camera-free core both the webcam loop and the folder importer run —
+  `lookup` readers → Discogs, `process` one photo to a `Resolution` (saved / attached to a photo-less Discogs import / duplicate /
+  ambiguous / notFound / parked), `commit` the save with the duplicate and attach rules, `parkRecord` into the review queue with
+  evidence; nothing in it touches the engine, HUD, chimes or speaker), `ScanController` (the webcam loop: capture → `lookup` → the
+  prompts only a person can answer (label, retry, pick a number, add anyway) → `commit`/`park` → extra shots; voice command
+  handling; `enrich` tasks are tracked so `awaitEnrichment` can wait for the Discogs writes), `ScanView` (HUD,
   plus `ScanKey`: the keyboard table — SPACE capture, F flip, U undo, W wrong record, P add photo, S skip, D done, R review, N none,
   1–3 pick, RETURN add anyway, ESC start over — per phase; the bottom-bar legend shows exactly `ScanKey.set(for:)`, with the
   spoken word beside each key while VOICE is on. Keys and voice both go through `handle(command:)`. They are installed only on
@@ -68,7 +76,15 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   `Store.insert` is `INSERT OR REPLACE`, which deletes the row first: never give a records-keyed table an `ON DELETE CASCADE`
   (the `evidence` and `feedback` tables are cleaned up by hand in `Store.delete`).
 - `Library/` (+ `ManualEntry`: "+ ADD RECORD" in the detail column — type what is known, search Discogs at 50 per query, pick a
-  release or save without one), `Review/` (search box focused per record, every candidate listed), `Settings/` (scrolls; under
+  release or save without one; + `PhotoImport`: `PhotoImporter` and `ImportSheet` behind "+ IMPORT PHOTOS" and a Finder drop of a
+  folder or image files onto the Library. `walk` is the folder walk (sorted, jpg/jpeg/png/heic, dotfiles and hidden folders skipped),
+  `load` decodes with EXIF orientation applied, `run` sends each photo through `ScanController.process` serially and never waits on
+  the user: match → saved (or attached to a photo-less Discogs import), ambiguous / not found → parked with the candidates in
+  `ScanEvidence`, duplicate → skipped and the photo dropped, Discogs/network error → parked with the `FriendlyError` note. Photos are
+  named `import-<stamp>-NNN` so they sort after the webcam's. `CollectionSync.paused` holds valuation for the run. The sheet
+  (progress, MATCHED / PARKED / DUPLICATES / ERRORS, the LLM cost delta, STOP that finishes the photo in hand, OPEN REVIEW at the
+  end) is presented from `RootView` so a tab change mid-run doesn't dismiss it; `--render-ui` writes `import-1-running.png` and
+  `import-2-finished.png` from `PhotoImporter.preview`), `Review/` (search box focused per record, every candidate listed), `Settings/` (scrolls; under
   `--render-ui` the `staticRender` environment flag lays it flat, since ImageRenderer draws nothing inside a ScrollView).
 - `Support/Coffee.swift` — the tip jar (2026-09-07, Woody's call: free app, own keys, Ko-fi at 0% — `Coffee.url`). The ask grows
   with `Store.scannedCount()` (live records with a photo; Discogs pulls and typed-in records don't count): a strip at 25, a card at

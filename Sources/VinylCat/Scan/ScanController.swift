@@ -60,9 +60,12 @@ final class ScanController {
     let speaker = Speaker()
     weak var appState: AppState?
 
-    private let store: Store
-    private let photos: PhotoStore
+    let store: Store
+    let photos: PhotoStore
     private var tasks: [Task<Void, Never>] = []
+    /// Price + collection writes in flight (one token per call, so two for the same record can coexist):
+    /// a headless import waits for them before exiting.
+    private var enrichTasks: [UUID: Task<Void, Never>] = [:]
 
     init(store: Store = .shared, photos: PhotoStore = .shared) {
         self.store = store
@@ -184,25 +187,20 @@ final class ScanController {
     }
 
     private func identify(still: CapturedStill, fileName: String, thumb: CGImage?) async {
-        guard let app = appState else { return }
+        guard appState != nil else { return }
         await engine.setHold(false)
         phase = .reading(step: "starting")
-        var partial: Identifier.Outcome?
         do {
-            let outcome = try await app.identifier.identify(still.image, sessionFormat: app.format.spoken, expectLabel: expectLabel) { [weak self] step in
-                self?.phase = .reading(step: step)
+            let look = try await lookup(image: still.image, expectLabel: expectLabel) { [weak self] step in
+                self?.phase = step == "searching Discogs" ? .searching : .reading(step: step)
             }
+            let outcome = look.outcome
             lastOutcome = outcome
-            partial = outcome
-            phase = .searching
-            // The model's other numbers (matrix, album) go before the OCR tokens: it has seen the print magnified.
-            let alternates = (outcome.model?.otherNumbers ?? []) + outcome.local.catalogueCandidates
-            let (verdict, ranked) = try await Matcher(discogs: app.discogs).find(reading: outcome.reading, sessionFormat: app.format, catalogueAlternates: alternates)
-            lastCandidates = ranked
+            lastCandidates = look.ranked
             // Second look at the same record (e.g. flipped to the B-side while ambiguous)? Keep what both shots agree on.
             if let amb = ambiguity {
                 let previous = Set(amb.candidates.map(\.id))
-                let agreed = ranked.filter { previous.contains($0.id) }
+                let agreed = look.ranked.filter { previous.contains($0.id) }
                 if agreed.count == 1, let only = agreed.first {
                     ambiguity = nil
                     await finalize(candidate: only, outcome: outcome, photo: fileName, thumb: thumb, allowDuplicate: false)
@@ -210,7 +208,7 @@ final class ScanController {
                     return
                 }
             }
-            switch verdict {
+            switch look.verdict {
             case .match(let c):
                 await finalize(candidate: c, outcome: outcome, photo: fileName, thumb: thumb, allowDuplicate: false)
             case .ambiguous(let cands):
@@ -241,83 +239,60 @@ final class ScanController {
                     park(outcome: outcome, photo: fileName, thumb: thumb, guess: guess)
                 }
             }
-        } catch {
+        } catch let e as LookupError {
             // Reader errors are absorbed upstream (OCR-only fallback), so what lands here is Discogs
             // or the network. Say what broke, in words, and park the photo so the scan isn't lost.
-            let isKey = { if case ReaderError.missingKey = error { return true } else { return false } }()
-            let friendly = FriendlyError.describe(error, context: partial == nil ? app.identifier.provider.title : "Discogs")
-            Log.scan.error("identify failed: \(error) — \(friendly)")
-            let title = isKey ? "SETUP NEEDED" : partial == nil ? "READER ERROR" : "DISCOGS ERROR"
-            park(outcome: partial, photo: fileName, thumb: thumb, guess: partial.map { [$0.reading.artist, $0.reading.title].compactMap { $0 }.joined(separator: " — ") } ?? "",
-                 error: (title, friendly))
+            let (title, detail) = describe(e)
+            park(outcome: e.partial, photo: fileName, thumb: thumb, guess: e.partial.map { [$0.reading.artist, $0.reading.title].compactMap { $0 }.joined(separator: " — ") } ?? "",
+                 error: (title, detail))
+        } catch {
+            park(outcome: nil, photo: fileName, thumb: thumb, guess: "", error: ("READER ERROR", error.localizedDescription))
         }
         trimItems()
     }
 
-    /// Save a record for a confirmed Discogs release, then ask for the remaining shots.
+    /// Save a record for a confirmed Discogs release (the shared `commit`), then tell the operator.
     private func finalize(candidate c: Candidate, outcome: Identifier.Outcome, photo: String, thumb: CGImage?, allowDuplicate: Bool) async {
-        guard let app = appState else { return }
         await engine.setHold(false)
-        if !allowDuplicate, var dup = store.existing(discogsReleaseID: c.result.id) {
-            if dup.photos.isEmpty {
-                // Pulled from the Discogs collection, never photographed: this scan *is* its photo.
-                let kind: ShotKind = (outcome.reading.isLabelShot ?? false) || expectLabel ? .labelA : .coverFront
-                dup.photos = [ScanPhoto(recordID: dup.id, fileName: photo, kind: kind, order: 0)]
-                dup.readText = outcome.local.text
-                dup.confidence = c.score
-                store.update(dup)
-                store.saveEvidence(Self.evidence(for: dup, outcome: outcome, candidates: lastCandidates, chosen: c))
-                lastClosedRecordID = dup.id
-                expectLabel = false; retried = false
-                phase = .matched(title: dup.displayTitle.uppercased(), detail: "already in your Discogs collection · photo added", meta: String(format: "%.2f · r%d", c.score, c.result.id))
-                Chime.matched.play()
-                items.insert(SessionItem(recordID: dup.id, thumbnail: thumb, title: dup.displayTitle, meta: "in Discogs already · photo added", tone: .normal), at: 0)
-                speaker.say("\(dup.artist), \(dup.title). Already in your collection, photo added.")
-                enrich(dup.id)
-                finishRecord(announce: false)
-                return
-            }
-            duplicate = (c, outcome, photo, thumb)
-            phase = .duplicate(title: dup.displayTitle.uppercased())
-            Chime.duplicate.play()
-            speaker.say("Already catalogued: \(dup.artist), \(dup.title). Say add anyway to keep a second copy.")
-            expectLabel = false
-            await engine.setMode(.identify)
-            return
-        }
-        do {
-            phase = .searching
-            let release = try await app.discogs.release(c.result.id)
-            var rec = Self.record(from: release, sessionID: sessionID)
-            rec.confidence = c.score
-            rec.barcode = outcome.reading.barcode
-            rec.readText = outcome.local.text
-            let firstKind: ShotKind = (outcome.reading.isLabelShot ?? false) || expectLabel ? .labelA : .coverFront
-            rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: firstKind, order: 0)]
-            rec.sync = syncToCollection && (UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true) ? .pending : .off
-            store.insert(rec)
-            store.saveEvidence(Self.evidence(for: rec, outcome: outcome, candidates: lastCandidates, chosen: c))
+        phase = .searching
+        let wasLabel = expectLabel
+        switch await commit(candidate: c, outcome: outcome, candidates: lastCandidates, photo: photo, expectLabel: wasLabel, sessionID: sessionID, allowDuplicate: allowDuplicate) {
+        case .saved(let rec, let c, attached: true):
+            // Pulled from the Discogs collection, never photographed: this scan *is* its photo.
+            lastClosedRecordID = rec.id
+            expectLabel = false; retried = false
+            phase = .matched(title: rec.displayTitle.uppercased(), detail: "already in your Discogs collection · photo added", meta: String(format: "%.2f · r%d", c.score, c.result.id))
+            Chime.matched.play()
+            items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: rec.displayTitle, meta: "in Discogs already · photo added", tone: .normal), at: 0)
+            speaker.say("\(rec.artist), \(rec.title). Already in your collection, photo added.")
+            finishRecord(announce: false)
+        case .saved(let rec, let c, attached: false):
             current = rec
             pending = []
             expectLabel = false
             retried = false
             let detail = [rec.year.map(String.init), rec.discCount > 1 ? "\(rec.discCount)×\(rec.format)" : rec.format,
                           rec.label.map { "\($0.uppercased()) \(rec.catalogNumber ?? "")" }, rec.country?.uppercased()].compactMap { $0 }.joined(separator: " · ")
-            phase = .matched(title: rec.displayTitle.uppercased(), detail: detail, meta: String(format: "%.2f · r%d · %@", c.score, release.id, c.reasons.joined(separator: " ")))
+            phase = .matched(title: rec.displayTitle.uppercased(), detail: detail, meta: String(format: "%.2f · r%d · %@", c.score, c.result.id, c.reasons.joined(separator: " ")))
             Chime.matched.play()
             items.insert(SessionItem(recordID: rec.id, thumbnail: thumb, title: rec.displayTitle, meta: detail, tone: .normal), at: 0)
             var line = "\(rec.artist), \(rec.title)"
             if let y = rec.year { line += ", \(y)" }
             line += ", \(Self.spoken(format: rec.format, discs: rec.discCount))."
             speaker.say(line)
-            enrich(rec.id)
             finishRecord(announce: false)
-        } catch {
-            // The release lookup failed after a good match: park the photo with what we know so it
-            // can be finished from Review once Discogs is back.
-            let friendly = FriendlyError.describe(error, context: "Discogs")
-            Log.scan.error("release r\(c.result.id) failed: \(error) — \(friendly)")
-            park(outcome: outcome, photo: photo, thumb: thumb, guess: c.headline, error: ("DISCOGS ERROR", friendly))
+        case .duplicate(let dup, let c, let outcome):
+            duplicate = (c, outcome, photo, thumb)
+            phase = .duplicate(title: dup.displayTitle.uppercased())
+            Chime.duplicate.play()
+            speaker.say("Already catalogued: \(dup.artist), \(dup.title). Say add anyway to keep a second copy.")
+            expectLabel = false
+            await engine.setMode(.identify)
+        case .parked(let rec, let title, let detail):
+            expectLabel = false; retried = false
+            announceParked(rec, thumb: thumb, guess: c.headline, outcome: outcome, error: (title, detail))
+        case .ambiguous, .notFound:
+            break   // `commit` never returns these
         }
     }
 
@@ -348,34 +323,17 @@ final class ScanController {
         Task { await engine.setMode(.identify) }
     }
 
-    /// Into the review queue, with everything the readers saw saved as evidence so the fix made
-    /// there can be compared with it later. `outcome` is nil only when the readers themselves failed.
+    /// Into the review queue (the shared `parkRecord`), then tell the operator.
     private func park(outcome: Identifier.Outcome?, photo: String, thumb: CGImage?, guess: String, error: (title: String, detail: String)? = nil) {
-        guard let app = appState else { return }
+        guard appState != nil else { return }
+        let rec = parkRecord(outcome: outcome, candidates: lastCandidates, photo: photo, expectLabel: expectLabel, sessionID: sessionID, error: error)
         expectLabel = false
         retried = false
-        let reading = outcome?.reading ?? SleeveReading()
-        var rec = VinylRecord(artist: reading.artist ?? "", title: reading.title ?? "", format: app.format.discogsFormat, sessionID: sessionID)
-        rec.status = .needsReview
-        rec.label = reading.label
-        rec.catalogNumber = reading.catalogNumber
-        rec.barcode = reading.barcode
-        rec.year = reading.year
-        rec.readText = outcome?.local.text ?? ""
-        if let error { rec.notes = "Scan error: \(error.detail)" }
-        rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: (reading.isLabelShot ?? false) || expectLabel ? .labelA : .coverFront, order: 0)]
-        store.insert(rec)
-        if let outcome {
-            var e = ScanEvidence(recordID: rec.id, mergedReading: outcome.reading)
-            e.provider = outcome.provider; e.ocrLines = outcome.local.lines; e.barcodes = outcome.local.barcodes
-            e.catalogueCandidates = outcome.local.catalogueCandidates; e.modelReading = outcome.model
-            e.candidates = lastCandidates.prefix(12).map {
-                .init(releaseID: $0.result.id, title: $0.result.title, label: $0.result.label?.first, catno: $0.result.catno,
-                      year: $0.result.year, country: $0.result.country, score: $0.score, reasons: $0.reasons)
-            }
-            store.saveEvidence(e)
-        }
-        app.reviewCount = store.reviewCount()
+        announceParked(rec, thumb: thumb, guess: guess, outcome: outcome, error: error)
+    }
+
+    /// The HUD, chime, speech and session row for a parked photo, and the engine back to scanning.
+    private func announceParked(_ rec: VinylRecord, thumb: CGImage?, guess: String, outcome: Identifier.Outcome?, error: (title: String, detail: String)?) {
         let shown = guess.isEmpty ? "Unknown" : guess
         if let error {
             phase = .error(title: error.title, detail: error.detail)
@@ -397,8 +355,10 @@ final class ScanController {
 
     func enrich(_ id: UUID) {
         guard let app = appState else { return }
-        Task {
-            guard var rec = store.fetch(id), let rid = rec.discogsReleaseID else { return }
+        let token = UUID()
+        enrichTasks[token] = Task { [weak self] in
+            defer { self?.enrichTasks[token] = nil }
+            guard let self, var rec = store.fetch(id), let rid = rec.discogsReleaseID else { return }
             if let stats = try? await app.discogs.priceStats(rid) {
                 rec.valueLow = stats.lowest_price?.value
                 rec.numForSale = stats.num_for_sale
@@ -422,6 +382,11 @@ final class ScanController {
             store.update(rec)
             if current?.id == id { current = rec }
         }
+    }
+
+    /// Waits for every price/collection write started by `enrich`. A headless import calls this before exiting.
+    func awaitEnrichment() async {
+        while let t = enrichTasks.values.first { await t.value }
     }
 
     // MARK: - Verdicts

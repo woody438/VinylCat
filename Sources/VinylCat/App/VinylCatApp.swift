@@ -51,6 +51,11 @@ struct RootView: View {
         Binding(get: { coffeeSheet != nil }, set: { if !$0 { coffeeSheet = nil } })
     }
 
+    /// The photo import sheet lives here, not on the Library, so switching tabs mid-run doesn't tear it down.
+    private var importSheetShown: Binding<Bool> {
+        Binding(get: { state.importer.active }, set: { if !$0 { state.importer.dismiss() } })
+    }
+
     private var mainView: some View {
         VStack(spacing: 0) {
             TopBar()
@@ -82,6 +87,9 @@ struct RootView: View {
                             onClose: { coffeeSheet = nil })
                     .environment(state)
             }
+        }
+        .sheet(isPresented: importSheetShown) {
+            ImportSheet(importer: state.importer).environment(state)
         }
     }
 }

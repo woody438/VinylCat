@@ -329,6 +329,20 @@ enum SelfTest {
         check(drift.nudgeDented, "easing the sleeve sideways costs half the ring, not all of it (\(String(format: "%.2f → %.2f", drift.nudgeBefore, drift.nudgeLow)))")
         check(drift.slideNeverFired, "a record sliding through never fires")
 
+        print("photo import — folder walk")
+        let walkDir = FileManager.default.temporaryDirectory.appendingPathComponent("vinylcat-walk-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: walkDir.appendingPathComponent("sub"), withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: walkDir.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        for f in ["b.JPG", "a.jpeg", "c.png", "d.heic", ".e.jpg", "f.txt", "g.HEIC.bak", "sub/h.jpg", ".git/i.png", "IMG_10.jpg", "IMG_9.jpg"] {
+            try? Data().write(to: walkDir.appendingPathComponent(f))
+        }
+        let root = walkDir.resolvingSymlinksInPath().path + "/"   // the temp dir is reached through /private
+        let walked = PhotoImporter.walk([walkDir]).map { $0.resolvingSymlinksInPath().path.replacingOccurrences(of: root, with: "") }
+        check(walked == ["a.jpeg", "b.JPG", "c.png", "d.heic", "IMG_9.jpg", "IMG_10.jpg", "sub/h.jpg"], "sorted, jpg/jpeg/png/heic in any case, dotfiles and hidden folders skipped, numbers in natural order (\(walked))")
+        check(PhotoImporter.walk([walkDir.appendingPathComponent("b.JPG"), walkDir.appendingPathComponent("f.txt")]).map(\.lastPathComponent) == ["b.JPG"], "files given directly: images kept, the rest dropped")
+        check(PhotoImporter.walk([walkDir.appendingPathComponent("missing")]).isEmpty, "a path that doesn't exist walks to nothing")
+        try? FileManager.default.removeItem(at: walkDir)
+
         print("coffee")
         check(Coffee.milestone(reached: 24) == nil, "no ask below 25 scanned records")
         check(Coffee.milestone(reached: 25) == 25 && Coffee.milestone(reached: 99) == 25, "25–99 → the 25 rung")

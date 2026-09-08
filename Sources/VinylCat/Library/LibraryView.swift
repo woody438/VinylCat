@@ -9,6 +9,8 @@ struct LibraryView: View {
     @State private var exportMessage = ""
     @State private var pendingDelete: VinylRecord?
     @State private var adding = false
+    @State private var dropTargeted = false
+    @Environment(\.staticRender) private var staticRender
     private let store = Store.shared
 
     enum Filter: String, CaseIterable, Identifiable {
@@ -41,6 +43,14 @@ struct LibraryView: View {
                         .overlay(Rectangle().stroke(Theme.green, lineWidth: 1))
                         .contentShape(Rectangle()).onTapGesture { adding.toggle(); if adding { selected = nil } }
                         .help("Add a record by typing what you know and picking the Discogs release")
+                    // A folder of phone photos through the scan pipeline, no camera, no prompts (see PhotoImporter).
+                    Text("+ IMPORT PHOTOS").font(Theme.mono(12)).tracking(1).lineLimit(1).fixedSize()
+                        .foregroundStyle(state.importer.running ? Theme.muted : Theme.green)
+                        .padding(.horizontal, 12).frame(height: 30)
+                        .overlay(Rectangle().stroke(state.importer.running ? Theme.muted : Theme.green, lineWidth: 1))
+                        .contentShape(Rectangle())
+                        .onTapGesture { guard !state.importer.running else { return }; ImportPicker.choose { state.importer.start($0) } }
+                        .help("Import a folder of label or cover photos: each one is identified and saved, or parked in Review. You can also drop the folder here.")
                 }
                 HStack(spacing: 8) {
                     ForEach(Filter.allCases) { f in
@@ -100,6 +110,12 @@ struct LibraryView: View {
                     .frame(width: 400)
             }
         }
+        // Drop a folder (or image files) from Finder anywhere on the Library to import it. Not under
+        // --render-ui: the drop host is an AppKit view there, and ImageRenderer paints a placeholder over the whole tab.
+        .modifier(ImportDrop(enabled: !staticRender, targeted: $dropTargeted) { urls in
+            guard !state.importer.running, !PhotoImporter.walk(urls).isEmpty else { return false }
+            state.importer.start(urls); return true
+        })
         .confirmationDialog(
             "Delete \u{201C}\(pendingDelete?.title ?? "")\u{201D} by \(pendingDelete?.artist ?? "")?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -179,6 +195,22 @@ struct LibraryView: View {
             exportMessage = "SAVED \(url.lastPathComponent)"
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } catch { exportMessage = "EXPORT FAILED: \(error.localizedDescription)" }
+    }
+}
+
+/// The Library's Finder drop target for photo import; `enabled` false leaves the view untouched.
+struct ImportDrop: ViewModifier {
+    var enabled: Bool
+    @Binding var targeted: Bool
+    var drop: ([URL]) -> Bool
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .dropDestination(for: URL.self) { urls, _ in drop(urls) } isTargeted: { targeted = $0 }
+                .overlay { if targeted { Rectangle().stroke(Theme.green, lineWidth: 3).allowsHitTesting(false) } }
+        } else {
+            content
+        }
     }
 }
 

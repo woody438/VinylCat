@@ -38,6 +38,7 @@ final class AppState {
         scan = ScanController(store: store, photos: photos)
         if let f = UserDefaults.standard.string(forKey: "defaultFormat"), let v = VinylFormat(rawValue: f) { format = v }
         tour.app = self
+        importer.app = self
     }
 
     /// Once the camera delivers, sample its brightness so a running-but-black stream is reported
@@ -97,6 +98,8 @@ final class AppState {
     let discogs = DiscogsClient()
     let voice = SpeechCommands()
     let tour = TourState()
+    /// Bulk import of a folder of photos through the scan pipeline (Library "+ IMPORT PHOTOS", or a drop).
+    let importer = PhotoImporter()
     /// The tip jar: free app, own keys, an ask that grows with the catalogue (see `Coffee`).
     let coffee = Coffee()
 }

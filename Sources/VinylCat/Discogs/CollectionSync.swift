@@ -12,6 +12,8 @@ final class CollectionSync {
     private(set) var running = false
     private(set) var valuing = false
     private(set) var status = ""
+    /// A folder import sets this: pricing waits between records so the import keeps the Discogs rate limit.
+    var paused = false
     private(set) var lastRun: Date?
     /// Records created by a pull share one session id so they can be told apart from scans.
     static let importSession = UUID(uuidString: "00000000-0000-0000-0000-00000000D15C")!
@@ -81,6 +83,7 @@ final class CollectionSync {
         valuing = true; defer { valuing = false }
         var done = 0
         for r in todo {
+            while paused { status = "Valuing paused while photos import"; try? await Task.sleep(for: .seconds(1)) }
             status = "Valuing \(done + 1) of \(todo.count)…"
             guard var rec = store.fetch(r.id), let rid = rec.discogsReleaseID else { continue }
             if let stats = try? await discogs.priceStats(rid) {

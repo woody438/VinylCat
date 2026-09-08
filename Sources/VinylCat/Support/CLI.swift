@@ -11,6 +11,7 @@ import SwiftUI
 ///   VinylCat --pipeline-test <image>…   local OCR → Discogs → rank (no vision model)
 ///   VinylCat --discogs-test <catno>…    what each catalogue number actually finds on Discogs
 ///   VinylCat --export-feedback [dir]    thumbs-up/down verdicts with their evidence → output/vinylcat_feedback_vN_date.jsonl
+///   VinylCat --import <dir> [7|12|lp]   every photo in the folder through the scan pipeline into the LIVE store
 @MainActor
 enum CLI {
     static func run(_ args: [String]) -> Int32? {
@@ -23,6 +24,7 @@ enum CLI {
         case "--pipeline-test": return runBlocking { await pipelineTest(paths: rest) }
         case "--scenario": return runBlocking { await scenario(dir: rest.first ?? "test-images") }
         case "--discogs-test": return runBlocking { await discogsTest(terms: rest) }
+        case "--import": return runBlocking { await importPhotos(dir: rest.first ?? ".", format: rest.dropFirst().first) }
         case "--ocr-eval": return runBlocking { await ocrEval(limit: Int(rest.first(where: { Int($0) != nil }) ?? "") ?? 0, model: rest.contains("--model")) }
         case "--export-feedback":
             do {
@@ -154,6 +156,10 @@ enum CLI {
         state.coffee.dismissedAt = savedDismissed
         state.coffee.supporter = savedSupporter
         state.tab = .scan
+        // The photo import sheet, mid-run and finished (fixture counts; nothing is imported).
+        for (name, finished) in [("import-1-running", false), ("import-2-finished", true)] {
+            if render(ImportSheet(importer: PhotoImporter.preview(finished: finished)).environment(state), to: out.appendingPathComponent("\(name).png")) { written += 1 }
+        }
         // Rows live in a ScrollView, which ImageRenderer leaves blank; render a few directly.
         let rows = Array(Store.shared.all().prefix(4))
         if !rows.isEmpty {
@@ -364,6 +370,36 @@ enum CLI {
         }
         return failures == 0 ? 0 : 1
     }
+
+    // MARK: folder import (headless)
+
+    /// `--import <dir>`: the same run the Library's "+ IMPORT PHOTOS" does, against the live store and
+    /// photos folder, with the real keys — matches land in the catalogue (and the Discogs collection if
+    /// sync is on), everything else in the review queue. One line per photo, `--pipeline-test` style;
+    /// exit code 1 if anything was parked or errored. Optional second argument picks the format
+    /// (`7`, `12`, `lp`); otherwise Settings' default applies.
+    static func importPhotos(dir: String, format: String?) async -> Int32 {
+        let state = AppState()
+        state.scan.appState = state
+        state.scan.speaker.enabled = false
+        switch format?.lowercased() {
+        case "7", "7\"": state.format = .seven
+        case "12", "12\"": state.format = .twelve
+        case "lp", "album", "albums": state.format = .lp
+        default: break
+        }
+        let files = PhotoImporter.walk([URL(fileURLWithPath: dir)])
+        guard !files.isEmpty else { print("no photos (jpg, jpeg, png, heic) in \(dir)"); return 1 }
+        print("import · \(files.count) photos from \(dir) · \(state.format.rawValue) · \(state.identifier.hasAnyKey ? "OCR + \(state.identifier.provider.title)" : "OCR only (no model key)") · store \(Store.shared.url.path)")
+        let width = files.map(\.lastPathComponent.count).max() ?? 20
+        state.importer.onLine = { l in print("\(l.file.padding(toLength: width, withPad: " ", startingAt: 0))  → \(l.text)") }
+        let t0 = Date()
+        await state.importer.run(files)
+        let imp = state.importer
+        print("\nimport · \(imp.summary) · $\(String(format: "%.4f", imp.costUSD)) · \(String(format: "%.0fs", Date().timeIntervalSince(t0))) · discogs \(state.discogs.rateText)")
+        if imp.unresolved > 0 { print("  \(imp.unresolved) waiting in the Review tab") }
+        return imp.unresolved == 0 ? 0 : 1
+    }
 }
 
 extension CLI {
@@ -535,11 +571,54 @@ extension CLI {
             scan.handle(command: .done)
         }
 
+        print("scenario · folder import: match, attach to a photo-less Discogs import, duplicate skip, park")
+        // The Specials record becomes a photo-less import (as a Discogs pull would leave it); its photo
+        // should attach. The Jam is already catalogued with photos → duplicate. All Mod Cons was deleted
+        // above → a fresh match. A blank frame → parked. A dotfile and a text file must be skipped.
+        state.format = .seven
+        let importDir = tmp.appendingPathComponent("import")
+        try? FileManager.default.createDirectory(at: importDir, withIntermediateDirectories: true)
+        for name in ["label-jam-posp113", "label-jam-pold5008", "label-specials-chstt17"] {
+            try? FileManager.default.copyItem(at: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"), to: importDir.appendingPathComponent("\(name).png"))
+        }
+        if let tiny = photos.downscale(jam.image, maxSide: 8) {
+            let rep = NSBitmapImageRep(cgImage: tiny)
+            try? rep.representation(using: .png, properties: [:])?.write(to: importDir.appendingPathComponent("blank.png"))
+            try? rep.representation(using: .png, properties: [:])?.write(to: importDir.appendingPathComponent(".hidden.png"))
+        }
+        try? "not a photo".write(to: importDir.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
+        if let sp = store.all().first(where: { $0.artist == "The Specials" }) {
+            var bare = CollectionSync.record(from: .init(instance_id: 1, id: sp.discogsReleaseID ?? 0, folder_id: nil, date_added: nil,
+                                                         basic_information: .init(id: sp.discogsReleaseID ?? 0, title: sp.title, year: sp.year, artists: [.init(name: sp.artist)], labels: nil, formats: nil, genres: nil, styles: nil, cover_image: nil, thumb: nil, master_id: nil, resource_url: nil)))
+            bare.sync = .off; bare.discogsInstanceID = nil
+            await scan.delete(sp.id)
+            store.insert(bare)
+        }
+        let photosBefore = (try? FileManager.default.contentsOfDirectory(atPath: photos.root.path))?.count ?? 0
+        let recordsBefore = store.count(), reviewBefore = store.reviewCount()
+        let walked = PhotoImporter.walk([importDir]).map(\.lastPathComponent)
+        check(walked == ["blank.png", "label-jam-pold5008.png", "label-jam-posp113.png", "label-specials-chstt17.png"], "folder walk: sorted, images only, dotfile skipped (\(walked))")
+        state.importer.onLine = { print("    \($0.file) → \($0.text.prefix(110))") }
+        await state.importer.run(PhotoImporter.walk([importDir]))
+        let imp = state.importer
+        check(imp.state == .finished && imp.done == 4, "run finishes on its own, 4 of 4 (\(imp.summary))")
+        check(imp.matched == 2 && imp.attached == 1, "All Mod Cons matched, The Specials' photo attached to the photo-less import (matched \(imp.matched), attached \(imp.attached))")
+        check(imp.duplicates == 1 && imp.parked == 1 && imp.errors == 0, "The Jam skipped as a duplicate, the blank frame parked (dup \(imp.duplicates), parked \(imp.parked), errors \(imp.errors))")
+        check(store.count() == recordsBefore + 2 && store.reviewCount() == reviewBefore + 1, "two catalogue records more, one more in review (\(recordsBefore) → \(store.count()), review \(reviewBefore) → \(store.reviewCount()))")
+        let photosAfter = (try? FileManager.default.contentsOfDirectory(atPath: photos.root.path))?.count ?? 0
+        check(photosAfter == photosBefore + 3, "three photos saved, the duplicate's dropped (\(photosBefore) → \(photosAfter))")
+        let attachedRec = store.all().first { $0.artist == "The Specials" }
+        check(attachedRec?.photos.count == 1 && attachedRec?.sessionID == CollectionSync.importSession && store.evidence(for: attachedRec?.id ?? UUID()) != nil, "the import kept its identity and gained a photo and evidence")
+        let parkedRec = store.all().first { $0.status == .needsReview && $0.sessionID == imp.runID }
+        check(parkedRec != nil && parkedRec?.photos.count == 1, "parked record carries its photo")
+        check(store.all().contains { $0.title == "All Mod Cons" && $0.sessionID == imp.runID && !$0.photos.isEmpty }, "the fresh match is saved under the run's session")
+        check(imp.unresolved == 1, "exit signal: one unresolved photo")
+
         print("scenario · export")
         let csv = try? store.exportCSV(to: tmp)
         check(csv != nil, "csv written: \(csv?.lastPathComponent ?? "-")")
         let files = (try? FileManager.default.contentsOfDirectory(atPath: photos.root.path))?.count ?? 0
-        check(files >= 7, "photos on disk: \(files)")
+        check(files >= 10, "photos on disk: \(files)")
         print("records: \(store.count()) · review: \(store.reviewCount()) · discogs \(state.discogs.rateText)")
         try? FileManager.default.removeItem(at: tmp)
         return failures == 0 ? 0 : 1
