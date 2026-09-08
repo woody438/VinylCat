@@ -199,7 +199,7 @@ struct ReviewView: View {
             var rec = ScanController.record(from: release, sessionID: old.sessionID)
             rec.id = old.id; rec.createdAt = old.createdAt; rec.photos = old.photos; rec.readText = old.readText; rec.notes = old.notes
             rec.confidence = c.score; rec.status = .matched
-            rec.sync = UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true ? .pending : .off
+            rec.sync = CollectionSync.enabledByUser ? .pending : .off
             store.update(rec)
             // The other half of the tuning signal: what it took to find it by hand.
             store.logFeedback(rec.id, .fixed, correction: CorrectionNote(source: "review", typed: extra.trimmingCharacters(in: .whitespaces),

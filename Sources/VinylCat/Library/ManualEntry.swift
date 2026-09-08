@@ -138,7 +138,7 @@ struct ManualEntryView: View {
             rec.confidence = c.score
             rec.status = .matched
             rec.barcode = reading.barcode ?? rec.barcode
-            rec.sync = UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true ? .pending : .off
+            rec.sync = CollectionSync.enabledByUser ? .pending : .off
             store.insert(rec)
             store.logFeedback(rec.id, .fixed, correction: CorrectionNote(source: "library", typed: typedSummary, chosenReleaseID: c.result.id, foundBy: c.reasons.joined(separator: " ")))
             state.scan.enrich(rec.id)

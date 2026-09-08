@@ -88,7 +88,7 @@ final class AppState {
         // Prices follow the currency set on the Discogs profile; then the pull half of the sync.
         Task {
             await discogs.adoptProfileCurrency()
-            if UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true, Keychain.get(.discogsToken)?.nilIfEmpty != nil {
+            if CollectionSync.enabledByUser, Keychain.get(.discogsToken)?.nilIfEmpty != nil {
                 await collectionSync.pull(discogs: discogs, store: Store.shared); reviewCount = Store.shared.reviewCount()
             }
         }

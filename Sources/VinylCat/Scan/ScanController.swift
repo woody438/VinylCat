@@ -402,7 +402,7 @@ final class ScanController {
         case .fixed: break
         case .up:
             rec.verified = true
-            if rec.status == .rejected { rec.status = .matched; if rec.sync == .off, syncToCollection, UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true { rec.sync = .pending } }
+            if rec.status == .rejected { rec.status = .matched; if rec.sync == .off, syncToCollection, CollectionSync.enabledByUser { rec.sync = .pending } }
             store.update(rec)
             if let i = items.firstIndex(where: { $0.recordID == id }) { items[i].tone = .normal }
             if current?.id == id { current = rec }
@@ -426,7 +426,7 @@ final class ScanController {
                 // and a resurrected `rejected` row would sit in the review queue as a ghost.
                 guard var fresh = store.fetch(id) else { return }
                 fresh.sync = r.sync; fresh.discogsInstanceID = r.discogsInstanceID
-                if fresh.status != .rejected, fresh.sync == .off, syncToCollection, UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true {
+                if fresh.status != .rejected, fresh.sync == .off, syncToCollection, CollectionSync.enabledByUser {
                     fresh.sync = .pending                                // restored while we were removing it: put it back
                 }
                 store.update(fresh)

@@ -107,7 +107,7 @@ extension ScanController {
             rec.barcode = outcome.reading.barcode
             rec.readText = outcome.local.text
             rec.photos = [ScanPhoto(recordID: rec.id, fileName: photo, kind: kind, order: 0)]
-            rec.sync = syncToCollection && (UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? true) ? .pending : .off
+            rec.sync = syncToCollection && (CollectionSync.enabledByUser) ? .pending : .off
             store.insert(rec)
             store.saveEvidence(Self.evidence(for: rec, outcome: outcome, candidates: candidates, chosen: c))
             enrich(rec.id)

@@ -343,6 +343,16 @@ enum SelfTest {
         check(PhotoImporter.walk([walkDir.appendingPathComponent("missing")]).isEmpty, "a path that doesn't exist walks to nothing")
         try? FileManager.default.removeItem(at: walkDir)
 
+        print("discogs collection sync — the pref")
+        let saved = UserDefaults.standard.object(forKey: "discogsSync")
+        UserDefaults.standard.removeObject(forKey: "discogsSync")
+        check(CollectionSync.enabledByUser == false, "a fresh install writes nothing to Discogs until asked")
+        UserDefaults.standard.set(true, forKey: "discogsSync")
+        check(CollectionSync.enabledByUser, "the wizard/Settings toggle switches it on")
+        UserDefaults.standard.set(false, forKey: "discogsSync")
+        check(CollectionSync.enabledByUser == false, "and off again")
+        if let saved { UserDefaults.standard.set(saved, forKey: "discogsSync") } else { UserDefaults.standard.removeObject(forKey: "discogsSync") }
+
         print("coffee")
         check(Coffee.milestone(reached: 24) == nil, "no ask below 25 scanned records")
         check(Coffee.milestone(reached: 25) == 25 && Coffee.milestone(reached: 99) == 25, "25–99 → the 25 rung")

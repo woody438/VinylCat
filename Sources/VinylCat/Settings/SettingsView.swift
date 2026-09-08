@@ -7,7 +7,7 @@ struct SettingsView: View {
     @State private var discogsToken = Keychain.get(.discogsToken) ?? ""
     @AppStorage("discogsUsername") private var discogsUsername = ""
     @AppStorage("currency") private var currency = "GBP"
-    @AppStorage("discogsSync") private var discogsSync = true
+    @AppStorage("discogsSync") private var discogsSync = false
     @AppStorage("sharpnessMin") private var sharpnessMin = 60.0
     @AppStorage("steadySeconds") private var steadySeconds = 1.0
     @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0

@@ -124,7 +124,9 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   keychain any more (2026-09-07, Woody's call). The keychain pins each item to the storing build's code hash via the
   `partition_id` ACL entry; without an Apple team identity that cannot be widened or stripped (tested: "allow all
   applications" only covers the application list; removing the entry prompts too), so every rebuild re-prompted once per key.
-  Legacy keychain items are read once on first access, copied to the file and deleted. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync`,
+  Legacy keychain items are read once on first access, copied to the file and deleted. Non-secret prefs in UserDefaults (`readerProvider`, `discogsUsername`, `currency`, `discogsSync` — default **off**
+  (2026-09-07, Woody's call: a fresh install touches Discogs only once the wizard's Discogs step or Settings switches it on);
+  read it through `CollectionSync.enabledByUser`, never a raw `UserDefaults` lookup, so the default stays in one place,
   `voiceOnLaunch` — default off: the speech recogniser only runs once VOICE is clicked, `setupCompleted`, `tourCompleted`).
 - One photo per record, the identifying one. There is no shot plan any more (the SHOTS settings, `CaptureProfile`, `expectedShots`,
   `isComplete` and the INCOMPLETE filter went on 2026-09-07 at Woody's call): extra photos are only ever asked for by hand — F / "flip",

@@ -2,28 +2,61 @@ VINYLCAT — INSTALLING
 
 You need macOS 15 or later on an Apple silicon Mac.
 
+
+READ THIS FIRST: THE APP IS NOT SIGNED BY APPLE
+
+VinylCat is ad-hoc signed on the machine that built it. It is NOT signed with an
+Apple Developer ID and it is NOT notarised by Apple.
+
+macOS WILL REFUSE TO OPEN IT THE FIRST TIME. This is expected. The download is
+not broken and there is nothing wrong with the app — it is Gatekeeper doing its
+job on an unnotarised app. Follow steps 1-6 and you are in.
+
+Note: right-click -> Open does NOT get around this on macOS 15 or later. That
+old workaround is gone. System Settings is the only way in.
+
+
 1. Drag VinylCat onto the Applications folder in this window.
 
-2. Open Applications and double-click VinylCat. macOS will say
-   "Apple could not verify VinylCat is free of malware". Click Done.
-   (This happens because the app is not notarised with Apple. Right-click → Open
-   does not get around it on macOS 15.)
+2. Open Applications and double-click VinylCat. macOS says
+   "Apple could not verify VinylCat is free of malware", with only a Done
+   button. Click Done.
+   Nothing has gone wrong. This step is REQUIRED — it is what tells macOS that
+   an app was blocked, which puts the button you need into System Settings.
 
-3. Open System Settings → Privacy & Security. Scroll to the bottom and click
-   Open Anyway, then Open Anyway again in the confirmation.
+3. Open System Settings -> Privacy & Security.
 
-4. VinylCat launches. The setup wizard asks for Camera, Microphone and Speech
-   Recognition and checks that Dictation is switched on. Click ALLOW on each.
-   You only do this once.
+4. Scroll ALL THE WAY to the bottom, to the Security section. You will see
+   "VinylCat was blocked to protect your Mac." Click OPEN ANYWAY next to it.
+   That line only appears after step 2. If it isn't there, go back and
+   double-click the app again.
 
-5. Enter your own Discogs token and your OpenAI or Gemini key in the wizard.
+5. Authenticate with Touch ID or your password if asked, then click OPEN ANYWAY
+   again in the confirmation dialog.
+
+6. VinylCat opens. YOU ONLY DO THIS ONCE. Every launch after this is a normal
+   double-click.
+
+
+THEN: FIRST-RUN SETUP
+
+7. The setup wizard asks for Camera, Microphone and Speech Recognition and
+   checks that Dictation is switched on. Click ALLOW on each. Once only.
+
+8. Enter your own Discogs token and your OpenAI or Gemini key in the wizard.
    The wizard says where to get them. Identifying a record costs about a tenth
    of a cent, so the model account needs billing set up.
+
+   Adding your matches to your Discogs Collection is OFF until you switch it on
+   — either in the wizard's Discogs step or later in Settings. Until you do,
+   VinylCat neither writes to nor reads from your Discogs Collection.
+
 
 UPDATING
 
 Drag the new VinylCat over the old one in Applications and replace it. Your
 catalogue and photos are kept in your own Library folder and are not touched.
+
 
 WHERE YOUR DATA LIVES
 

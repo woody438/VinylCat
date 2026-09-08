@@ -145,7 +145,7 @@ private struct DiscogsStep: View {
     @State private var result = ""
     @State private var busy = false
     @AppStorage("discogsUsername") private var username = ""
-    @AppStorage("discogsSync") private var sync = true
+    @AppStorage("discogsSync") private var sync = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {

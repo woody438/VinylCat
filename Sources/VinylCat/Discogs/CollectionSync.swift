@@ -15,6 +15,11 @@ final class CollectionSync {
     /// A folder import sets this: pricing waits between records so the import keeps the Discogs rate limit.
     var paused = false
     private(set) var lastRun: Date?
+    /// The user's "add matches to my Collection" pref. Off until it is switched on in the setup wizard
+    /// or Settings: a fresh install writes nothing to Discogs, and pulls nothing, until it is asked to.
+    /// Every read of `discogsSync` goes through here — the default lives in one place, not seven.
+    static var enabledByUser: Bool { UserDefaults.standard.object(forKey: "discogsSync") as? Bool ?? false }
+
     /// Records created by a pull share one session id so they can be told apart from scans.
     static let importSession = UUID(uuidString: "00000000-0000-0000-0000-00000000D15C")!
 
