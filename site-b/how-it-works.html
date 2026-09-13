@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How VinylCat finds a record</title>
+  <meta name="description" content="The six layers between holding a record up to the camera and hearing its name: camera watch, local OCR, the vision model and its exact prompt, Discogs search, ranking, and what happens next.">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="VinylCat home">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="46" fill="#2a2f34"/>
+        <circle cx="50" cy="50" r="27.6" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="33.1" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="38.6" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="13.8" fill="#cc6a3c" stroke="#9e4f2a" stroke-width=".8"/>
+        <circle cx="50" cy="50" r="1.6" fill="#2a2f34"/>
+        <path d="M68.4 48.2Q80.96 45.05 93.51 45.12M68.4 51.79Q80.96 54.95 93.51 54.88M31.6 48.2Q19.04 45.05 6.49 45.12M31.6 51.79Q19.04 54.95 6.49 54.88" fill="none" stroke="#9e4f2a" stroke-width=".9" stroke-linecap="round"/>
+      </svg>
+      <span class="word">VINYLCAT</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">Overview</a>
+      <a href="how-it-works.html" aria-current="page">How it works</a>
+      <a href="install.html">Install</a>
+    </div>
+    <div class="grow"></div>
+    <a class="cta" href="downloads/VinylCat_v1_2026-09-09.dmg" data-download>Download</a>
+  </div>
+</nav>
+
+<main>
+
+<section class="hero" style="padding-bottom:48px">
+  <div class="wrap">
+    <span class="eyebrow">Scan pipeline</span>
+    <h1 style="max-width:14ch">How VinylCat finds a record</h1>
+    <p class="lede">You hold a record up to the camera. About two seconds later the app says the artist, title, year and format out loud, and the record is in the library. This page walks through the six layers that make that happen, what each one costs, and the exact words sent to the vision model.</p>
+
+    <figure class="diagram" style="margin-top:44px">
+      <svg viewBox="0 0 1132 150" role="img" aria-label="Pipeline: camera watch, local read, vision model, Discogs search, rank and decide, outcome. A barcode bypasses the vision model.">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5 0 10z" fill="#8a9096"/></marker></defs>
+        <g>
+          <rect class="box" x="0" y="40" width="160" height="64" rx="3"/>
+          <text class="t" x="16" y="66">1 · Camera watch</text>
+          <text class="sub" x="16" y="88">steady 1 s → one still</text>
+        </g>
+        <path class="edge" d="M160 72H192" marker-end="url(#ah)"/>
+        <g>
+          <rect class="box" x="192" y="40" width="160" height="64" rx="3"/>
+          <text class="t" x="208" y="66">2 · Local read</text>
+          <text class="sub" x="208" y="88">barcode · OCR · zoom</text>
+        </g>
+        <path class="edge" d="M352 72H384" marker-end="url(#ah)"/>
+        <g>
+          <rect class="box" x="384" y="40" width="160" height="64" rx="3" style="stroke:#f0b26b"/>
+          <text class="t" x="400" y="66" style="fill:#f0b26b">3 · Vision model</text>
+          <text class="sub" x="400" y="88">13 fields · ~$0.001</text>
+        </g>
+        <path class="edge" d="M544 72H576" marker-end="url(#ah)"/>
+        <path class="edge-dash" d="M352 60C360 10 560 10 576 60" marker-end="url(#ah)"/>
+        <text class="sub" x="415" y="24">clean barcode: skip the model</text>
+        <g>
+          <rect class="box" x="576" y="40" width="160" height="64" rx="3" style="stroke:#7cc4f5"/>
+          <text class="t" x="592" y="66" style="fill:#7cc4f5">4 · Discogs</text>
+          <text class="sub" x="592" y="88">up to 6 queries</text>
+        </g>
+        <path class="edge" d="M736 72H768" marker-end="url(#ah)"/>
+        <g>
+          <rect class="box" x="768" y="40" width="160" height="64" rx="3"/>
+          <text class="t" x="784" y="66">5 · Rank</text>
+          <text class="sub" x="784" y="88">0.85 match · 0.60 ask</text>
+        </g>
+        <path class="edge" d="M928 72H960" marker-end="url(#ah)"/>
+        <g>
+          <rect class="box" x="960" y="40" width="160" height="64" rx="3" style="stroke:#7ee2a8"/>
+          <text class="t" x="976" y="66" style="fill:#7ee2a8">6 · Outcome</text>
+          <text class="sub" x="976" y="88">save · ask · park</text>
+        </g>
+        <text class="sub" x="0" y="140">free · on device</text>
+        <text class="sub" x="384" y="140" style="fill:#f0b26b">the only paid step</text>
+        <text class="sub" x="576" y="140" style="fill:#7cc4f5">the only network step besides the model</text>
+      </svg>
+      <figcaption>Every scan runs left to right. Only one stage costs money and only one talks to Discogs. A clean barcode lets the run skip the paid stage entirely.</figcaption>
+    </figure>
+
+    <p class="measure sec">Two ideas underpin the whole design. First, <strong>the catalogue number does most of the work.</strong> A label that says "POSP 113" pins a release far more precisely than the artist and title do, so every layer is tuned to find and preserve that string. Second, <strong>do the free thing first.</strong> Apple's on-device recognition runs before anything is sent to a paid model, and a good barcode means nothing is sent at all.</p>
+
+    <nav class="index" aria-label="Layers">
+      <a href="#l1"><span class="n">01</span><span class="t">Camera watch</span><span class="s">Decide when the record is steady and take one still</span></a>
+      <a href="#l2"><span class="n">02</span><span class="t">Local read</span><span class="s">Free, on-device barcode and text recognition</span></a>
+      <a href="#l3"><span class="n">03</span><span class="t">Vision model</span><span class="s">Luna or Gemini turns the photo into fields</span></a>
+      <a href="#l4"><span class="n">04</span><span class="t">Discogs search</span><span class="s">Up to six queries, strongest key first</span></a>
+      <a href="#l5"><span class="n">05</span><span class="t">Rank &amp; decide</span><span class="s">Score every hit, then match, ask or give up</span></a>
+      <a href="#l6"><span class="n">06</span><span class="t">What happens next</span><span class="s">Save, ask you, ask for the label, or park it</span></a>
+    </nav>
+  </div>
+</section>
+
+<section class="layer" id="l1">
+  <div class="wrap">
+    <div class="layer-head">
+      <div class="layer-num">1</div>
+      <div><h2>Camera watch</h2><div class="where">free · on device · about one second of steady frames</div></div>
+    </div>
+    <p class="measure sec">Nothing is searched yet. This layer's only job is to notice that a record is being held still and sharp in front of the camera, and to take exactly one photo of it. It never fires while you are moving the record, and it never fires twice on the same record.</p>
+    <div class="cols">
+      <div>
+        <h3>What it measures</h3>
+        <p>Every frame is shrunk to a small greyscale thumbnail of the central region only, so hands at the edges do not count. Four numbers are computed per frame, each smoothed over the last five so a single flicker cannot flip the state.</p>
+        <div class="tablewrap"><table>
+          <tr><th>Signal</th><th>How</th><th class="num">Default</th></tr>
+          <tr><td><strong>Sharpness</strong></td><td>Variance of an edge filter. Blur flattens edges.</td><td class="num">≥ 60</td></tr>
+          <tr><td><strong>Motion</strong></td><td>Mean pixel difference against the previous frame.</td><td class="num">≤ 6</td></tr>
+          <tr><td><strong>Presence</strong></td><td>Mean difference against the memorised empty scene.</td><td class="num">≥ 14</td></tr>
+          <tr><td><strong>Fingerprint</strong></td><td>64-bit perceptual hash. "Is this the same item I just shot?"</td><td class="num">≤ 10 bits</td></tr>
+        </table></div>
+        <p>The SHARP, STILL and RECORD bars in the app's Settings are these three thresholds, live, so you can see why a capture isn't firing.</p>
+      </div>
+      <div>
+        <h3>Details that matter</h3>
+        <ul>
+          <li><strong>Hold credit, not a timer.</strong> Good frames add time to a one-second bucket; bad frames drain it at a third of the rate. Once a hold has started the thresholds relax, so the ring doesn't strobe.</li>
+          <li><strong>Drift check.</strong> A record sliding past looks "still" frame to frame, so the engine also compares against the frame the hold started from.</li>
+          <li><strong>Two modes.</strong> Identifying a new record waits for the record to be removed before re-arming. An extra shot of a matched record demands a burst of motion first, so a flip is required before the next capture.</li>
+          <li><strong>Hand-held iPhone.</strong> The motion and drift limits were raised so a Continuity-Camera iPhone in the hand can ever fill the ring.</li>
+          <li><strong>Manual mode.</strong> Switch CAPTURE off and only SPACE or "capture" takes a shot.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="l2">
+  <div class="wrap">
+    <div class="layer-head">
+      <div class="layer-num">2</div>
+      <div><h2>Local read</h2><div class="where">free · Apple Vision · 0.65 s per photo</div></div>
+    </div>
+    <p class="measure sec">The still goes first to Apple's on-device Vision framework. This costs nothing, works offline, and takes well under a second. It produces three things: any barcodes, every line of printed text it can see, and a shortlist of tokens that look like catalogue numbers.</p>
+    <div class="cols">
+      <div>
+        <h3>Three orientations, then a zoom pass</h3>
+        <p>Labels are round and held at any angle, so the text pass runs three ways up. Then the smallest print is cropped, magnified two to four times, and read again. That zoom pass took "catalogue number somewhere in the candidates" from 84% to 91% of photos, at the cost of doubling the time.</p>
+        <h3>The catalogue-number sieve</h3>
+        <p>Every OCR line is upper-cased and run through one loose pattern: up to two short letter or digit groups, then a run of digits. That net catches "CHS TT 17", "2059 227" and "SRK 6095", but also years and speeds, so the filters do the real work:</p>
+        <ul>
+          <li>Drop bare four-digit numbers, "45" and "33". Years and RPM.</li>
+          <li>Drop "A1", "B2" style side markers.</li>
+          <li>De-duplicate ignoring spaces.</li>
+          <li>Score by shape: letters first, then longer strings. Every rule in that scorer was earned by a photo the eval got wrong.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Details that matter</h3>
+        <ul>
+          <li><strong>OCR autocorrect is off.</strong> Apple's language correction would "fix" catalogue numbers into words. The raw glyphs are what's wanted.</li>
+          <li><strong>Comparison form.</strong> Whenever two catalogue numbers are compared, both are reduced to upper-case letters and digits, so "POSP-113", "POSP 113" and "posp113" all agree.</li>
+          <li><strong>Barcode shortcut.</strong> A barcode of eight digits or more skips the model entirely. A stray Code 39 fragment does not trigger it.</li>
+          <li><strong>No API key at all?</strong> The app still works, badly. It guesses "is this a label?" from words like RPM, SIDE A, MADE IN, picks the first long lines as label, title and artist, and lets the catalogue number carry the search. The HUD nudges you to add a key.</li>
+          <li><strong>The whole shortlist</strong> goes on to the Discogs layer, not just the winner. Labels print matrix and side suffixes too, and the first-ranked token is not always the one Discogs uses.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="l3">
+  <div class="wrap">
+    <div class="layer-head">
+      <div class="layer-num">3</div>
+      <div><h2>Vision model</h2><div class="where">your key · GPT-5.6 Luna or Gemini 3.8 Flash · about $0.001 and 4 s per photo</div></div>
+    </div>
+    <p class="measure sec">If there was no usable barcode, the photo goes to a multimodal model with everything the local pass found attached as hints. The model is not asked to identify the release. It is asked to <em>read</em> the sleeve or label into thirteen fixed fields, and it is forced to answer in exactly that shape.</p>
+
+    <h3>The exact prompts</h3>
+    <p class="measure sec">Both providers get identical wording. The system prompt sets the job and the house rules. The user prompt is assembled per scan from the hints.</p>
+    <div class="prompt">
+      <div class="tag">System prompt · sent verbatim</div>
+<pre>You identify vinyl records from a photo of a sleeve (cover) or the paper label in the centre of the disc. Extract only what is visible or can be inferred with high confidence. Catalogue numbers matter most: copy them exactly as printed (e.g. "POSP 113", "FAC 73", "7N 17241"). Do not guess a year unless printed. Set isLabelShot true when the photo shows the round centre label. formatGuess: "7in" for a small single label or 45 RPM marking, "12in" for a 45/33 RPM maxi single, "LP" for an album, "10in" for a ten-inch. confidence is your certainty that artist and title are right (0–1). Return JSON matching the schema; use null for unknown fields.</pre>
+    </div>
+    <div class="prompt">
+      <div class="tag">User prompt · assembled per scan; the hint lines appear only when that hint exists</div>
+<pre>Read this record photo. The operator is currently scanning seven inch. This should be the centre label. Barcode detected locally: 5012394112345.
+Local OCR lines (may contain errors):
+POLYDOR
+BLUE MONDAY
+POSP 113
+45 RPM
+SIDE A</pre>
+    </div>
+    <p class="measure sec">"The operator is currently scanning seven inch" comes from the format button or the voice commands. "This should be the centre label" is added after the app has asked you for the label. The OCR block is a deliberate hint: the model can read the photo itself, but a second opinion on hard-to-read catalogue numbers helps, and "may contain errors" stops it copying OCR mistakes blindly.</p>
+
+    <div class="cols">
+      <div>
+        <h3>The answer shape</h3>
+        <p>The model must return every one of these keys, null when unknown. Anything else is rejected before the app sees it.</p>
+        <div class="tablewrap"><table>
+          <tr><th>Field</th><th>Meaning</th></tr>
+          <tr><td class="k">artist, title</td><td>As printed</td></tr>
+          <tr><td class="k">label</td><td>Record company</td></tr>
+          <tr><td class="k">catalogNumber</td><td>Exactly as printed. The most important field.</td></tr>
+          <tr><td class="k">otherNumbers</td><td>Anything else that looks like one</td></tr>
+          <tr><td class="k">barcode</td><td>Digits if visible</td></tr>
+          <tr><td class="k">year, country</td><td>Only if printed</td></tr>
+          <tr><td class="k">formatGuess</td><td>7in · 10in · 12in · LP</td></tr>
+          <tr><td class="k">isLabelShot</td><td>True for the round centre label</td></tr>
+          <tr><td class="k">side</td><td>A / B / 1 / 2 if visible</td></tr>
+          <tr><td class="k">visibleTracks</td><td>Track titles it can see</td></tr>
+          <tr><td class="k">confidence</td><td>0 to 1 for artist and title only</td></tr>
+          <tr><td class="k">notes</td><td>Free text</td></tr>
+        </table></div>
+      </div>
+      <div>
+        <h3>Details that matter</h3>
+        <ul>
+          <li><strong>Image size.</strong> The still is downscaled to 1024 px on the long side and JPEG-compressed before upload, plus the zoomed close-ups from the local pass. That caps the per-image token cost.</li>
+          <li><strong>Strict output.</strong> OpenAI gets a JSON schema in strict mode; Google gets a response schema at low temperature. The reply cap is 2,500 tokens, because reasoning tokens count against it and a smaller cap cut the JSON off mid-field.</li>
+          <li><strong>Cost meter.</strong> Every reply's token counts are priced and added to the session total in the HUD's LLM COST cell.</li>
+          <li><strong>A model failure never aborts a scan.</strong> Timeout, bad key, malformed reply: the app carries on OCR-only and records the error against the scan.</li>
+          <li><strong>When OCR and the model disagree, the model wins.</strong> In the eval it gets the catalogue number right first time on 88% of photos against OCR's 49%.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="l4">
+  <div class="wrap">
+    <div class="layer-head">
+      <div class="layer-num">4</div>
+      <div><h2>Discogs search</h2><div class="where">your token · 60 requests a minute · one to six calls per scan</div></div>
+    </div>
+    <p class="measure sec">Discogs is the only source of truth for what a release actually is. The app never asks Discogs an open question if it can ask a precise one, so it works down a ladder from the strongest key to the weakest, collecting hits into one pool and stopping the moment a precise key lands.</p>
+    <div class="cols">
+      <div>
+        <h3>The ladder</h3>
+        <div class="tablewrap"><table>
+          <tr><th>Rung</th><th>Query</th><th>Fires when</th></tr>
+          <tr><td class="k">1</td><td>barcode</td><td>a barcode was read</td></tr>
+          <tr><td class="k">2</td><td>label + catno + format</td><td>the model read a label and a number</td></tr>
+          <tr><td class="k">3</td><td>catno alone</td><td>rung 2 came back empty</td></tr>
+          <tr><td class="k">4</td><td>free text = the catalogue token</td><td>no catno hit at all</td></tr>
+          <tr><td class="k">5</td><td>artist + release title + format</td><td>the precise keys found nothing</td></tr>
+          <tr><td class="k">6</td><td>free text = "artist title"</td><td>last resort</td></tr>
+        </table></div>
+        <p>Every OCR candidate gets its own rung-3 attempt, so a mis-ranked token still gets searched.</p>
+      </div>
+      <div>
+        <h3>A worked example</h3>
+        <p>The model reads a Polydor 7" label as New Order, Blue Monday, Polydor, POSP 113. OCR also produced POSP 113. No barcode. Session format is 7". The first call that returns hits ends the run:</p>
+        <div class="prompt">
+          <div class="tag">Rung 2 · label + catno + format</div>
+<pre>/database/search?type=release&amp;per_page=15
+  &amp;label=Polydor&amp;catno=POSP%20113&amp;format=7%22</pre>
+        </div>
+        <div class="prompt">
+          <div class="tag">Rung 3 · only if rung 2 was empty</div>
+<pre>/database/search?type=release&amp;per_page=15&amp;catno=POSP%20113</pre>
+        </div>
+        <ul>
+          <li><strong>Rate limit</strong> is read from Discogs' own headers and kept at 60 a minute with headroom. Valuation after a Collection pull runs one call every 2.2 s so scanning keeps most of the budget.</li>
+          <li><strong>No token</strong> means the public limit of 25 a minute and no writes to your Collection.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="l5">
+  <div class="wrap">
+    <div class="layer-head">
+      <div class="layer-num">5</div>
+      <div><h2>Rank &amp; decide</h2><div class="where">free · instant · two thresholds and a safety net</div></div>
+    </div>
+    <p class="measure sec">Discogs returns hits, not answers. Each one is scored from 0 to 1 against what was read off the record, look-alike pressings are folded together, and then a simple set of gates decides whether to accept the top hit, ask you to choose, or admit defeat.</p>
+    <div class="cols">
+      <div>
+        <h3>Scoring weights</h3>
+        <p>Points are added per hit and clamped to 0 to 1. The reasons are kept and shown in the HUD's meta line, for example <code>0.94 · r2413807 · catno title format</code>.</p>
+        <div class="tablewrap"><table>
+          <tr><th>Evidence</th><th>Test</th><th class="num">Points</th></tr>
+          <tr><td>Catalogue number, exact</td><td>Letters and digits identical after normalising</td><td class="num">+0.50</td></tr>
+          <tr><td>Catalogue number, near</td><td>One contains or ends with the other</td><td class="num">+0.30</td></tr>
+          <tr><td>Barcode</td><td>Digits identical</td><td class="num">+0.50</td></tr>
+          <tr><td>Label</td><td>Name similarity above 0.85</td><td class="num">+0.15</td></tr>
+          <tr><td>Artist / title</td><td>Similarity above 0.60, scaled</td><td class="num">up to +0.25</td></tr>
+          <tr><td>Format</td><td>Matches the session or the model's guess</td><td class="num">+0.10</td></tr>
+          <tr><td>Format</td><td>Contradicts it</td><td class="num">−0.15</td></tr>
+          <tr><td>Year</td><td>Within a year of a printed year</td><td class="num">+0.05</td></tr>
+          <tr><td>Home country</td><td>UK for GBP, US for USD, and so on</td><td class="num">+0.03</td></tr>
+        </table></div>
+        <p>An exact catalogue number plus a good title plus the right format lands around 0.85 on its own. A barcode plus title does the same. Artist and title alone can never pass 0.85, which is the point: names alone cannot tell pressings apart.</p>
+      </div>
+      <div>
+        <h3>Details that matter</h3>
+        <ul>
+          <li><strong>Text similarity</strong> is Jaro–Winkler on lower-cased, punctuation-stripped strings with a leading "The" removed. It rewards shared prefixes, which suits titles.</li>
+          <li><strong>Swapped artist and title</strong> are tolerated: the ranker tries the whole "Artist – Title" string and each part against each part, and takes the best.</li>
+          <li><strong>"Strong"</strong> means an exact catalogue number or barcode <em>and</em> a title match. A strong hit is accepted even below 0.85. This is the safety net for scores dented by a wrong format guess.</li>
+          <li><strong>Look-alikes.</strong> Two Discogs entries with the same label, catalogue number, country and year cannot be told apart from a photo, so they are folded into one before deciding. Without this, every reissue would trigger a "which one?" question.</li>
+          <li><strong>Ambiguous</strong> lists every distinct pressing within 0.25 of the top score, three to nine of them, each as headline plus label, catno, country, year and format. Keys 1 to 9 or the spoken number pick one.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="layer" id="l6">
+  <div class="wrap">
+    <div class="layer-head">
+      <div class="layer-num">6</div>
+      <div><h2>What happens next</h2><div class="where">spoken · chimed · saved with its evidence</div></div>
+    </div>
+    <p class="measure sec">The verdict drives the HUD, the voice and the camera mode. There are three lanes, and two of them loop back to the camera for another photo of the same record before anything is given up on.</p>
+    <div class="cols">
+      <div>
+        <h3>Match lane</h3>
+        <ul>
+          <li><strong>Duplicate check</strong> is by Discogs release id. A second copy is allowed, but only if you say "add anyway".</li>
+          <li><strong>What gets saved</strong> comes from the full Discogs release, not the search hit: artist line, title, label, catalogue number, format, year, country, genres, styles, tracklist, cover image. Alongside it, the photo, the OCR lines, the model's reading, every ranked candidate and the score. That is the evidence Review and the thumbs-down verdict work from.</li>
+          <li><strong>One photo per record</strong>, the identifying one. Extra shots are only ever asked for by hand: "flip", "back cover", "gatefold", "disc two", and the record closes again after each one.</li>
+          <li><strong>Spoken confirmation:</strong> "The Jam, Going Underground, 1980, seven inch." Then the next record.</li>
+          <li><strong>Discogs sync</strong>, if you switched it on, adds the release to your Collection in the background and fetches a value in your currency.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Ambiguous and none lanes</h3>
+        <ul>
+          <li><strong>The camera is frozen</strong> while a question is on screen, so the next steady frame cannot wipe the list. SPACE and "capture" still work.</li>
+          <li><strong>Second look.</strong> Flip the record while the list is up and the new read runs the whole pipeline again; if exactly one candidate survives both reads, it is accepted and both photos are kept.</li>
+          <li><strong>Label first.</strong> When a cover shot fails to match, the app assumes the label will do better, switches the camera to shot mode and tells the model to expect a label. Only if that also fails does it offer one retry, then park the record.</li>
+          <li><strong>Parked</strong> means the Review tab, with everything read so far. Type a few extra words: a catalogue number in them is pulled out and searched exactly, the rest goes in as free text, and the same ranker orders the results.</li>
+          <li><strong>Errors park too.</strong> Discogs down, network gone: the photo goes to Review with a plain-words note, and nothing is lost.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="knobs" style="padding-top:40px">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Every knob in one place</span>
+      <h2>What you can turn</h2>
+    </div>
+    <div class="tablewrap"><table>
+      <tr><th>Layer</th><th>Setting</th><th class="num">Default</th><th>Where</th></tr>
+      <tr><td class="k">1</td><td>Sharpness needed</td><td class="num">60</td><td>Settings → Capture</td></tr>
+      <tr><td class="k">1</td><td>Steady for</td><td class="num">1.0 s</td><td>Settings → Capture</td></tr>
+      <tr><td class="k">1</td><td>Scene change needed</td><td class="num">14 of 255</td><td>Settings → Capture</td></tr>
+      <tr><td class="k">1</td><td>Auto capture</td><td class="num">on</td><td>CAPTURE switch in the top bar · "pause" / "resume"</td></tr>
+      <tr><td class="k">2</td><td>Skip the model when a barcode of 8+ digits reads</td><td class="num">on</td><td>Settings → Identification</td></tr>
+      <tr><td class="k">3</td><td>Provider</td><td class="num">GPT-5.6 Luna</td><td>Settings → Identification</td></tr>
+      <tr><td class="k">4</td><td>Session format</td><td class="num">7" singles</td><td>FORMAT in the top bar · "forty-fives" / "twelve inch" / "albums"</td></tr>
+      <tr><td class="k">5</td><td>Accept / ask thresholds</td><td class="num">0.85 / 0.60</td><td>fixed</td></tr>
+      <tr><td class="k">5</td><td>Preferred country</td><td class="num">from your Discogs currency</td><td>Settings → Discogs</td></tr>
+      <tr><td class="k">6</td><td>Add matches to my Collection</td><td class="num">off</td><td>Wizard's Discogs step · Settings → Discogs</td></tr>
+      <tr><td class="k">6</td><td>Read out results · Listen from launch</td><td class="num">on · off</td><td>Settings → Voice</td></tr>
+    </table></div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="dl-card">
+      <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
+      <div>
+        <h3>VinylCat <span data-version>0.1.0</span></h3>
+        <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free · <a href="install.html">read the install steps first</a></div>
+      </div>
+      <a class="btn" href="downloads/VinylCat_v1_2026-09-09.dmg" data-download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg>
+        Download the DMG
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>VINYLCAT · v<span data-version>0.1.0</span> · macOS 15+ · Apple silicon</span>
+    <a href="index.html">Overview</a>
+    <a href="install.html">Install</a>
+    <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
+    <span class="grow"></span>
+    <span>Not affiliated with Discogs, OpenAI, Google or Apple.</span>
+  </div>
+</footer>
+
+<script src="assets/js/site.js"></script>
+</body>
+</html>

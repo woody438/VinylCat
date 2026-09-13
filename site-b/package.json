@@ -1,0 +1,14 @@
+{
+  "name": "vinylcat-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static marketing and download site for VinylCat. Plain HTML/CSS, no build step.",
+  "scripts": {
+    "dev": "serve -l 4174 -n .",
+    "start": "serve -l 4174 -n .",
+    "check": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install VinylCat — the six steps past Gatekeeper</title>
+  <meta name="description" content="VinylCat is not signed by Apple, so macOS blocks the first launch. Here are the six steps, once, plus first-run setup and where your data lives.">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="VinylCat home">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="46" fill="#2a2f34"/>
+        <circle cx="50" cy="50" r="27.6" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="33.1" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="38.6" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="13.8" fill="#cc6a3c" stroke="#9e4f2a" stroke-width=".8"/>
+        <circle cx="50" cy="50" r="1.6" fill="#2a2f34"/>
+        <path d="M68.4 48.2Q80.96 45.05 93.51 45.12M68.4 51.79Q80.96 54.95 93.51 54.88M31.6 48.2Q19.04 45.05 6.49 45.12M31.6 51.79Q19.04 54.95 6.49 54.88" fill="none" stroke="#9e4f2a" stroke-width=".9" stroke-linecap="round"/>
+      </svg>
+      <span class="word">VINYLCAT</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">Overview</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="install.html" aria-current="page">Install</a>
+    </div>
+    <div class="grow"></div>
+    <a class="cta" href="downloads/VinylCat_v1_2026-09-09.dmg" data-download>Download</a>
+  </div>
+</nav>
+
+<main>
+
+<section class="hero" style="padding-bottom:0">
+  <div class="wrap">
+    <span class="eyebrow red">Read this first</span>
+    <h1 style="max-width:14ch">The app is not signed by Apple</h1>
+    <p class="lede">VinylCat is ad-hoc signed on the machine that built it. It is not signed with an Apple Developer ID and it is not notarised. <strong>macOS will refuse to open it the first time. This is expected.</strong> The download is not broken and there is nothing wrong with the app. It is Gatekeeper doing its job on an unnotarised app. Follow the six steps and you are in.</p>
+    <div class="callout amber" style="max-width:64ch">
+      <div class="tag">Note</div>
+      <p>Right-click → Open does <strong>not</strong> get round this on macOS 15 or later. That old workaround is gone. System Settings is the only way in.</p>
+    </div>
+  </div>
+</section>
+
+<section id="gatekeeper" style="padding-top:40px">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Six steps, once</span>
+      <h2>Getting past Gatekeeper</h2>
+    </div>
+    <ol class="steps measure" style="max-width:72ch">
+      <li><div><b>Drag VinylCat onto Applications</b><p>Open the DMG and drag the app onto the Applications folder shortcut in the same window.</p></div></li>
+      <li><div><b>Double-click VinylCat. Click Done.</b><p>macOS says "Apple could not verify VinylCat is free of malware", with only a Done button. Click it.</p><p class="aside">Nothing has gone wrong. This step is required: it is what tells macOS that an app was blocked, which puts the button you need into System Settings.</p></div></li>
+      <li><div><b>Open System Settings → Privacy &amp; Security</b><p>Apple menu → System Settings, then Privacy &amp; Security in the sidebar.</p></div></li>
+      <li><div><b>Scroll all the way down to Security. Click Open Anyway.</b><p>You will see "VinylCat was blocked to protect your Mac." Click <strong>Open Anyway</strong> next to it.</p><p class="aside">That line only appears after step 2. If it isn't there, go back and double-click the app again.</p></div></li>
+      <li><div><b>Authenticate, then Open Anyway again</b><p>Touch ID or your password if asked, then click Open Anyway once more in the confirmation dialog.</p></div></li>
+      <li><div><b>VinylCat opens. You only do this once.</b><p>Every launch after this is a normal double-click.</p></div></li>
+    </ol>
+    <p class="foot-note">Skipping all of the above would need a paid Apple Developer ID, $99 a year. VinylCat is free, so that is not happening. The six steps are the way in.</p>
+  </div>
+</section>
+
+<section id="first-run">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Then</span>
+      <h2>First-run setup, about five minutes</h2>
+      <p class="lede">The app opens with a wizard: Welcome → Permissions → Discogs → Vision model → Preferences → Ready. It tests each piece as you go, and you can run it again any time from Settings.</p>
+    </div>
+    <div class="two">
+      <div>
+        <ol class="steps" start="7">
+          <li><div><b>Permissions</b><p>The wizard asks for Camera, Microphone and Speech Recognition and checks that Dictation is switched on. Click Allow on each, once.</p></div></li>
+          <li><div><b>Your Discogs token</b><p>Free, from discogs.com/settings/developers. Paste it in and test it. Without one the app still looks records up, at 25 a minute instead of 60, but cannot add them to your Collection.</p><p class="aside">Adding matches to your Discogs Collection is off until you switch it on, here or later in Settings. Until you do, VinylCat neither writes to nor reads from your Collection.</p></div></li>
+          <li><div><b>Your OpenAI or Google AI key</b><p>Optional. Identifying a record costs about a tenth of a cent, so the account needs billing set up. Without a key the app runs on local OCR and catalogue numbers only: good on labels, worse on artwork-heavy covers.</p></div></li>
+        </ol>
+      </div>
+      <div>
+        <div class="shot"><img src="assets/img/setup-welcome.png" alt="The setup wizard's Welcome step: Hold up a record. That's it. Setup takes about five minutes. You'll need camera, microphone and speech permissions, a free Discogs token, and optionally an OpenAI or Google AI key." loading="lazy" width="1440" height="900"></div>
+        <div class="shot-caption">The wizard's first screen. Continue at the bottom right, and it walks the rest.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="after">
+  <div class="wrap">
+    <div class="two">
+      <div>
+        <span class="eyebrow">Updating</span>
+        <h2>Drag the new one over the old one</h2>
+        <p class="lede" style="margin-top:16px">Replace VinylCat in Applications with the new version. Your catalogue and photos live in your own Library folder and are not touched. Gatekeeper may ask once more for a new build.</p>
+      </div>
+      <div>
+        <span class="eyebrow">Where your data lives</span>
+        <h2>One folder, yours</h2>
+        <div class="prompt" style="margin-top:20px">
+          <div class="tag">~/Library/Application Support/VinylCat/</div>
+<pre>VinylCat.sqlite   the catalogue, evidence and verdicts
+Photos/           one JPEG per record, plus any extra shots
+keys.json         your Discogs token and model key, 0600</pre>
+        </div>
+        <p class="sec">CSV exports and the feedback file go wherever you point them from the Library. Nothing is sent anywhere except the Discogs and model calls you set up.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="dl-card">
+      <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
+      <div>
+        <h3>VinylCat <span data-version>0.1.0</span></h3>
+        <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free</div>
+      </div>
+      <a class="btn" href="downloads/VinylCat_v1_2026-09-09.dmg" data-download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg>
+        Download the DMG
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>VINYLCAT · v<span data-version>0.1.0</span> · macOS 15+ · Apple silicon</span>
+    <a href="index.html">Overview</a>
+    <a href="how-it-works.html">How it works</a>
+    <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
+    <span class="grow"></span>
+    <span>Not affiliated with Discogs, OpenAI, Google or Apple.</span>
+  </div>
+</footer>
+
+<script src="assets/js/site.js"></script>
+</body>
+</html>
