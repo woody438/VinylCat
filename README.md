@@ -1,8 +1,10 @@
 # VinylCat
 
 Hands-free vinyl cataloguing for macOS: hold a record up to the camera, it photographs it, reads the label or cover,
-finds the release on Discogs, speaks the result, asks for the B-side / back cover / disc 2, and files everything in a
-local database (with an optional push to your Discogs Collection, off until you switch it on).
+finds the release on Discogs, speaks the result, and files it in a local database with a value in your currency
+(with an optional two-way sync to your Discogs Collection, off until you switch it on).
+
+Website, download and how it works: **[vinyl-cat.com](https://vinyl-cat.com)**. Current version: 0.2.2.
 
 ## Read this first: the app is not signed by Apple
 
@@ -52,7 +54,7 @@ through everything below and tests each piece. Re-run it any time from Settings 
 
 ```bash
 scripts/build-app.sh debug --run     # build + assemble build/VinylCat.app + launch
-scripts/test.sh                      # 82 self-checks (ranker, catalogue numbers, engine, voice, store, import, coffee)
+scripts/test.sh                      # 117 self-checks (ranker, catalogue numbers, engine, voice, store, import, coffee, spend, updates, reports)
 .build/debug/VinylCat --diagnose     # permissions, cameras, keys, Discogs reachability
 .build/debug/VinylCat --render-ui ui # every screen/state as PNG, no camera needed
 .build/debug/VinylCat --make-test-images img && .build/debug/VinylCat --pipeline-test img/*.png
@@ -60,29 +62,40 @@ scripts/test.sh                      # 82 self-checks (ranker, catalogue numbers
 
 ## Scanning
 
-- Set the format in the top bar (or say **"forty-fives" / "twelve inch" / "albums"**). It filters Discogs and sets what
-  extra shots are asked for: 7" → label A + B; 12" → cover + label; LP → front + back + label; 2×LP / gatefold detected
-  from Discogs and asked for automatically.
+- Set the format in the top bar (or say **"forty-fives" / "twelve inch" / "albums"**). It filters the Discogs search.
 - Hold the record steady and sharp for ~0.6 s → chime → it reads, searches, and speaks:
-  **Matched** (green) · **N matches — say one/two/three/none** (orange) · **Show me the label** (blue) ·
-  **Next shot: B-side / back cover / disc 2 side C** (blue) · **Not found → review queue** (red) · **Already catalogued** (amber).
-- The bottom bar always lists the words that work right now.
+  **Matched** (green) · **N matches — press 1–9 or say the number, N for none** (orange) · **Show me the label** (blue) ·
+  **Try again** (amber) · **Not found → review queue** (red) · **Already catalogued** (amber) · **Error → review queue** (red).
+- One photo per record, the identifying one. Extra photos only when you ask: **F** / "flip" for the B-side, **P** /
+  "add photo", or say "back cover", "gatefold", "disc two". The record closes again after each.
+- Thumbs down — **W** / "wrong record" — keeps the record and its evidence for tuning but takes it out of the counts,
+  the value and your Discogs Collection, and puts it in the Review tab to fix.
+- The bottom bar always lists the keys and words that work right now: SPACE capture · F flip · U undo · W wrong record ·
+  P add photo · S skip · D done · R review · N none · 1–9 pick · RETURN add anyway · ESC start over.
+- The rail's meters: **DISCOGS** calls used this minute (from Discogs' own headers, back to 0/60 a minute after the last
+  call), **LLM COST** this session with the month to date underneath (amber past the figure in Settings → Identification,
+  default $5 — a warning, never a stop), **REVIEW** the queue. After a Collection pull the app prices every record that
+  has no value yet, one Discogs call every 2.2 s; the rail says "Pricing N of M · leave the app open" while it runs, and it
+  carries on from where it left off next launch.
 
 ### Voice commands
 
 | Say | Does |
 |---|---|
 | capture | force a shot now |
-| flip / B-side · label · back cover · gatefold · disc two · add photo | take that specific shot for the open record |
-| skip | skip the shot being asked for |
-| done | finish this record early |
-| undo | retake the last shot (or delete the record if it only has one) |
+| flip / B-side · label · back cover · gatefold · disc two · add photo | take that extra photo for the last record |
+| skip | skip what is being asked for (label, retry) — to the review queue |
+| done | close the record |
+| undo | remove the last extra photo, then the record |
+| wrong record | thumbs down: out of the counts and Discogs, into the Review tab |
 | review / later | park it for the Review tab |
 | again | retake the identification shot |
-| one / two / three / none | pick from the candidate list |
+| one … nine ("number four", "number seven") / none | pick from the candidate list |
 | add anyway | keep a second copy of a duplicate |
 | forty-fives · twelve inch · albums | switch session format |
-| pause / resume | stop / start auto-capture |
+| pause / resume · manual mode / auto mode | stop / start auto-capture |
+
+Voice is off until you click VOICE in the top bar (Settings → Voice → "Listen from launch" changes that).
 
 ## Sharing the app
 
@@ -102,9 +115,19 @@ click ALLOW on each, once. They then enter their own Discogs token and model key
 Release builds send one anonymous tick to vinyl-cat.com per launch (the word "launch" and the version, nothing else) so
 you can see take-up on the site's download card; Settings → ABOUT switches it off. Debug builds never send it.
 
-Updates: send a new DMG, replace the app in Applications. Their database and photos live in their own Application
-Support folder and survive the swap. Keep building on the Mac with the "VinylCat Local Signing" certificate so the
-signature stays the same and the permissions carry over to the new version.
+Updates: the app reads [vinyl-cat.com/release.json](https://vinyl-cat.com/release.json) at launch and every six hours
+and shows an amber UPDATE chip in the top bar when a newer version is there (DOWNLOAD → vinyl-cat.com/download, or
+SKIP THIS VERSION; Settings → ABOUT has the switch and CHECK NOW). It never replaces itself: they drag the new app
+over the old one, and macOS asks for the Gatekeeper steps again because the build is not signed with a Developer ID.
+Their database and photos live in their own Application Support folder and survive the swap.
+
+Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, `scripts/package.sh`, copy the DMG
+into `site-b/downloads/`, update `site-b/release.json` (`version`, `file`, `notes`), push — Vercel deploys the site
+from `main` — then tag it and attach the DMG to a GitHub release.
+
+Bug reports: REPORT A PROBLEM in Settings → ABOUT, or REPORT on a record in the Library. The note, the last 150 log
+lines and the record's scan evidence (both optional, keys masked) go to vinyl-cat.com/api/report, which files a GitHub
+issue labelled `report` here. If that fails the sheet offers SAVE AS FILE.
 
 ## Where things live
 
