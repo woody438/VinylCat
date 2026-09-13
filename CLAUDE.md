@@ -57,7 +57,9 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   instance id for local records of the same release, unlinks — never deletes — local records whose instance has gone from
   Discogs, skipping anything under ten minutes old). A scan that matches a photo-less imported record attaches its photo to it
   instead of reporting a duplicate. After a pull, `valueUnvalued` prices every catalogue record with no `valuedAt` (imports, and
-  scans whose price call failed), one call every 2.2 s so scanning keeps most of the rate limit.
+  scans whose price call failed), one call every 2.2 s so scanning keeps most of the rate limit. The Scan rail shows
+  `collectionSync.status` under the meters while a pull or that pass runs: a DISCOGS meter climbing with nobody scanning is
+  this, not a leak (2026-09-14, Woody asked).
 - `Scan/` — `ScanPipeline` (extension on `ScanController`: the camera-free core both the webcam loop and the folder importer run —
   `lookup` readers → Discogs, `process` one photo to a `Resolution` (saved / attached to a photo-less Discogs import / duplicate /
   ambiguous / notFound / parked), `commit` the save with the duplicate and attach rules, `parkRecord` into the review queue with

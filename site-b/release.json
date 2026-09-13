@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
-  "file": "downloads/VinylCat_v2_2026-09-14.dmg",
-  "notes": "The app now tells you when a new version is out."
+  "version": "0.2.1",
+  "file": "downloads/VinylCat_v3_2026-09-14.dmg",
+  "notes": "The Discogs meter reads properly again, and the app now says when it is pricing your collection after a pull — leave it open and it finishes on its own."
 }

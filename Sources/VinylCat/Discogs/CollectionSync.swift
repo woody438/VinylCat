@@ -88,8 +88,8 @@ final class CollectionSync {
         valuing = true; defer { valuing = false }
         var done = 0
         for r in todo {
-            while paused { status = "Valuing paused while photos import"; try? await Task.sleep(for: .seconds(1)) }
-            status = "Valuing \(done + 1) of \(todo.count)…"
+            while paused { status = "Pricing paused while photos import"; try? await Task.sleep(for: .seconds(1)) }
+            status = "Pricing \(done + 1) of \(todo.count) · leave the app open"
             guard var rec = store.fetch(r.id), let rid = rec.discogsReleaseID else { continue }
             if let stats = try? await discogs.priceStats(rid) {
                 rec.valueLow = stats.lowest_price?.value
@@ -101,7 +101,7 @@ final class CollectionSync {
             }
             try? await Task.sleep(for: .seconds(2.2))   // ~27/min, leaving room for scans
         }
-        status = "Valued \(done) of \(todo.count) records"
+        status = "Priced \(done) of \(todo.count) records"
         Log.discogs.info("valued \(done)/\(todo.count)")
     }
 

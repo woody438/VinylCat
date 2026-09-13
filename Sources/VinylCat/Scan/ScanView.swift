@@ -341,14 +341,23 @@ struct RightRail: View {
                 CoffeeAsk(sizes: [.card, .sheet], narrow: true).padding(.horizontal, 20).padding(.bottom, 16)
             }
             Rectangle().fill(Theme.line).frame(height: 1)
+            VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", unit: "per min", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
+                Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", unit: "/min", widest: "\(state.discogs.limit)/\(state.discogs.limit)", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
                     .help("Discogs calls used in the current minute (from Discogs' own rate-limit headers)")
                 Meter(title: "LLM COST", value: String(format: "$%.3f", state.identifier.sessionCostUSD), color: Theme.text)
                     .help("Vision-model spend this session · \(state.identifier.reads) reads")
                 Meter(title: "REVIEW", value: "\(state.reviewCount)", color: Theme.red)
                 // Supporters get a quiet fourth meter. It rewards the honest and gives everyone else something to look at.
                 if state.coffee.supporter { Meter(title: "COFFEE", value: "BOUGHT", color: Theme.green).help("Thank you. Settings → SUPPORT to undo.") }
+            }
+            // Why the DISCOGS meter climbs with nobody scanning: the launch pull and the pricing pass that
+            // follows it (one call per unvalued record, every 2.2 s). Say so, or it looks like a leak.
+            if state.collectionSync.running || state.collectionSync.valuing {
+                Text(state.collectionSync.status.uppercased()).font(Theme.mono(10)).tracking(1).foregroundStyle(Theme.muted).lineLimit(1)
+                    .padding(.top, 8)
+                    .help("Discogs has no bulk price call, so each record is priced one at a time, about 24 a minute. It stops once every record has a value and carries on from where it left off next launch. Settings → DISCOGS shows the same.")
+            }
             }
             .padding(.horizontal, 20).padding(.vertical, 16)
         }
@@ -428,16 +437,28 @@ struct SessionRow: View {
 struct Meter: View {
     let title: String, value: String
     var unit: String = ""
+    /// The widest value this meter can show ("60/60"): the layout is sized to it, so the unit doesn't
+    /// come and go as the digits change.
+    var widest: String? = nil
     let color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Caption(title)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value).font(Theme.mono(16)).foregroundStyle(color)
-                if !unit.isEmpty { Text(unit).font(Theme.mono(10)).foregroundStyle(Theme.muted) }
+            // The value never breaks across lines ("17/6" over "0" was the rail at 340 pt with "per min" beside it);
+            // the unit is drawn only when there is room for it next to the widest value, and dropped otherwise.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    valueText
+                    if !unit.isEmpty { Text(unit).font(Theme.mono(10)).foregroundStyle(Theme.muted).lineLimit(1).fixedSize() }
+                }
+                valueText
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private var valueText: some View {
+        Text(widest ?? value).font(Theme.mono(16)).lineLimit(1).fixedSize().hidden()
+            .overlay(alignment: .leading) { Text(value).font(Theme.mono(16)).foregroundStyle(color).lineLimit(1).fixedSize() }
     }
 }
 
