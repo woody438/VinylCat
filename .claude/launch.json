@@ -1,0 +1,49 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "site-b",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "site-b/scripts/dev.mjs"
+      ],
+      "port": 4174
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "serve",
+        "-l",
+        "4173",
+        "-n",
+        "site"
+      ],
+      "port": 4173
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8766",
+        "--directory",
+        "website"
+      ],
+      "port": 8766
+    },
+    {
+      "name": "review",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4180",
+        "--directory",
+        "/private/tmp/claude-501/-Users-ianwoodall-Documents-Claude-Projects-vinylcat/5db81c79-0255-4320-b703-3b13f0c4ec54/scratchpad"
+      ],
+      "port": 4180
+    }
+  ]
+}

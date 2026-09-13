@@ -13,6 +13,7 @@ struct VinylCatApp: App {
         try? FileManager.default.removeItem(at: FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Saved Application State/com.woodall.vinylcat.savedState"))
         Log.rotate()
+        LaunchPing.sendIfEnabled()
     }
 
     var body: some Scene {

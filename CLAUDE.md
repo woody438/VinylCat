@@ -93,6 +93,12 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   (`coffeeDismissedAt`); "I've bought one" gets one cheeky confirm, then `coffeeBought` silences everything for good and a COFFEE
   meter appears on the rail. Settings → SUPPORT can undo it. `--render-ui` writes every rung as `coffee-*.png`; the self-test
   covers the ladder.
+- `Support/LaunchPing.swift` — the take-up counter (2026-09-13): one anonymous POST to `https://vinyl-cat.com/api/ping` per launch
+  (`{"event":"launch","version":…}`, plus `install` once per Mac), release builds only (`build-app.sh` stamps `VinylCatChannel`;
+  `VINYLCAT_PING=1` forces it, `VINYLCAT_PING_URL` redirects it to `site-b`'s `npm run dev`). Settings → ABOUT → "Count launches"
+  (`launchPing`, default on) is the user's switch. The site side is `site-b/api/` + `lib/counter.js` (Upstash Redis, three
+  integers, `/download` counts and redirects to the DMG, `/api/stats` feeds the download card) — see `site-b/README.md`.
+  Nothing identifying is ever sent or stored; keep it that way, the site copy promises it.
 - `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
   `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
   `--render-ui` writes every step as `tour-NN-<anchor>.png`.

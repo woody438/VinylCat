@@ -249,6 +249,14 @@ enum SelfTest {
         check(m2.sharpness > m1.sharpness + 100, "high-frequency frame is sharper")
         check(m2.motion > 30, "changed frame reports motion (\(m2.motion))")
 
+        print("launch counter")
+        check(LaunchPing.shouldSend(channel: "release", enabled: true, forced: false), "release build counts")
+        check(!LaunchPing.shouldSend(channel: "debug", enabled: true, forced: false), "debug build never counts")
+        check(!LaunchPing.shouldSend(channel: nil, enabled: true, forced: false), "bare binary never counts")
+        check(LaunchPing.shouldSend(channel: nil, enabled: true, forced: true), "VINYLCAT_PING=1 forces it")
+        check(!LaunchPing.shouldSend(channel: "release", enabled: false, forced: true), "the Settings switch wins over everything")
+        check(String(decoding: LaunchPing.body(event: "launch", version: "0.1.0"), as: UTF8.self) == #"{"event":"launch","version":"0.1.0"}"#, "the body is the event and the version, nothing else")
+
         print("formats")
         check(VinylFormat.allCases.count == 3 && VinylFormat.seven.discogsFormat == "7\"", "format mapping")
 

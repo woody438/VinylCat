@@ -250,6 +250,8 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numer
 .dl-card h3 { font-size: 34px; }
 .dl-card .meta { font-family: var(--mono); font-size: 13px; color: var(--muted); letter-spacing: 0.06em; margin-top: 8px; line-height: 1.8; }
 .dl-card .meta b { color: var(--text); font-weight: 500; }
+.dl-card .stats { margin-top: 4px; }
+.dl-card .stats b { color: var(--green); }
 
 /* ---------- steps (install) ---------- */
 .steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }

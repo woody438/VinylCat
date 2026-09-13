@@ -15,6 +15,7 @@ for (const page of pages) {
   for (const m of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const u = m[1];
     if (/^(https?:|mailto:|#$)/.test(u)) continue;
+    if (u === "/download" || u.startsWith("/api/")) continue;   // served by api/ (see scripts/dev.mjs and vercel.json)
     if (u.startsWith("#")) { if (!ids.has(u.slice(1))) bad(`anchor ${u} has no target`); continue; }
     const [path, hash] = u.split("#");
     const file = resolve(dirname(resolve(root, page)), path);

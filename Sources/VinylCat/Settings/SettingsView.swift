@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("sharpnessMin") private var sharpnessMin = 60.0
     @AppStorage("steadySeconds") private var steadySeconds = 1.0
     @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0
+    @AppStorage("launchPing") private var launchPing = true
     @State private var testResult = ""
     @Environment(\.staticRender) private var staticRender
 
@@ -150,6 +151,9 @@ struct SettingsView: View {
                 Section("ABOUT") {
                     Row("Version") { Text(BuildInfo.version).foregroundStyle(Theme.secondary) }
                     Row("Build") { Text(BuildInfo.build).foregroundStyle(Theme.secondary).font(Theme.mono(11)) }
+                    Row("Count launches") { Toggle("", isOn: $launchPing).labelsHidden().toggleStyle(.switch) }
+                    Text("On: each launch sends the word “launch” and the version number to vinyl-cat.com, nothing else, so the developer can see whether anyone uses it. No identifier, no IP kept.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

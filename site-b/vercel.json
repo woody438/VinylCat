@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/download", "destination": "/api/download" }
+  ],
+  "headers": [
+    { "source": "/downloads/(.*)", "headers": [{ "key": "Content-Disposition", "value": "attachment" }] }
+  ]
+}

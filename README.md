@@ -99,6 +99,8 @@ which is also on the DMG as "Read me first.txt". Without those steps they will t
 
 After it opens, the setup wizard asks for Camera, Microphone and Speech Recognition and checks Dictation is on; they
 click ALLOW on each, once. They then enter their own Discogs token and model key — none of yours is in the DMG.
+Release builds send one anonymous tick to vinyl-cat.com per launch (the word "launch" and the version, nothing else) so
+you can see take-up on the site's download card; Settings → ABOUT switches it off. Debug builds never send it.
 
 Updates: send a new DMG, replace the app in Applications. Their database and photos live in their own Application
 Support folder and survive the swap. Keep building on the Mac with the "VinylCat Local Signing" certificate so the

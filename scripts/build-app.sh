@@ -18,6 +18,9 @@ STAMP="$(date '+%Y-%m-%d %H:%M') · $(git rev-parse --short HEAD 2>/dev/null || 
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date '+%Y%m%d.%H%M')" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :VinylCatBuild string $STAMP" "$APP/Contents/Info.plist" 2>/dev/null \
   || /usr/libexec/PlistBuddy -c "Set :VinylCatBuild $STAMP" "$APP/Contents/Info.plist"
+# The channel gates the launch counter (Support/LaunchPing.swift): only release builds phone home.
+/usr/libexec/PlistBuddy -c "Add :VinylCatChannel string $CONFIG" "$APP/Contents/Info.plist" 2>/dev/null \
+  || /usr/libexec/PlistBuddy -c "Set :VinylCatChannel $CONFIG" "$APP/Contents/Info.plist"
 # Bundle any resources SwiftPM produced (sounds, fonts) next to the binary.
 BUNDLE_DIR="$(dirname "$BIN")/VinylCat_VinylCat.bundle"
 [[ -d "$BUNDLE_DIR" ]] && cp -R "$BUNDLE_DIR" "$APP/Contents/Resources/"
@@ -27,7 +30,7 @@ BUNDLE_DIR="$(dirname "$BIN")/VinylCat_VinylCat.bundle"
 [[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 # Sign with the local "VinylCat Local Signing" certificate when present so Camera/Mic/Speech permissions survive rebuilds;
 # ad-hoc otherwise (works, but macOS re-asks after every build).
-IDENTITY="$(security find-certificate -c "VinylCat Local Signing" -Z ~/Library/Keychains/login.keychain-db 2>/dev/null | awk '/SHA-1/{print $NF}')"
+IDENTITY="$(security find-certificate -c "VinylCat Local Signing" -Z ~/Library/Keychains/login.keychain-db 2>/dev/null | awk '/SHA-1/{print $NF}' || true)"
 codesign --force --deep --sign "${IDENTITY:--}" "$APP" >/dev/null
 echo "signed with ${IDENTITY:-ad-hoc}"
 echo "built $APP"

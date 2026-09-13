@@ -9,6 +9,7 @@ enum Log {
     static let scan = Channel("scan")
     static let voice = Channel("voice")
     static let discogs = Channel("discogs")
+    static let app = Channel("app")
 
     static let fileURL: URL = PhotoStore.shared.root.deletingLastPathComponent().appendingPathComponent("vinylcat.log")
     private static let queue = DispatchQueue(label: "com.woodall.vinylcat.log")
