@@ -15,6 +15,9 @@ final class DiscogsClient {
     private let userAgent = "VinylCat/0.1 +https://github.com/woodall/vinylcat"
     private var windowStart = Date()
     private var windowCount = 0
+    /// Clears the meter a minute after the last response. `used` is whatever Discogs' header said last time;
+    /// with no further calls it would sit at "23/60" for ever, though Discogs itself has forgotten those calls.
+    private var meterReset: Task<Void, Never>?
 
     struct SearchResult: Decodable, Sendable {
         var id: Int
@@ -213,6 +216,7 @@ final class DiscogsClient {
             if let l = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit"), let v = Int(l) { limit = v }
             if let u = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Used"), let v = Int(u) { used = v }
             if let r = http.value(forHTTPHeaderField: "X-Discogs-Ratelimit-Remaining"), let v = Int(r) { remaining = v }
+            scheduleMeterReset()
         }
         let code = http?.statusCode ?? 0
         Log.discogs.info("\(method) \(path) → \(code) · \(self.used)/\(self.limit)")
@@ -227,6 +231,15 @@ final class DiscogsClient {
             throw DiscogsError.http(code, msg)
         }
         return data
+    }
+
+    private func scheduleMeterReset() {
+        meterReset?.cancel()
+        meterReset = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            guard !Task.isCancelled, let self else { return }
+            self.used = 0; self.remaining = self.limit
+        }
     }
 
     /// Keep a little headroom under the limit: never exceed limit-5 requests in any rolling minute.
