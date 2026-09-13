@@ -114,6 +114,11 @@ enum CLI {
                 .environment(\.previewPhase, phase)
             if render(view, to: out.appendingPathComponent("\(name).png")) { written += 1 }
         }
+        // The UPDATE chip in the top bar, as it looks when the site has a newer version.
+        state.updates.previewRelease = UpdateCheck.Release(version: "0.2.0", file: "downloads/VinylCat_v2.dmg", notes: "Update notice, faster label reads.")
+        if render(RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
+                    .environment(\.previewPhase, .armed(reason: "empty")), to: out.appendingPathComponent("update-available.png")) { written += 1 }
+        state.updates.previewRelease = nil
         for i in 0..<6 {
             let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
                 .environment(\.previewSetupStep, i)

@@ -25,6 +25,7 @@ struct SettingsView: View {
     private var columns: some View {
         @Bindable var identifier = state.identifier
         @Bindable var speaker = state.scan.speaker
+        @Bindable var updates = state.updates
         return HStack(alignment: .top, spacing: 40) {
             VStack(alignment: .leading, spacing: 24) {
                 Section("IDENTIFICATION") {
@@ -153,6 +154,20 @@ struct SettingsView: View {
                     Row("Build") { Text(BuildInfo.build).foregroundStyle(Theme.secondary).font(Theme.mono(11)) }
                     Row("Count launches") { Toggle("", isOn: $launchPing).labelsHidden().toggleStyle(.switch) }
                     Text("On: each launch sends the word “launch” and the version number to vinyl-cat.com, nothing else, so the developer can see whether anyone uses it. No identifier, no IP kept.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    Row("Check for updates") { Toggle("", isOn: $updates.enabled).labelsHidden().toggleStyle(.switch) }
+                    Row("Updates") {
+                        HStack(spacing: 14) {
+                            Text(updates.status.isEmpty ? (updates.enabled ? "Not checked yet" : "Off") : updates.status)
+                                .foregroundStyle(updates.available == nil ? Theme.secondary : Theme.amber).lineLimit(1)
+                            if updates.available != nil {
+                                Button("DOWNLOAD") { updates.download() }.buttonStyle(.plain).foregroundStyle(Theme.amber)
+                            }
+                            Button(updates.checking ? "CHECKING…" : "CHECK NOW") { Task { await updates.check() } }
+                                .buttonStyle(.plain).foregroundStyle(Theme.secondary).disabled(updates.checking || updates.current == nil)
+                        }
+                    }
+                    Text("On: at launch and every six hours the app reads vinyl-cat.com/release.json to see whether a newer version is out, and shows an UPDATE chip in the top bar when one is. Nothing is sent.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }

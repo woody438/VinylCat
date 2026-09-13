@@ -102,4 +102,5 @@ final class AppState {
     let importer = PhotoImporter()
     /// The tip jar: free app, own keys, an ask that grows with the catalogue (see `Coffee`).
     let coffee = Coffee()
+    let updates = UpdateCheck()
 }

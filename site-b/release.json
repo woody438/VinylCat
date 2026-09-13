@@ -1,4 +1,5 @@
 {
-  "version": "0.1.0",
-  "file": "downloads/VinylCat_v1_2026-09-13.dmg"
+  "version": "0.2.0",
+  "file": "downloads/VinylCat_v2_2026-09-14.dmg",
+  "notes": "The app now tells you when a new version is out."
 }

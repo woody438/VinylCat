@@ -73,6 +73,8 @@ struct RootView: View {
         // First-run callouts: anchors are collected from the whole tree, the overlay draws above it.
         .overlayPreferenceValue(TourAnchorKey.self) { TourHost(anchors: $0) }
         .task { await state.tour.autoStartIfNeeded() }
+        // Reads vinyl-cat.com/release.json now and every six hours; the UPDATE chip in the top bar follows it.
+        .task { await state.updates.run() }
         // The big ask is a launch-time thing only: mid-session the 500th record gets the card, not this.
         .task {
             let store = Store.shared
@@ -135,6 +137,7 @@ struct TopBar: View {
                 }
             }
             .tourAnchor(.tabs)
+            UpdateChip()
             Spacer()
             // The three top-bar controls share one shape so they read as one set.
             // Fixed size: the cluster must never compress into itself — overlapping controls were
@@ -207,6 +210,53 @@ struct CountBadge: View {
             .padding(.horizontal, count > 9 ? 4 : 0)
             .frame(minWidth: 16, minHeight: 16)
             .background(Capsule().fill(Theme.red))
+    }
+}
+
+/// Top-bar notice that a newer VinylCat is on the site (`UpdateCheck`). Draws nothing when up to date.
+struct UpdateChip: View {
+    @Environment(AppState.self) private var state
+    @State private var open = false
+    var body: some View {
+        if let r = state.updates.shown {
+            Button { open.toggle() } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "arrow.down.circle.fill").font(.system(size: 12, weight: .semibold))
+                    Text("UPDATE · \(r.version)").font(Theme.mono(11)).tracking(1.5).lineLimit(1).fixedSize()
+                }
+                .foregroundStyle(Theme.amber)
+                .padding(.horizontal, 10).frame(height: 26)
+                .background(Theme.amberBg)
+                .overlay(Rectangle().stroke(Theme.amber.opacity(0.6), lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("VinylCat \(r.version) is out — click for what's new and the download")
+            .popover(isPresented: $open, arrowEdge: .bottom) { UpdatePopover(release: r) { open = false } }
+        }
+    }
+}
+
+/// What's new, how to install it, and the two choices. The download opens in the browser: the app
+/// is not signed with a Developer ID, so it does not replace itself.
+struct UpdatePopover: View {
+    @Environment(AppState.self) private var state
+    let release: UpdateCheck.Release
+    let onClose: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Caption("VINYLCAT \(release.version) IS OUT", color: Theme.amber)
+            if let notes = release.notes, !notes.isEmpty {
+                Text(notes).font(Theme.display(18, weight: .semibold)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
+            }
+            Text("You have \(state.updates.current ?? "?"). Download the DMG, quit VinylCat and drag the new one over the old one in Applications. Your catalogue, photos and keys stay where they are; macOS may ask once more to open it.")
+                .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
+                CoffeePill("DOWNLOAD", fill: true, compact: true) { state.updates.download(); onClose() }
+                CoffeePill("SKIP THIS VERSION", fill: false, compact: true) { state.updates.skip(); onClose() }
+            }
+        }
+        .padding(16).frame(width: 380).background(Theme.panel)
     }
 }
 

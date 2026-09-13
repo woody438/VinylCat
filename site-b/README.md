@@ -7,7 +7,10 @@ Three plain HTML pages, one stylesheet, no build step. Palette and type mirror t
 - `install.html` — the six Gatekeeper steps, first-run wizard, updating, where data lives.
 - `how-it-works.html` — the six layers with the exact model prompts, Discogs ladder, ranker weights, every knob.
 - `assets/img/` — real screens from `.build/debug/VinylCat --render-ui`, plus the icon from `Resources/AppIcon.icns`.
-- `release.json` — the one place the version and DMG path live: the pages show the version from it, `/download` redirects to the file.
+- `release.json` — the one place the version and DMG path live: the pages show the version from it, `/download` redirects to the file,
+  and the app reads it (`Sources/VinylCat/Support/UpdateCheck.swift`) to show its UPDATE chip when `version` is newer than its own.
+  `notes` is the one line shown under the chip. To ship a release: `scripts/package.sh`, copy the DMG into `downloads/`, bump
+  `version`, `file` and `notes` here, push.
 - `assets/js/site.js` — fills in the version and the take-up counters.
 - `api/` + `lib/counter.js` — the take-up counter (below). `vercel.json` rewrites `/download` to `api/download.js`.
 

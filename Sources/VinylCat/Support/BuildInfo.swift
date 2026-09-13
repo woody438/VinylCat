@@ -4,6 +4,8 @@ import Foundation
 /// (date, time and git commit) into Info.plist as `VinylCatBuild`; the bare debug binary has no
 /// bundle, so it reports itself as a dev build.
 enum BuildInfo {
+    /// "0.2.0" from a bundle, nil from the bare binary (UpdateCheck compares against this).
+    static var versionNumber: String? { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
     static var version: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).map { "VinylCat \($0)" } ?? "VinylCat (dev build)"
     }

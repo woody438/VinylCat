@@ -99,6 +99,14 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   (`launchPing`, default on) is the user's switch. The site side is `site-b/api/` + `lib/counter.js` (Upstash Redis, three
   integers, `/download` counts and redirects to the DMG, `/api/stats` feeds the download card) — see `site-b/README.md`.
   Nothing identifying is ever sent or stored; keep it that way, the site copy promises it.
+- `Support/UpdateCheck.swift` — the update notice (2026-09-14): a GET of `https://vinyl-cat.com/release.json` at launch and every six
+  hours (`VINYLCAT_RELEASE_URL` redirects it; a `file://` URL works for tests); when `version` there is newer than
+  `BuildInfo.versionNumber` the amber UPDATE chip appears in the top bar (`UpdateChip` / `UpdatePopover` in `VinylCatApp.swift`:
+  notes, DOWNLOAD → `vinyl-cat.com/download`, SKIP THIS VERSION → `updateSkippedVersion`). Settings → ABOUT has the switch
+  (`updateCheck`, default on), the status line and CHECK NOW. The app never replaces itself: no Developer ID, so the install stays
+  drag-over-the-old-one. Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, `scripts/package.sh`, copy
+  the DMG into `site-b/downloads/`, update `site-b/release.json` (`version`, `file`, `notes`), push. `--render-ui` writes
+  `update-available.png`; the self-test covers the version compare and the offer rules.
 - `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
   `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
   `--render-ui` writes every step as `tour-NN-<anchor>.png`.

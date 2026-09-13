@@ -257,6 +257,21 @@ enum SelfTest {
         check(!LaunchPing.shouldSend(channel: "release", enabled: false, forced: true), "the Settings switch wins over everything")
         check(String(decoding: LaunchPing.body(event: "launch", version: "0.1.0"), as: UTF8.self) == #"{"event":"launch","version":"0.1.0"}"#, "the body is the event and the version, nothing else")
 
+        print("update check")
+        check(UpdateCheck.isNewer("0.2.0", than: "0.1.0"), "0.2.0 is newer than 0.1.0")
+        check(UpdateCheck.isNewer("0.1.10", than: "0.1.9"), "components compare as numbers, not strings")
+        check(UpdateCheck.isNewer("1.0", than: "0.9.9"), "shorter version string pads with zeros")
+        check(!UpdateCheck.isNewer("0.1.0", than: "0.1.0") && !UpdateCheck.isNewer("0.1.0", than: "0.2.0"), "same or older is not newer")
+        check(!UpdateCheck.isNewer("0.1.0-beta", than: "0.1.0"), "suffix text is ignored")
+        let rel = UpdateCheck.Release(version: "0.2.0", file: "downloads/x.dmg", notes: nil)
+        check(UpdateCheck.shouldOffer(rel, current: "0.1.0", skipped: ""), "newer release is offered")
+        check(!UpdateCheck.shouldOffer(rel, current: "0.1.0", skipped: "0.2.0"), "skipped version stays quiet")
+        check(UpdateCheck.shouldOffer(UpdateCheck.Release(version: "0.3.0", file: "", notes: nil), current: "0.1.0", skipped: "0.2.0"), "something newer than the skipped one shows again")
+        check(!UpdateCheck.shouldOffer(rel, current: nil, skipped: ""), "the bare binary never offers")
+        check(!UpdateCheck.shouldOffer(rel, current: "0.2.0", skipped: ""), "same version is up to date")
+        let decoded = try? JSONDecoder().decode(UpdateCheck.Release.self, from: Data(#"{"version":"0.2.0","file":"downloads/VinylCat_v2.dmg"}"#.utf8))
+        check(decoded?.version == "0.2.0" && decoded?.notes == nil, "release.json decodes without notes")
+
         print("formats")
         check(VinylFormat.allCases.count == 3 && VinylFormat.seven.discogsFormat == "7\"", "format mapping")
 
