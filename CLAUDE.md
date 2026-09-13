@@ -114,6 +114,8 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   GitHub issue labelled `report` on woody438/VinylCat with the `GITHUB_TOKEN` in the Vercel project env (`site-b/api/report.js`).
   503 (no token) or any failure → the sheet offers SAVE AS FILE to the Desktop. `--render-ui` writes `report-1-settings.png` and
   `report-2-record.png`; the self-test covers title, scrub, markdown and the request body.
+  Issues made with Woody's own token never notify him, so `.github/workflows/report-notify.yml` assigns each `report` issue to him
+  and comments on it as the Actions bot: that fires the phone's "assigned" and "direct mentions" notifications (tested 2026-09-14).
 - `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
   `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
   `--render-ui` writes every step as `tour-NN-<anchor>.png`.

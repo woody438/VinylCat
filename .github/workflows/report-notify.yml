@@ -20,5 +20,7 @@ jobs:
         run: |
           # Once per issue: skip if the bot has already commented.
           if gh api "repos/${{ github.repository }}/issues/$NUMBER/comments" --jq '.[].user.login' | grep -q '^github-actions\[bot\]$'; then exit 0; fi
+          # Assign it too: the phone's "assigned" and "direct mentions" switches both fire then.
+          gh issue edit "$NUMBER" --repo "${{ github.repository }}" --add-assignee "${{ github.repository_owner }}" || true
           gh issue comment "$NUMBER" --repo "${{ github.repository }}" \
             --body "New report from the app — filed via vinyl-cat.com. @${{ github.repository_owner }} this comment exists so you get a notification; the report itself is above."
