@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VinylCat vs Discogs, CLZ Music, Record Scanner, VinylAI and VinylBox</title>
+  <meta name="description" content="How VinylCat compares with the Discogs app, CLZ Music, Record Scanner, VinylAI and VinylBox: platforms, price, how each one identifies a record, Discogs sync and where your data lives.">
+  <link rel="canonical" href="https://vinyl-cat.com/compare.html">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="VinylCat">
+  <meta property="og:url" content="https://vinyl-cat.com/compare.html">
+  <meta property="og:title" content="VinylCat compared with the other vinyl cataloguers">
+  <meta property="og:description" content="The only one that is hands-free, reads the label, and keeps your collection on your own Mac. Also the only one that is Mac-only.">
+  <meta property="og:image" content="https://vinyl-cat.com/assets/img/scan-matched.png">
+  <meta property="og:image:width" content="1440">
+  <meta property="og:image:height" content="900">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="VinylCat home">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="46" fill="#2a2f34"/>
+        <circle cx="50" cy="50" r="27.6" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="33.1" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="38.6" fill="none" stroke="rgba(255,255,255,.06)" stroke-width=".6"/>
+        <circle cx="50" cy="50" r="13.8" fill="#cc6a3c" stroke="#9e4f2a" stroke-width=".8"/>
+        <circle cx="50" cy="50" r="1.6" fill="#2a2f34"/>
+        <path d="M68.4 48.2Q80.96 45.05 93.51 45.12M68.4 51.79Q80.96 54.95 93.51 54.88M31.6 48.2Q19.04 45.05 6.49 45.12M31.6 51.79Q19.04 54.95 6.49 54.88" fill="none" stroke="#9e4f2a" stroke-width=".9" stroke-linecap="round"/>
+      </svg>
+      <span class="word">VINYL-CAT</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">Overview</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="compare.html" aria-current="page">Compare</a>
+      <a href="install.html">Install</a>
+    </div>
+    <div class="grow"></div>
+    <a class="cta" href="/download" data-download>Download</a>
+  </div>
+</nav>
+
+<main>
+
+<section class="hero" style="padding-bottom:48px">
+  <div class="wrap">
+    <span class="eyebrow">Compared</span>
+    <h1 style="max-width:14ch">Everything else is tap, wait, repeat</h1>
+    <p class="lede">Three kinds of app catalogue vinyl. Discogs is the database and the free reference app: barcode or typed search. The established cataloguers are barcode-first with a subscription. The new photo-scan apps identify a cover from a phone snap, one tap per record. None of them watch a camera, read the label, or talk back. VinylCat does, and it is the only one that is Mac-only.</p>
+    <div class="foot-note" style="margin-top:24px">Researched 9 September 2026 · prices in US dollars from the US App Store · "not found" means it could not be verified, not that it is absent</div>
+  </div>
+</section>
+
+<section id="table" style="padding-top:40px">
+  <div class="wrap">
+    <div class="tablewrap">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="us">VinylCat</th>
+            <th>Discogs app</th>
+            <th>CLZ Music</th>
+            <th>Record Scanner</th>
+            <th>VinylAI</th>
+            <th>VinylBox</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="k">Platforms</td>
+            <td class="us">Native macOS 15+, Apple silicon</td>
+            <td>iOS, Android, web. No Mac app</td>
+            <td>iOS, Android, web, native Mac and Windows desktop</td>
+            <td>iOS, Android. No desktop</td>
+            <td>iOS, Android. No desktop</td>
+            <td>iPhone, iPad. Runs on a Mac as an iPad app</td>
+          </tr>
+          <tr>
+            <td class="k">Price</td>
+            <td class="us">Free. Your own Discogs token and model key, about $0.001 a scan. OCR-only costs nothing</td>
+            <td>Free. 9% commission when selling</td>
+            <td>$1.99 a month or $19.99 a year on mobile; $3.95 a month or $39.95 a year on the web</td>
+            <td>Free for 30 records, then $4.99 a month or about $12 to $39 a year</td>
+            <td>Free core; premium unlocks from $2.79 to $39.99</td>
+            <td>Free base; Pro about $1.99 to $7.99 a month</td>
+          </tr>
+          <tr>
+            <td class="k">How it identifies</td>
+            <td class="us">Webcam or iPhone over Continuity Camera. Barcode, on-device OCR and catalogue-number matching, plus an optional vision model that reads the label or cover</td>
+            <td>Barcode scan, typed search, catalogue-number search</td>
+            <td>Barcode scan on phone or webcam, typed search, catalogue number. No photo recognition</td>
+            <td>Cover-photo recognition, barcode, catalogue number</td>
+            <td>Photo of the cover, label or barcode</td>
+            <td>Barcode, Apple Visual Intelligence cover search, Shazam audio</td>
+          </tr>
+          <tr>
+            <td class="k">Reads the label</td>
+            <td class="us yes">Yes. The label is where it looks first, so singles and worn LPs match on the catalogue number</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td>Cover first. Catalogue number is a separate scan mode</td>
+            <td>Yes, claimed</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td class="k">Hands-free, voice, spoken results</td>
+            <td class="us yes">Yes. Hold it up, chime, next. Voice commands on-device, result read out, a key for every command</td>
+            <td class="no">No. One at a time</td>
+            <td>Barcode queue mode. Not camera-triggered, no voice</td>
+            <td class="no">No. One shot per scan</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td class="k">When it gets one wrong</td>
+            <td class="us">Thumbs down keeps the OCR lines, the model's reading and every candidate. Review re-searches from them and logs the fix</td>
+            <td>Remove and re-add by hand</td>
+            <td>Edit by hand</td>
+            <td>Not found</td>
+            <td>Not found</td>
+            <td>Alternate-match review after a scan</td>
+          </tr>
+          <tr>
+            <td class="k">Discogs sync</td>
+            <td class="us">Two-way, off by default. Pushes matches, pulls the collection, never deletes on Discogs</td>
+            <td>Is Discogs</td>
+            <td>Import only, one-way</td>
+            <td>Push to collection and wishlist. Pull not confirmed</td>
+            <td>Two-way, claimed</td>
+            <td>Collection and wantlist sync, marketplace listings</td>
+          </tr>
+          <tr>
+            <td class="k">Where your data lives</td>
+            <td class="us">On your Mac. No account, no vendor cloud. Only Discogs and the model provider you chose see anything</td>
+            <td>Discogs servers</td>
+            <td>CLZ Cloud. A local file on desktop</td>
+            <td>Vendor cloud, account required</td>
+            <td>Vendor servers, with third-party trackers disclosed</td>
+            <td>Discogs plus on-device</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="verdict">
+  <div class="wrap">
+    <div class="two">
+      <div>
+        <span class="eyebrow green">Where VinylCat wins</span>
+        <h2>Hands free, label first</h2>
+        <ul class="list" style="margin-top:28px">
+          <li><span class="dot"></span><div><b>The only hands-free one</b><span>Hold up, chime, next. A crate of 50 singles is a ten-minute job with both hands on the records.</span></div></li>
+          <li><span class="dot"></span><div><b>Reads the label</b><span>The others are cover-first. The catalogue number on the label is what identifies a single, and it is the first thing VinylCat looks for.</span></div></li>
+          <li><span class="dot"></span><div><b>Free, and your data is yours</b><span>No subscription, no vendor cloud, no trackers. The model runs on your own key at about a tenth of a cent a scan.</span></div></li>
+          <li><span class="dot"></span><div><b>A real correction loop</b><span>Nothing else shows why it chose what it chose, or learns from the fix.</span></div></li>
+          <li><span class="dot"></span><div><b>Discogs sync that never deletes</b><span>Off until you switch it on. Removed on Discogs means unlinked here, never gone.</span></div></li>
+        </ul>
+      </div>
+      <div>
+        <span class="eyebrow red">Where it loses</span>
+        <h2>Mac only, and honest about it</h2>
+        <ul class="list" style="margin-top:28px">
+          <li><span class="dot red"></span><div><b>Mac only, Apple silicon only</b><span>Every competitor is on a phone. If you catalogue in the shop, this is not the app for that.</span></div></li>
+          <li><span class="dot red"></span><div><b>Not signed by Apple</b><span>First launch takes a six-step detour through Privacy &amp; Security. <a href="install.html">Written out here.</a></span></div></li>
+          <li><span class="dot amber"></span><div><b>Two keys to set up</b><span>A Discogs token and a model key. The others are one install and go.</span></div></li>
+          <li><span class="dot amber"></span><div><b>No marketplace, wantlist or social</b><span>It catalogues. Selling and swapping stay on Discogs.</span></div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="dl-card">
+      <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
+      <div>
+        <h3>VinylCat <span data-version>0.2.1</span></h3>
+        <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free · <a href="install.html">read the install steps first</a></div>
+      </div>
+      <a class="btn" href="/download" data-download>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg>
+        Download the DMG
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>VINYLCAT · v<span data-version>0.2.1</span> · macOS 15+ · Apple silicon</span>
+    <a href="index.html">Overview</a>
+    <a href="how-it-works.html">How it works</a>
+    <a href="install.html">Install</a>
+    <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
+    <span class="grow"></span>
+    <span>Not affiliated with Discogs, OpenAI, Google, Apple or any product named above.</span>
+  </div>
+</footer>
+
+<script src="assets/js/site.js"></script>
+</body>
+</html>

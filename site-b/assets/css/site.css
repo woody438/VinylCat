@@ -310,6 +310,17 @@ footer a { color: var(--sec); }
 footer .grow { flex: 1; }
 
 /* ---------- responsive ---------- */
+/* ---------- compare table ---------- */
+.compare { font-size: 14.5px; min-width: 1040px; }
+.compare th, .compare td { padding: 12px 14px 12px 0; }
+.compare th:first-child, .compare td:first-child { width: 132px; }
+.compare td.k { white-space: normal; }
+.compare th.us { color: var(--green); }
+.compare td.us { color: var(--text); background: var(--green-bg); padding-left: 12px; border-left: 2px solid var(--green); }
+.compare td.yes { font-weight: 500; }
+.compare td.no { color: var(--muted); }
+.compare td { color: var(--sec); }
+
 @media (max-width: 1000px) {
   .loop, .features { grid-template-columns: repeat(2, 1fr); }
   .outcomes { grid-template-columns: repeat(3, 1fr); }
@@ -332,5 +343,6 @@ footer .grow { flex: 1; }
   .steps li { grid-template-columns: 48px 1fr; }
   .steps li::before { font-size: 40px; }
   td.k { white-space: normal; }
+  .compare { min-width: 900px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
