@@ -1,5 +1,5 @@
 {
   "version": "0.2.2",
-  "file": "downloads/VinylCat_v2_2026-09-14.dmg",
+  "file": "downloads/VinylCat_v4_2026-09-14.dmg",
   "notes": "LLM COST now shows this session and the month to date, turns amber past a monthly figure you set (default $5), and keeps an all-time total in Settings → About. The Discogs meter drops back to 0/60 a minute after the last call."
 }
