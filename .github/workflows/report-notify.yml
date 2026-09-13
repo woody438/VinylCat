@@ -1,0 +1,24 @@
+# Bug reports from the app arrive as issues created with Woody's own token (site-b/api/report.js), and
+# GitHub never notifies you of your own activity. This comments on each new "report" issue as the
+# Actions bot, which does count as someone else — so the author (Woody) gets the usual participating
+# notification: GitHub Mobile push and/or email, per github.com/settings/notifications.
+name: Notify on app report
+on:
+  issues:
+    types: [opened, labeled]
+permissions:
+  issues: write
+jobs:
+  ping:
+    if: github.event.label.name == 'report' || contains(github.event.issue.labels.*.name, 'report')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment so the author is notified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          # Once per issue: skip if the bot has already commented.
+          if gh api "repos/${{ github.repository }}/issues/$NUMBER/comments" --jq '.[].user.login' | grep -q '^github-actions\[bot\]$'; then exit 0; fi
+          gh issue comment "$NUMBER" --repo "${{ github.repository }}" \
+            --body "New report from the app — filed via vinyl-cat.com. @${{ github.repository_owner }} this comment exists so you get a notification; the report itself is above."
