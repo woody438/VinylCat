@@ -38,6 +38,17 @@ struct SettingsView: View {
                     KeyField(label: "Google AI key", text: $geminiKey) { Keychain.set(geminiKey, for: .gemini); identifier.refreshKeys() }
                     Row("Skip model when barcode hits") { Toggle("", isOn: $identifier.skipModelWhenBarcode).labelsHidden().toggleStyle(.switch) }
                     Row("Spend this session") { Text(String(format: "$%.3f · %d reads", identifier.sessionCostUSD, identifier.reads)).foregroundStyle(Theme.secondary) }
+                    Row("Spend this month") {
+                        Text(String(format: "$%.2f · %d reads", identifier.spend.monthCostUSD, identifier.spend.monthReads))
+                            .foregroundStyle(identifier.overBudget ? Theme.amber : Theme.secondary)
+                    }
+                    Row("Warn me past") {
+                        HStack(spacing: 6) {
+                            TextField("", value: $identifier.monthlyBudgetUSD, format: .number.precision(.fractionLength(0...2)))
+                                .textFieldStyle(.roundedBorder).frame(width: 64).multilineTextAlignment(.trailing)
+                            Text("USD a month · 0 never").foregroundStyle(Theme.muted).font(Theme.mono(11))
+                        }
+                    }
                 }
                 .tourAnchor(.settingsIdentification)
                 Section("DISCOGS") {
@@ -153,6 +164,7 @@ struct SettingsView: View {
                 Section("ABOUT") {
                     Row("Version") { Text(BuildInfo.version).foregroundStyle(Theme.secondary) }
                     Row("Build") { Text(BuildInfo.build).foregroundStyle(Theme.secondary).font(Theme.mono(11)) }
+                    Row("Model spend, all time") { Text(String(format: "$%.2f · %d reads", identifier.spend.totalCostUSD, identifier.spend.totalReads)).foregroundStyle(Theme.secondary) }
                     Row("Count launches") { Toggle("", isOn: $launchPing).labelsHidden().toggleStyle(.switch) }
                     Text("On: each launch sends the word “launch” and the version number to vinyl-cat.com, nothing else, so the developer can see whether anyone uses it. No identifier, no IP kept.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)

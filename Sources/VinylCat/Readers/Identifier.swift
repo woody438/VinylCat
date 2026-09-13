@@ -20,6 +20,13 @@ final class Identifier {
     var skipModelWhenBarcode = true
     private(set) var sessionCostUSD = 0.0
     private(set) var reads = 0
+    /// Month-to-date and all-time spend, kept across launches (`SpendLedger`).
+    private(set) var spend = SpendLedger.load()
+    /// Monthly spend past which the LLM COST meter turns amber. A warning only; 0 switches it off.
+    var monthlyBudgetUSD: Double {
+        didSet { UserDefaults.standard.set(monthlyBudgetUSD, forKey: "llmBudget") }
+    }
+    var overBudget: Bool { spend.isOver(budgetUSD: monthlyBudgetUSD) }
     /// True once a scan ran without any model key — the HUD nudges the user to add one.
     private(set) var modelSkippedForMissingKey = false
     /// Cached: the HUD reads this on every frame, and each Keychain query is a round trip to
@@ -28,6 +35,7 @@ final class Identifier {
 
     init() {
         provider = ReaderProvider(rawValue: UserDefaults.standard.string(forKey: "readerProvider") ?? "") ?? .luna
+        monthlyBudgetUSD = UserDefaults.standard.object(forKey: "llmBudget") as? Double ?? 5.0
         refreshKeys()
     }
 
@@ -100,6 +108,7 @@ final class Identifier {
         }
         sessionCostUSD += r.usage.costUSD
         reads += 1
+        spend.add(costUSD: r.usage.costUSD); spend.save()
         var m = r.reading
         if m.catalogNumber == nil { m.catalogNumber = local.catalogueCandidates.first }
         if m.barcode == nil { m.barcode = local.barcodes.first }

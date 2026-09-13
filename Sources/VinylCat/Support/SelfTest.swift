@@ -394,6 +394,24 @@ enum SelfTest {
         check(CollectionSync.enabledByUser == false, "and off again")
         if let saved { UserDefaults.standard.set(saved, forKey: "discogsSync") } else { UserDefaults.standard.removeObject(forKey: "discogsSync") }
 
+        print("spend ledger")
+        let cal = Calendar(identifier: .gregorian)
+        let sep = cal.date(from: DateComponents(year: 2026, month: 9, day: 14))!, oct = cal.date(from: DateComponents(year: 2026, month: 10, day: 1))!
+        var ledger = SpendLedger()
+        ledger.add(costUSD: 0.4, at: sep); ledger.add(costUSD: 0.6, at: sep)
+        check(ledger.monthKey == "2026-09" && abs(ledger.monthCostUSD - 1.0) < 1e-9 && ledger.monthReads == 2, "reads in one month add up")
+        ledger.add(costUSD: 0.25, at: oct)
+        check(ledger.monthKey == "2026-10" && abs(ledger.monthCostUSD - 0.25) < 1e-9 && ledger.monthReads == 1, "a new month starts from zero")
+        check(abs(ledger.totalCostUSD - 1.25) < 1e-9 && ledger.totalReads == 3, "the all-time total survives the roll")
+        check(!ledger.isOver(budgetUSD: 5) && ledger.isOver(budgetUSD: 0.25) && !ledger.isOver(budgetUSD: 0), "budget: under, reached, switched off")
+        let suite = UserDefaults(suiteName: "vinylcat-selftest-spend")!
+        suite.removePersistentDomain(forName: "vinylcat-selftest-spend")
+        ledger.save(to: suite)
+        check(SpendLedger.load(from: suite, now: oct) == ledger, "ledger round-trips through UserDefaults")
+        let rolled = SpendLedger.load(from: suite, now: cal.date(from: DateComponents(year: 2026, month: 11, day: 3))!)
+        check(rolled.monthCostUSD == 0 && rolled.monthKey == "2026-11" && rolled.totalReads == 3, "loading in a later month rolls the month, keeps the total")
+        suite.removePersistentDomain(forName: "vinylcat-selftest-spend")
+
         print("coffee")
         check(Coffee.milestone(reached: 24) == nil, "no ask below 25 scanned records")
         check(Coffee.milestone(reached: 25) == 25 && Coffee.milestone(reached: 99) == 25, "25–99 → the 25 rung")

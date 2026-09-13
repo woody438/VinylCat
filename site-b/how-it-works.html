@@ -235,7 +235,7 @@ SIDE A</pre>
         <ul>
           <li><strong>Image size.</strong> The still is downscaled to 1024 px on the long side and JPEG-compressed before upload, plus the zoomed close-ups from the local pass. That caps the per-image token cost.</li>
           <li><strong>Strict output.</strong> OpenAI gets a JSON schema in strict mode; Google gets a response schema at low temperature. The reply cap is 2,500 tokens, because reasoning tokens count against it and a smaller cap cut the JSON off mid-field.</li>
-          <li><strong>Cost meter.</strong> Every reply's token counts are priced and added to the session total in the HUD's LLM COST cell.</li>
+          <li><strong>Cost meter.</strong> Every reply's token counts are priced and added to the LLM COST cell: this session on top, the month to date underneath, so the number you see matches the provider's bill. It turns amber once the month passes the figure you set in Settings (default $5) — a warning, never a stop. The all-time total is in Settings → About.</li>
           <li><strong>A model failure never aborts a scan.</strong> Timeout, bad key, malformed reply: the app carries on OCR-only and records the error against the scan.</li>
           <li><strong>When OCR and the model disagree, the model wins.</strong> In the eval it gets the catalogue number right first time on 88% of photos against OCR's 49%.</li>
         </ul>

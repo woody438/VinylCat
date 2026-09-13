@@ -1,5 +1,5 @@
 {
-  "version": "0.2.1",
-  "file": "downloads/VinylCat_v3_2026-09-14.dmg",
-  "notes": "The Discogs meter reads properly again, and the app now says when it is pricing your collection after a pull — leave it open and it finishes on its own."
+  "version": "0.2.2",
+  "file": "downloads/VinylCat_v2_2026-09-14.dmg",
+  "notes": "LLM COST now shows this session and the month to date, turns amber past a monthly figure you set (default $5), and keeps an all-time total in Settings → About. The Discogs meter drops back to 0/60 a minute after the last call."
 }

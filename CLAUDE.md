@@ -73,6 +73,11 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   A model failure never aborts a scan: `Identifier` falls back to OCR-only and records `modelError`; Discogs/network failures
   land in `ScanPhase.error` with a `FriendlyError` sentence, spoken and shown, and the photo is parked in the review queue
   (with a "Scan error: …" note) so nothing is lost. `park` saves `ScanEvidence` too, so the model's reading survives for Review.
+- `Readers/SpendLedger.swift` — model spend across launches (2026-09-14, Woody's call): month-to-date and all-time cost + reads in
+  UserDefaults `llmSpend`, rolled on the first read or launch of a new calendar month. The rail's LLM COST meter shows the session
+  on top and `MONTH $x` under it, amber once the month passes `Identifier.monthlyBudgetUSD` (`llmBudget`, default $5, 0 = never;
+  Settings → IDENTIFICATION "Warn me past") — a warning, never a stop. All-time sits in Settings → ABOUT. The self-test covers the
+  roll, the total and the round trip.
 - `Voice/` — `SpeechCommands` (on-device SFSpeechRecognizer, phrase table in `VoiceCommand.phrases`), `Speaker` (TTS, mutes recogniser), `Chimes`.
 - `Persistence/` — `Models` (structs), `Store` (SQLite, `revision` drives view refresh, CSV + feedback JSONL export), `Keychain` (API keys).
   `Store.insert` is `INSERT OR REPLACE`, which deletes the row first: never give a records-keyed table an `ON DELETE CASCADE`

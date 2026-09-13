@@ -342,11 +342,19 @@ struct RightRail: View {
             }
             Rectangle().fill(Theme.line).frame(height: 1)
             VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 Meter(title: "DISCOGS", value: "\(state.discogs.used)/\(state.discogs.limit)", unit: "/min", widest: "\(state.discogs.limit)/\(state.discogs.limit)", color: state.discogs.remaining < 10 ? Theme.amber : Theme.text)
                     .help("Discogs calls used in the current minute (from Discogs' own rate-limit headers)")
-                Meter(title: "LLM COST", value: String(format: "$%.3f", state.identifier.sessionCostUSD), color: Theme.text)
-                    .help("Vision-model spend this session · \(state.identifier.reads) reads")
+                // Session on top (what this sitting costs), month underneath (what the bill will say); amber past the
+                // monthly figure in Settings → IDENTIFICATION. All-time lives in Settings → ABOUT.
+                Meter(title: "LLM COST", value: String(format: "$%.3f", state.identifier.sessionCostUSD),
+                      sub: String(format: "MONTH $%.2f", state.identifier.spend.monthCostUSD),
+                      color: state.identifier.overBudget ? Theme.amber : Theme.text)
+                    .help(String(format: "Vision-model spend · this session $%.3f, %d reads · this month $%.2f, %d reads%@ · all time $%.2f, %d reads",
+                                 state.identifier.sessionCostUSD, state.identifier.reads,
+                                 state.identifier.spend.monthCostUSD, state.identifier.spend.monthReads,
+                                 state.identifier.monthlyBudgetUSD > 0 ? String(format: " (warning past $%.2f)", state.identifier.monthlyBudgetUSD) : "",
+                                 state.identifier.spend.totalCostUSD, state.identifier.spend.totalReads))
                 Meter(title: "REVIEW", value: "\(state.reviewCount)", color: Theme.red)
                 // Supporters get a quiet fourth meter. It rewards the honest and gives everyone else something to look at.
                 if state.coffee.supporter { Meter(title: "COFFEE", value: "BOUGHT", color: Theme.green).help("Thank you. Settings → SUPPORT to undo.") }
@@ -440,6 +448,8 @@ struct Meter: View {
     /// The widest value this meter can show ("60/60"): the layout is sized to it, so the unit doesn't
     /// come and go as the digits change.
     var widest: String? = nil
+    /// A second, smaller line under the value (the month's spend under the session's).
+    var sub: String? = nil
     let color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -453,6 +463,7 @@ struct Meter: View {
                 }
                 valueText
             }
+            if let sub { Text(sub).font(Theme.mono(10)).foregroundStyle(color == Theme.text ? Theme.muted : color).lineLimit(1).fixedSize() }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
