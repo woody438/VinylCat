@@ -32,18 +32,6 @@
         "website"
       ],
       "port": 8766
-    },
-    {
-      "name": "review",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "4180",
-        "--directory",
-        "/private/tmp/claude-501/-Users-ianwoodall-Documents-Claude-Projects-vinylcat/5db81c79-0255-4320-b703-3b13f0c4ec54/scratchpad"
-      ],
-      "port": 4180
     }
   ]
 }
