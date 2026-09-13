@@ -35,6 +35,13 @@ hidden if the API is unreachable. The app's side is `Sources/VinylCat/Support/La
 only, Settings → ABOUT → "Count launches" is the user's switch, `VINYLCAT_PING=1 VINYLCAT_PING_URL=http://localhost:4174/api/ping`
 points a dev build at the local server.
 
+### Hosting (done 2026-09-13)
+
+Vercel project `vinyl-cat` (team woody438, Hobby), root directory `site-b`, deploys on every push to `main`. Domain
+`vinyl-cat.com` + `www` point at Vercel. Redis store `vinylcat-counters` (Upstash, Free plan: 500k commands/month, region
+iad1) is connected to Production and Preview as `KV_REST_API_URL` / `KV_REST_API_TOKEN`. Counts: `curl https://vinyl-cat.com/api/stats`,
+or Vercel → Storage → vinylcat-counters → REPL. The steps below are what it took, kept for a rebuild.
+
 ### Hosting on Vercel (once)
 
 1. `vercel.com` → Add New Project → import `woody438/VinylCat`, **Root Directory `site-b`**, framework "Other". Deploy.
