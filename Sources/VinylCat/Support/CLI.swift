@@ -119,6 +119,11 @@ enum CLI {
         if render(RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
                     .environment(\.previewPhase, .armed(reason: "empty")), to: out.appendingPathComponent("update-available.png")) { written += 1 }
         state.updates.previewRelease = nil
+        // The bug report sheet: from Settings (no record) and from a record's detail.
+        if render(BugReportSheet(record: nil, onClose: {}).environment(state).environment(\.staticRender, true), to: out.appendingPathComponent("report-1-settings.png")) { written += 1 }
+        if let r = Store.shared.all().first {
+            if render(BugReportSheet(record: r, onClose: {}).environment(state).environment(\.staticRender, true), to: out.appendingPathComponent("report-2-record.png")) { written += 1 }
+        }
         for i in 0..<6 {
             let view = RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
                 .environment(\.previewSetupStep, i)

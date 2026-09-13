@@ -272,6 +272,24 @@ enum SelfTest {
         let decoded = try? JSONDecoder().decode(UpdateCheck.Release.self, from: Data(#"{"version":"0.2.0","file":"downloads/VinylCat_v2.dmg"}"#.utf8))
         check(decoded?.version == "0.2.0" && decoded?.notes == nil, "release.json decodes without notes")
 
+        print("bug report")
+        check(BugReport.title("Camera shows black\nafter waking") == "Camera shows black", "title is the first line")
+        check(BugReport.title("   ") == "Problem report", "empty description gets a stock title")
+        check(BugReport.title(String(repeating: "x", count: 120)).count <= 80, "title is capped at 80")
+        check(BugReport.title("wrong match", record: "The Jam — Going Underground") == "The Jam — Going Underground: wrong match", "record name leads the title")
+        check(!BugReport.scrub("my key is sk-proj-abcdefghijklmnopqrstuvwxyz0123").contains("sk-proj-abc"), "OpenAI-shaped key is masked")
+        check(!BugReport.scrub("AIzaSyA1234567890abcdefghijklmnop").contains("AIzaSyA12"), "Google-shaped key is masked")
+        check(!BugReport.scrub("token=abcdefghij1234567890ABCDEFGHIJ").contains("abcdefghij1234"), "token=… is masked")
+        check(BugReport.scrub("POSP 113 · 0.94 · r2413807") == "POSP 113 · 0.94 · r2413807", "ordinary text is untouched")
+        let md = BugReport.markdown(description: "It froze", email: "a@b.c", version: "VinylCat 0.2.0", build: "b", macOS: "26.0",
+                                    record: nil, evidenceJSON: "{}", log: "12:00 I app · launch")
+        check(md.hasPrefix("## What went wrong\n\nIt froze") && md.contains("Reply to: a@b.c") && md.contains("- Version: VinylCat 0.2.0"), "markdown carries the note, email and version")
+        check(md.contains("## Scan evidence") && md.contains("## Log (last 150 lines)"), "markdown carries the evidence and the log when given")
+        let mdBare = BugReport.markdown(description: "x", email: "", version: "v", build: "b", macOS: "m", record: nil, evidenceJSON: nil, log: nil)
+        check(!mdBare.contains("Reply to") && !mdBare.contains("## Log") && !mdBare.contains("## Scan evidence"), "nothing optional appears unasked")
+        let sentBody = (try? JSONSerialization.jsonObject(with: BugReport.body(title: "t", markdown: "m", version: "v")) as? [String: String]) ?? [:]
+        check(sentBody == ["title": "t", "body": "m", "version": "v"], "the request is title, body and version, nothing else")
+
         print("formats")
         check(VinylFormat.allCases.count == 3 && VinylFormat.seven.discogsFormat == "7\"", "format mapping")
 

@@ -13,6 +13,11 @@ Three plain HTML pages, one stylesheet, no build step. Palette and type mirror t
   `version`, `file` and `notes` here, push.
 - `assets/js/site.js` — fills in the version and the take-up counters.
 - `api/` + `lib/counter.js` — the take-up counter (below). `vercel.json` rewrites `/download` to `api/download.js`.
+- `api/report.js` — bug reports from the app (Settings → ABOUT → REPORT A PROBLEM, or REPORT on a record): the app POSTs
+  `{title, body, version}` and this files it as a GitHub issue labelled `report` on `woody438/VinylCat`, using `GITHUB_TOKEN`
+  from the Vercel project environment (a fine-grained personal access token, Issues read/write on that one repo). Without the
+  token it answers 503 and the app offers to save the report as a file. Capped at 100 a day. Local test:
+  `GITHUB_TOKEN=$(gh auth token) npm run dev` and `VINYLCAT_REPORT_URL=http://localhost:4174/api/report` on the app.
 
 ```bash
 npm run dev     # http://localhost:4174 — static pages plus the api/ functions, counters in memory (scripts/dev.mjs)

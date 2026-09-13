@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage("sceneDeltaMin") private var sceneDeltaMin = 14.0
     @AppStorage("launchPing") private var launchPing = true
     @State private var testResult = ""
+    @State private var reporting = false
     @Environment(\.staticRender) private var staticRender
 
     var body: some View {
@@ -169,6 +170,11 @@ struct SettingsView: View {
                     }
                     Text("On: at launch and every six hours the app reads vinyl-cat.com/release.json to see whether a newer version is out, and shows an UPDATE chip in the top bar when one is. Nothing is sent.")
                         .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                    Row("Something wrong?") {
+                        Button("REPORT A PROBLEM") { reporting = true }.buttonStyle(.plain).foregroundStyle(Theme.amber)
+                    }
+                    Text("Say what happened and send it, with the app's recent log if you like; it lands with the developer as a ticket. For a wrong match, use REPORT on the record in the Library so its scan evidence goes too.")
+                        .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -177,6 +183,7 @@ struct SettingsView: View {
         .onChange(of: sharpnessMin) { _, _ in state.scan.applyTuning() }
         .onChange(of: steadySeconds) { _, _ in state.scan.applyTuning() }
         .onChange(of: sceneDeltaMin) { _, _ in state.scan.applyTuning() }
+        .sheet(isPresented: $reporting) { BugReportSheet(record: nil) { reporting = false }.environment(state) }
     }
 
     private func testModel() async -> String {

@@ -4,6 +4,7 @@
 //   installs             the app's first launch after install ("install" ping, sent once per Mac)
 //   launches             every launch of a release build ("launch" ping)
 //   launches:v:<ver>     the same, per app version
+//   reports              every bug report filed through /api/report (the report itself goes to GitHub, not here)
 //   <key>:d:<yyyy-mm-dd> the same, per UTC day, for a chart later
 //
 // Storage is the Upstash Redis REST API (the "Upstash for Redis" Vercel Marketplace integration
@@ -39,10 +40,16 @@ async function bump(keys) {
   await redis(all.map((k) => ["INCR", k]));
 }
 
+/** One key's value (0 when unset). */
+async function count(key) {
+  const v = url ? (await redis([["GET", key]]))[0] : memory.get(key);
+  return Number(v) || 0;
+}
+
 /** The three headline totals. */
 async function totals() {
   const values = url ? await redis([["MGET", ...TOTALS]]).then((r) => r[0]) : TOTALS.map((k) => memory.get(k) || 0);
   return Object.fromEntries(TOTALS.map((k, i) => [k, Number(values[i]) || 0]));
 }
 
-module.exports = { bump, totals, TOTALS, backed: Boolean(url) };
+module.exports = { bump, count, totals, today, TOTALS, backed: Boolean(url) };

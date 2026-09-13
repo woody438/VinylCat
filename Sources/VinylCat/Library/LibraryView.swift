@@ -260,6 +260,7 @@ struct RecordDetail: View {
     let record: VinylRecord?
     var onDelete: (VinylRecord) -> Void = { _ in }
     @State private var notes = ""
+    @State private var reporting = false
 
     var body: some View {
         if let r = record {
@@ -307,11 +308,13 @@ struct RecordDetail: View {
                             Button("WRONG RECORD") { state.scan.verdict(r.id, .down) }.foregroundStyle(Theme.amber)
                         }
                         Button("DELETE") { onDelete(r) }.foregroundStyle(Theme.red)
+                        Button("REPORT") { reporting = true }.help("Send this record's scan evidence to the developer with a note")
                     }
                     .buttonStyle(.plain).font(Theme.mono(12)).foregroundStyle(Theme.secondary)
                 }
                 .padding(20)
             }
+            .sheet(isPresented: $reporting) { BugReportSheet(record: r) { reporting = false }.environment(state) }
             .onAppear { notes = r.notes }
             .onChange(of: r.id) { _, _ in notes = r.notes }
         } else {

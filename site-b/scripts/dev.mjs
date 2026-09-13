@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const routes = {
   "/api/stats": require(join(root, "api/stats.js")),
   "/api/ping": require(join(root, "api/ping.js")),
+  "/api/report": require(join(root, "api/report.js")),
   "/api/download": require(join(root, "api/download.js")),
   "/download": require(join(root, "api/download.js")),   // the vercel.json rewrite
 };

@@ -107,6 +107,13 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   drag-over-the-old-one. Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, `scripts/package.sh`, copy
   the DMG into `site-b/downloads/`, update `site-b/release.json` (`version`, `file`, `notes`), push. `--render-ui` writes
   `update-available.png`; the self-test covers the version compare and the offer rules.
+- `Support/BugReport.swift` — bug reports (2026-09-14): REPORT A PROBLEM in Settings → ABOUT, or REPORT on a record in the Library.
+  The sheet (`BugReportSheet`) takes a note and an optional reply email, ticks for the last 150 log lines and the record's
+  `ScanEvidence`, builds the whole thing as Markdown (`BugReport.markdown`; `scrub` masks anything key-shaped), PREVIEW shows it,
+  SEND POSTs `{title, body, version}` to `https://vinyl-cat.com/api/report` (`VINYLCAT_REPORT_URL` redirects it), which files a
+  GitHub issue labelled `report` on woody438/VinylCat with the `GITHUB_TOKEN` in the Vercel project env (`site-b/api/report.js`).
+  503 (no token) or any failure → the sheet offers SAVE AS FILE to the Desktop. `--render-ui` writes `report-1-settings.png` and
+  `report-2-record.png`; the self-test covers title, scrub, markdown and the request body.
 - `Setup/` — `SetupWizard` (first run, until `setupCompleted`) and `Tour` (first-run callout bubbles over the main view, until
   `tourCompleted`; re-run from Settings → SHOW THE TOUR AGAIN). Point the tour at a view with `.tourAnchor(.x)` and add a `TourStep`;
   `--render-ui` writes every step as `tour-NN-<anchor>.png`.
