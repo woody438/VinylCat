@@ -278,7 +278,7 @@ SIDE A</pre>
 <pre>/database/search?type=release&amp;per_page=15&amp;catno=POSP%20113</pre>
         </div>
         <ul>
-          <li><strong>Rate limit</strong> is read from Discogs' own headers and kept at 60 a minute with headroom. Valuation after a Collection pull runs one call every 2.2 s so scanning keeps most of the budget.</li>
+          <li><strong>Rate limit</strong> is read from Discogs' own headers and kept at 60 a minute with headroom. Valuation after a Collection pull runs one call every 2.2 s so scanning keeps most of the budget: Discogs has no bulk price call, so each record is priced on its own. While that runs the Scan rail says <em>Pricing 18 of 203 · leave the app open</em>; it stops once every record has a value and picks up where it left off next launch.</li>
           <li><strong>No token</strong> means the public limit of 25 a minute and no writes to your Collection.</li>
         </ul>
       </div>
@@ -385,7 +385,7 @@ SIDE A</pre>
     <div class="dl-card">
       <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
       <div>
-        <h3>VinylCat <span data-version>0.1.0</span></h3>
+        <h3>VinylCat <span data-version>0.2.1</span></h3>
         <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free · <a href="install.html">read the install steps first</a></div>
       </div>
       <a class="btn" href="/download" data-download>
@@ -400,7 +400,7 @@ SIDE A</pre>
 
 <footer>
   <div class="wrap">
-    <span>VINYLCAT · v<span data-version>0.1.0</span> · macOS 15+ · Apple silicon</span>
+    <span>VINYLCAT · v<span data-version>0.2.1</span> · macOS 15+ · Apple silicon</span>
     <a href="index.html">Overview</a>
     <a href="install.html">Install</a>
     <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
