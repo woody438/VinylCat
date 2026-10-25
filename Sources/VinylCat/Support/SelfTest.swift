@@ -171,7 +171,12 @@ enum SelfTest {
         settle(); captures = 0; series.removeAll()
 
         // 2. A nudge: held, then eased 6 px sideways and held there. Half a ring, not none.
-        feed(0, frames: 6); feed(2, frames: 12)
+        //    20 frames, not 12: the ring fills against the wall clock (0.035s a frame against
+        //    steadySeconds 1.5), so 12 left it at ~0.28 — right on the `beforeNudge > 0.3` guard
+        //    below. It held on a Mac at ~0.38 and flaked on CI, which is slower per frame (seen
+        //    at 0.37 and 0.25 on consecutive runs of the same commit). 20 frames reach ~0.47, so
+        //    the sleeve really is held before it's nudged, which is what this is meant to test.
+        feed(0, frames: 6); feed(2, frames: 20)
         let beforeNudge = series.last ?? 0
         feed(2, shift: 6, frames: 5)
         let low = series.suffix(5).min() ?? 0
