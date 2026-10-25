@@ -206,7 +206,7 @@ private struct ModelStep: View {
                     }.labelsHidden().frame(width: 150)
                     Text(claudeModel.note).font(Theme.mono(12)).foregroundStyle(Theme.muted)
                 }
-                Text(ClaudeModel.costAdvice).font(Theme.mono(12)).foregroundStyle(Theme.muted).frame(maxWidth: 720).fixedSize(horizontal: false, vertical: true)
+                Text(ClaudeModel.costAdvice(withLedger: false)).font(Theme.mono(12)).foregroundStyle(Theme.muted).frame(maxWidth: 720).fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
                 Text("\(p.title) · \(p.costNote) · key from").font(Theme.mono(12)).foregroundStyle(Theme.muted)

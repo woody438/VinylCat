@@ -61,7 +61,9 @@ enum ReaderProvider: String, CaseIterable, Identifiable {
         switch self {
         case .luna: "about $0.001 per photo"
         case .gemini: "about $0.002 per photo"
-        case .claude: String(format: "about $%.3f per photo on %@", ClaudeModel.current.perPhotoUSD, ClaudeModel.current.short)
+        // No price here: the rung's own `note` states it just above this line, and repeating it as
+        // dollars beside the cents read as two different figures.
+        case .claude: "billed to your Anthropic account, or its monthly credits"
         }
     }
 }

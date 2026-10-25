@@ -59,18 +59,23 @@ enum ClaudeModel: String, CaseIterable, Identifiable {
         ClaudeModel(rawValue: UserDefaults.standard.string(forKey: "claudeModel") ?? "") ?? .opus
     }
 
-    /// Why the picker usually does not matter, stated in the app at Woody's request. One photo per
-    /// record keeps every rung in fractions of a cent, so the choice only starts to bite at volume.
-    static var costAdvice: String {
-        let cheap = String(format: "%.2f¢", haiku.perPhotoUSD * 100)
-        let best = String(format: "%.1f¢", opus.perPhotoUSD * 100)
-        let thousand = String(format: "$%.0f", opus.perPhotoUSD * 1000)
-        return "One photo per record, so the rungs sit about two cents apart — \(cheap) against \(best) a photo, about "
-            + "\(thousand) for a thousand records on the dearest. Measured over the same 100 records, Opus read the catalogue "
-            + "number correctly first time on 97% and Haiku on 94%; counting the other numbers it also returns — which the "
-            + "Discogs search tries too — they are 98% and 97%, near enough a tie. Take the best reader unless you are "
-            + "scanning at real volume: Max and Team plans come with monthly API credits that expire at the end of each "
-            + "billing cycle, so if yours are going unspent, saving pennies here only loses money you had already paid for."
+    /// Why the picker usually does not matter, stated in the app at Woody's request.
+    ///
+    /// Deliberately does **not** quote a per-photo figure or project a total: `note` above it
+    /// already gives the cents, and `SpendLedger` below it reports what was actually spent, which
+    /// beats any estimate. It also hands off to the monthly warning rather than arguing against
+    /// economising — an earlier draft sat directly above that control telling the reader not to
+    /// bother, which is the sort of thing only a rendered screen shows you.
+    ///
+    /// `withLedger` is true in Settings, where the month-to-date spend and the budget field are
+    /// the next rows down; false in the wizard, where nothing has been spent yet.
+    static func costAdvice(withLedger: Bool) -> String {
+        "The rungs barely differ on accuracy: over the same 100 records Opus read the catalogue number right first time "
+            + "on 97% and Haiku on 94%, and counting the other numbers it also returns — which the Discogs search tries "
+            + "too — 98% against 97%. Take the best reader. Max and Team plans include monthly API credits that expire at "
+            + "the end of each billing cycle, so the spend may already be covered"
+            + (withLedger ? "; what you have actually spent is below, with a warning you can set if you would rather cap it."
+                          : ". Settings keeps a running total, with a warning you can set if you would rather cap it.")
     }
 }
 

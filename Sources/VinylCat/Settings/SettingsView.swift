@@ -45,7 +45,7 @@ struct SettingsView: View {
                             }.labelsHidden().frame(width: 150)
                         }
                         Text(claudeModel.note).font(Theme.mono(11)).foregroundStyle(Theme.muted)
-                        Text(ClaudeModel.costAdvice).font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        Text(ClaudeModel.costAdvice(withLedger: true)).font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                         Text(AnthropicCredential.statusLine()).font(Theme.mono(11)).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
                         KeyField(label: "Anthropic API key", text: $anthropicKey) { Keychain.set(anthropicKey, for: .anthropic); identifier.refreshKeys() }
                     }
