@@ -38,6 +38,10 @@ jobs:
       # No Discogs token and no model key on the runner, so nothing is spent and nothing is written
       # to a live collection: the checks run OCR-only against what they carry.
       VINYLCAT_NO_KEYCHAIN: 1
+      # One line of what's new for the top-bar chip. On a pull request the checkout is the synthetic
+      # refs/pull/N/merge commit, whose subject is "Merge <sha> into <sha>" — useless to a reader — so
+      # the PR's own title stands in; a push to main uses the commit subject.
+      VINYLCAT_NOTES: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -91,8 +95,8 @@ jobs:
           test -f "$APP/Contents/Resources/AppIcon.icns"                # the icon made it in
           ditto -c -k --sequesterRsrc --keepParent "$APP" VinylCat.zip
           ls -l VinylCat.zip
-          # One line of what's new for the top-bar chip: the commit subject, quotes stripped so the JSON holds.
-          NOTES=$(git log -1 --pretty=%s | tr -d '"\\' | cut -c1-120)
+          # Quotes and backslashes stripped so the JSON holds whatever the title or subject contains.
+          NOTES=$(printf '%s' "${VINYLCAT_NOTES:-$(git log -1 --pretty=%s)}" | tr -d '"\\' | cut -c1-120)
           # What the updater reads (Sources/VinylCat/Support/UpdateCheck.swift).
           cat > VinylCat.json <<EOF
           {"build": $VINYLCAT_BUILD, "version": "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")", "commit": "$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)", "channel": "$VINYLCAT_UPDATE_CHANNEL", "notes": "$NOTES"}
