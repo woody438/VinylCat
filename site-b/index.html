@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VinylCat — hands-free vinyl cataloguing for macOS</title>
-  <meta name="description" content="Hold a record up to your Mac's camera. Two seconds later VinylCat says the artist, title, year and format, and the record is in your library. Free, runs on your own keys, optional Discogs sync.">
+  <meta name="description" content="Hold a record up to your Mac's camera. Two seconds later VinylCat says the artist, title, year and format, and the record is in your library. Free, runs on your own Claude, OpenAI or Google key, optional Discogs sync.">
   <link rel="canonical" href="https://vinyl-cat.com/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="VinylCat">
@@ -62,7 +62,7 @@
         Download for macOS
       </a>
       <a class="btn ghost" href="install.html">Read the install steps first</a>
-      <span class="btn-note">v<span data-version>0.2.1</span> · DMG · unsigned, six steps once</span>
+      <span class="btn-note">v<span data-version>0.2.3</span> · DMG · unsigned, six steps once</span>
     </div>
     <div class="shot">
       <img src="assets/img/scan-matched.png" alt="VinylCat's Scan tab after a match: the banner reads MATCHED 0.94, The Jam — Going Underground, 1980, 7 inch, Polydor POSP 113, UK." width="1440" height="900" fetchpriority="high">
@@ -94,8 +94,8 @@
       <div class="step">
         <div class="n">3</div>
         <h3>Vision model</h3>
-        <p>No clean barcode? The photo and the OCR hints go to OpenAI or Google, forced into thirteen fixed fields. Your own key. No key means OCR-only: fine on labels, worse on artwork covers.</p>
-        <div class="cost paid">About $0.001 per scan</div>
+        <p>No clean barcode? The photo and the OCR hints go to Claude, OpenAI or Google, forced into thirteen fixed fields. Your own key. No key means OCR-only: fine on labels, worse on artwork covers.</p>
+        <div class="cost paid">From $0.0005 per scan</div>
       </div>
       <div class="step">
         <div class="n">4</div>
@@ -152,12 +152,15 @@
     <div class="features">
       <div class="feature"><span class="k">Voice</span><h3>Say it, don't click it</h3><p>Capture, flip, back cover, gatefold, disc two, skip, done, undo, review, again, one to nine, add anyway, wrong record, pause. On-device speech recognition, nothing leaves the Mac. Every command has a key too.</p></div>
       <div class="feature"><span class="k">Spoken</span><h3>It reads the result back</h3><p>Artist, title, year, format. A different chime for each outcome. You never have to look at the screen mid-stack.</p></div>
+      <div class="feature"><span class="k">Model</span><h3>Three readers, your pick</h3><p>Claude, GPT-5.6 Luna or Gemini 3.8 Flash, switched in Settings. Claude has three rungs: Haiku reads the catalogue number right first time on 94% of photos for about 50&#162; a thousand records, Opus on 97% for $20. If you have the <code>ant</code> CLI signed in, it uses a short-lived token and stores no key at all.</p></div>
       <div class="feature"><span class="k">Format</span><h3>7" · 12" · LP sessions</h3><p>Set the format once, or say "forty-fives", "twelve inch", "albums". It filters Discogs and shapes the prompts.</p></div>
       <div class="feature"><span class="k">Library</span><h3>Search, value, export</h3><p>Every record with its photo, Discogs release and a value in your Discogs currency. CSV export. Type one in by hand with "+ ADD RECORD".</p></div>
       <div class="feature"><span class="k">Import</span><h3>A folder of photos, no webcam</h3><p>Drop a folder of label or sleeve photos on the Library and every one goes through the same pipeline. Matched, parked, duplicate or error, one line per photo.</p></div>
       <div class="feature"><span class="k">Review</span><h3>Nothing is lost</h3><p>Not found, ambiguous and wrong-match records queue up with the OCR lines, the model's reading and every ranked candidate. Re-search, pick, or save as a manual entry.</p></div>
       <div class="feature"><span class="k">Verdicts</span><h3>Thumbs up, thumbs down</h3><p>Wrong record? One word or one key. It leaves the counts and the Discogs Collection but the evidence stays, so the matcher can be tuned from real mistakes.</p></div>
       <div class="feature"><span class="k">Discogs</span><h3>Two-way sync, off by default</h3><p>Switch it on and matches go to your Collection as they are saved. Pull brings the Collection down as records to photograph later. It never deletes anything on Discogs.</p></div>
+      <div class="feature"><span class="k">Report</span><h3>One click when it gets it wrong</h3><p>REPORT A PROBLEM in Settings, or REPORT on any record, sends the note with the last log lines and that scan's evidence straight to the issue tracker. Preview it first; API keys are masked. No account needed.</p></div>
+      <div class="feature"><span class="k">Updates</span><h3>It tells you when there is a new one</h3><p>The app checks this site at launch and every six hours; a newer version puts an amber UPDATE chip in the top bar with what changed. Drag the new one over the old; your catalogue is untouched. Switch the check off in Settings, or skip a version.</p></div>
       <div class="feature"><span class="k">Local</span><h3>Your data on your Mac</h3><p>SQLite and JPEGs in your own Application Support folder. Keys in a file only you can read. No account, no server. The one thing it sends home is an anonymous launch count — a switch in Settings turns that off.</p></div>
     </div>
   </div>
@@ -197,15 +200,25 @@
     <div class="section-head">
       <span class="eyebrow">Measured, not promised</span>
       <h2>How well it reads</h2>
-      <p class="lede">The app ships with its own evaluation: the real photos in the library, scored against each record's known catalogue number. These are the numbers from 92 photos on 6 September 2026.</p>
+      <p class="lede">The app ships with its own evaluation: the real photos in the library, scored against each record's known catalogue number. Every reader below was run over the same 100 records on 25 October 2026.</p>
     </div>
     <div class="numbers">
-      <div class="stat"><div class="v">88<small>%</small></div><div class="l">Model · catalogue number right first time</div><div class="d">GPT-5.6 Luna reading the still plus OCR hints. 90% counting secondary numbers.</div></div>
-      <div class="stat"><div class="v">91<small>%</small></div><div class="l">OCR · catalogue number in the candidates</div><div class="d">Free on-device pass. Right first time only 49% of the time, which is why the model exists.</div></div>
-      <div class="stat"><div class="v">$0.0009</div><div class="l">Model cost per photo</div><div class="d">Roughly a dollar per thousand records. Nothing at all when the barcode reads cleanly.</div></div>
-      <div class="stat"><div class="v">4.3<small>s</small></div><div class="l">Model time per photo</div><div class="d">Local OCR alone is 0.65 s. Discogs adds a call or two on top.</div></div>
+      <div class="stat"><div class="v">97<small>%</small></div><div class="l">Best reader · right first time</div><div class="d">Claude Opus 5.5. 98% counting the secondary numbers the Discogs search also tries.</div></div>
+      <div class="stat"><div class="v">94<small>%</small></div><div class="l">Cheapest rung · right first time</div><div class="d">Claude Haiku 5.5, three points behind Opus at a thirty-eighth of the cost. Three photos in a hundred.</div></div>
+      <div class="stat"><div class="v">$0.0005</div><div class="l">Haiku cost per photo</div><div class="d">About 50&#162; per thousand records. Opus is $20. Nothing at all when the barcode reads cleanly.</div></div>
+      <div class="stat"><div class="v">49<small>%</small></div><div class="l">OCR alone · right first time</div><div class="d">The free on-device pass gets it somewhere in the candidates 91% of the time, but first only half. That is why the model exists.</div></div>
     </div>
-    <div class="foot-note">What is still hard: album numbers printed on singles, RCA and Capitol LP references, worn print, and the odd label with nothing legible on it. Those go to Review.</div>
+    <div class="tablewrap" style="margin-top:28px">
+      <table>
+        <tr><th>Reader</th><th class="num">Right first time</th><th class="num">Counting other numbers</th><th class="num">$ per photo</th><th class="num">Seconds</th></tr>
+        <tr><td class="k">Claude Opus 5.5 <span class="muted">· default</span></td><td class="num">97%</td><td class="num">98%</td><td class="num">0.0200</td><td class="num">4.3</td></tr>
+        <tr><td class="k">Claude Haiku 5.5</td><td class="num">94%</td><td class="num">97%</td><td class="num">0.00052</td><td class="num">2.7</td></tr>
+        <tr><td class="k">Claude Sonnet 5.5</td><td class="num">not measured</td><td class="num">—</td><td class="num">≈0.010</td><td class="num">—</td></tr>
+        <tr><td class="k">GPT-5.6 Luna</td><td class="num">92%</td><td class="num">94%</td><td class="num">0.00084</td><td class="num">3.9</td></tr>
+        <tr><td class="k">Apple Vision, on device</td><td class="num">49%</td><td class="num">91% in its candidates</td><td class="num">free</td><td class="num">0.65</td></tr>
+      </table>
+    </div>
+    <div class="foot-note">Honest about the sample: those first 100 records are easier than the rest of the box — local OCR scores 91% on them against 85% over all 347. Haiku across the whole library is 85% first time, 92% counting the other numbers. A three-point gap on a hundred photos is three photos, so the rungs are closer than the table makes them look; the spread in price is not. Gemini 3.8 Flash has not been re-run since September. Still hard: album numbers printed on singles, RCA and Capitol LP references, worn print, and the odd label with nothing legible on it. Those go to Review.</div>
   </div>
 </section>
 
@@ -218,7 +231,7 @@
         <ul class="list" style="margin-top:28px">
           <li><span class="dot"></span><div><b>A Mac on macOS 15 or later</b><span>Apple silicon only for now. Built-in camera, or an iPhone over Continuity Camera for a better lens.</span></div></li>
           <li><span class="dot"></span><div><b>A Discogs personal token</b><span>Free, from discogs.com/settings/developers. Without one lookups still work at 25 a minute instead of 60, but nothing can go to your Collection.</span></div></li>
-          <li><span class="dot amber"></span><div><b>An OpenAI or Google AI key, optional</b><span>About a tenth of a cent per record, so the account needs billing on. Without it the app runs OCR-only: good on labels, poor on artwork.</span></div></li>
+          <li><span class="dot amber"></span><div><b>A Claude, OpenAI or Google key, optional</b><span>From about a twentieth of a cent per record on Claude Haiku, so the account needs billing on — Claude Max and Team plans include monthly API credits that may already cover it. Without a key the app runs OCR-only: good on labels, poor on artwork.</span></div></li>
           <li><span class="dot blue"></span><div><b>Camera, microphone and speech permissions</b><span>macOS asks once, in the setup wizard. Voice needs Dictation switched on.</span></div></li>
         </ul>
       </div>
@@ -227,7 +240,7 @@
         <h2>Things to know before you download</h2>
         <ul class="list" style="margin-top:28px">
           <li><span class="dot red"></span><div><b>Not signed by Apple</b><span>macOS blocks the first launch with a dialog that only says Done. It takes six steps in System Settings, once. <a href="install.html">They are written out here.</a></span></div></li>
-          <li><span class="dot amber"></span><div><b>Version <span data-version>0.2.1</span></b><span>It has been used on one desk, on one collection. Expect rough edges, and the review queue to earn its keep on worn labels.</span></div></li>
+          <li><span class="dot amber"></span><div><b>Version <span data-version>0.2.3</span></b><span>It has been used on one desk, on one collection. Expect rough edges, and the review queue to earn its keep on worn labels. REPORT A PROBLEM in Settings files one straight from the app.</span></div></li>
           <li><span class="dot amber"></span><div><b>Artwork covers are the weak spot</b><span>Labels carry catalogue numbers; picture sleeves often don't. When the cover isn't enough it asks for the label.</span></div></li>
           <li><span class="dot muted"></span><div><b>Discogs is the source of truth</b><span>If a pressing isn't on Discogs, VinylCat can't match it. Save it as a manual entry instead.</span></div></li>
         </ul>
@@ -245,7 +258,7 @@
     <div class="dl-card">
       <img src="assets/img/icon-256.png" alt="VinylCat app icon: a black record with a burnt-orange label and two whiskers a side" width="256" height="256">
       <div>
-        <h3>VinylCat <span data-version>0.2.1</span></h3>
+        <h3>VinylCat <span data-version>0.2.3</span></h3>
         <div class="meta">
           <b>macOS 15 Sequoia</b> or later · <b>Apple silicon</b> · DMG<br>
           Drag to Applications · setup wizard on first run · about five minutes
@@ -286,13 +299,13 @@
 
 <footer>
   <div class="wrap">
-    <span>VINYLCAT · v<span data-version>0.2.1</span> · macOS 15+ · Apple silicon</span>
+    <span>VINYLCAT · v<span data-version>0.2.3</span> · macOS 15+ · Apple silicon</span>
     <a href="how-it-works.html">How it works</a>
     <a href="compare.html">Compare</a>
     <a href="install.html">Install</a>
     <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
     <span class="grow"></span>
-    <span>Not affiliated with Discogs, OpenAI, Google or Apple.</span>
+    <span>Not affiliated with Discogs, Anthropic, OpenAI, Google or Apple.</span>
   </div>
 </footer>
 

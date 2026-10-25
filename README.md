@@ -44,9 +44,11 @@ through everything below and tests each piece. Re-run it any time from Settings 
    (25 requests/min instead of 60) but cannot add them to your Collection. **Adding matches to your Discogs
    Collection is off on a fresh install** — switch it on in the wizard's Discogs step, or later under
    **Settings → "Add matches to my Collection"**. Until you do, VinylCat neither writes to nor pulls from Discogs.
-2. **Vision model key** — paste an OpenAI key (GPT-5.6 Luna, ~$0.001 per scan) or a Google AI key (Gemini 3.8 Flash)
-   in **Settings → Identification**, then **Test model** after you've captured one photo. Without a key the app runs
-   on local OCR + catalogue numbers only — this works well on labels, worse on artwork-heavy covers.
+2. **Vision model key** — pick a reader in **Settings → Identification** and paste that provider's key: Anthropic
+   (Claude 5.5 — Haiku ~$0.0005, Sonnet ~$0.010, Opus ~$0.020 per scan; Opus is the default rung), OpenAI
+   (GPT-5.6 Luna, ~$0.0008) or Google (Gemini 3.8 Flash, ~$0.002). Then **Test model** after you've captured one
+   photo. With the `ant` CLI signed in, the Claude reader uses a short-lived token and stores no key. Without any
+   key the app runs on local OCR + catalogue numbers only — this works well on labels, worse on artwork-heavy covers.
 3. **Permissions** — allow Camera, Microphone and Speech Recognition when macOS asks. (Because the app is ad-hoc signed,
    macOS may ask again after each rebuild.)
 

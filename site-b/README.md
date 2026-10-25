@@ -3,9 +3,9 @@
 Four plain HTML pages, one stylesheet, no build step. Palette and type mirror the app
 (`Sources/VinylCat/Support/Theme.swift`): Barlow Condensed + IBM Plex Mono / Sans, dark control-room.
 
-- `index.html` — overview: the six-step loop, the five outcomes, features, voice table, measured numbers, needs and limits, download, coffee.
-- `install.html` — the six Gatekeeper steps, first-run wizard, updating, where data lives.
-- `how-it-works.html` — the six layers with the exact model prompts, Discogs ladder, ranker weights, every knob.
+- `index.html` — overview: the six-step loop, the five outcomes, features, voice table, the measured reader table (2026-10-25, three providers over the same 100 records), needs and limits, download, coffee.
+- `install.html` — the six Gatekeeper steps, first-run wizard, updating, reporting a problem, where data lives.
+- `how-it-works.html` — the six layers with the exact model prompts, which reader to pick and what each costs, Discogs ladder, ranker weights, every knob.
 - `compare.html` — VinylCat against the Discogs app, CLZ Music, Record Scanner, VinylAI and VinylBox: eight rows, where it wins,
   where it loses. Source: `output/competitor-comparison_v1_2026-09-09.md`; the page carries its research date, refresh both together.
 - `assets/img/` — real screens from `.build/debug/VinylCat --render-ui`, plus the icon from `Resources/AppIcon.icns`.

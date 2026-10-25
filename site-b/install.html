@@ -93,11 +93,11 @@
         <ol class="steps" start="7">
           <li><div><b>Permissions</b><p>The wizard asks for Camera, Microphone and Speech Recognition and checks that Dictation is switched on. Click Allow on each, once.</p></div></li>
           <li><div><b>Your Discogs token</b><p>Free, from discogs.com/settings/developers. Paste it in and test it. Without one the app still looks records up, at 25 a minute instead of 60, but cannot add them to your Collection.</p><p class="aside">Adding matches to your Discogs Collection is off until you switch it on, here or later in Settings. Until you do, VinylCat neither writes to nor reads from your Collection.</p></div></li>
-          <li><div><b>Your OpenAI or Google AI key</b><p>Optional. Identifying a record costs about a tenth of a cent, so the account needs billing set up. Without a key the app runs on local OCR and catalogue numbers only: good on labels, worse on artwork-heavy covers.</p></div></li>
+          <li><div><b>Your Claude, OpenAI or Google key</b><p>Optional. Pick a reader and paste that provider's key; the account needs billing set up. Identifying a record runs from about a twentieth of a cent on Claude Haiku to two cents on Claude Opus, the default rung — the accuracy between them differs by three photos in a hundred, so start cheap. Without a key the app runs on local OCR and catalogue numbers only: good on labels, worse on artwork-heavy covers.</p><p class="aside">If Anthropic's <code>ant</code> CLI is signed in on this Mac, the Claude reader uses a short-lived token from it and stores no key at all. The wizard says which it found.</p></div></li>
         </ol>
       </div>
       <div>
-        <div class="shot"><img src="assets/img/setup-welcome.png" alt="The setup wizard's Welcome step: Hold up a record. That's it. Setup takes about five minutes. You'll need camera, microphone and speech permissions, a free Discogs token, and optionally an OpenAI or Google AI key." loading="lazy" width="1440" height="900"></div>
+        <div class="shot"><img src="assets/img/setup-welcome.png" alt="The setup wizard's Welcome step: Hold up a record. That's it. Setup takes about five minutes. You'll need camera, microphone and speech permissions, a free Discogs token, and optionally an OpenAI, Google or Anthropic key." loading="lazy" width="1440" height="900"></div>
         <div class="shot-caption">The wizard's first screen. Continue at the bottom right, and it walks the rest.</div>
       </div>
     </div>
@@ -119,10 +119,19 @@
           <div class="tag">~/Library/Application Support/VinylCat/</div>
 <pre>VinylCat.sqlite   the catalogue, evidence and verdicts
 Photos/           one JPEG per record, plus any extra shots
-keys.json         your Discogs token and model key, 0600</pre>
+keys.json         your Discogs token and model key, 0600 (empty if the ant CLI supplies a token)</pre>
         </div>
         <p class="sec">CSV exports and the feedback file go wherever you point them from the Library. Nothing is sent anywhere except the Discogs and model calls you set up, and one anonymous tick to vinyl-cat.com each time the app opens (the word “launch” and the version number, no IP kept, no identifier) so the developer can see whether anyone uses it. Settings → ABOUT → Count launches switches it off.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section id="report">
+  <div class="wrap">
+    <div class="callout blue">
+      <div class="tag">When it gets something wrong</div>
+      <p>Settings → About → <strong>REPORT A PROBLEM</strong>, or REPORT on any record in the Library. Write a line, optionally tick the last 150 log lines and that scan's evidence, and PREVIEW shows the exact text before it goes. It is filed as an issue for the developer; anything key-shaped is masked first, and an email address is yours to add or leave out. If the site is unreachable it offers to save the report to your Desktop instead.</p>
     </div>
   </div>
 </section>
@@ -132,7 +141,7 @@ keys.json         your Discogs token and model key, 0600</pre>
     <div class="dl-card">
       <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
       <div>
-        <h3>VinylCat <span data-version>0.2.1</span></h3>
+        <h3>VinylCat <span data-version>0.2.3</span></h3>
         <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free</div>
       </div>
       <a class="btn" href="/download" data-download>
@@ -147,13 +156,13 @@ keys.json         your Discogs token and model key, 0600</pre>
 
 <footer>
   <div class="wrap">
-    <span>VINYLCAT · v<span data-version>0.2.1</span> · macOS 15+ · Apple silicon</span>
+    <span>VINYLCAT · v<span data-version>0.2.3</span> · macOS 15+ · Apple silicon</span>
     <a href="index.html">Overview</a>
     <a href="how-it-works.html">How it works</a>
     <a href="compare.html">Compare</a>
     <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
     <span class="grow"></span>
-    <span>Not affiliated with Discogs, OpenAI, Google or Apple.</span>
+    <span>Not affiliated with Discogs, Anthropic, OpenAI, Google or Apple.</span>
   </div>
 </footer>
 

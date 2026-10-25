@@ -1,5 +1,5 @@
 {
-  "version": "0.2.2",
-  "file": "downloads/VinylCat_v4_2026-09-14.dmg",
-  "notes": "LLM COST now shows this session and the month to date, turns amber past a monthly figure you set (default $5), and keeps an all-time total in Settings → About. The Discogs meter drops back to 0/60 a minute after the last call."
+  "version": "0.2.3",
+  "file": "downloads/VinylCat_v1_2026-10-25.dmg",
+  "notes": "Claude joins GPT-5.6 Luna and Gemini as a vision reader, with three rungs: Haiku reads the catalogue number right first time on 94% of photos for about 50¢ a thousand records, Opus on 97%. If the ant CLI is signed in, it uses a short-lived token and stores no key. Settings → Identification picks the reader and the rung."
 }

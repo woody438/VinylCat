@@ -43,7 +43,7 @@ THEN: FIRST-RUN SETUP
 7. The setup wizard asks for Camera, Microphone and Speech Recognition and
    checks that Dictation is switched on. Click ALLOW on each. Once only.
 
-8. Enter your own Discogs token and your OpenAI or Gemini key in the wizard.
+8. Enter your own Discogs token and your OpenAI, Gemini or Anthropic key in the wizard.
    The wizard says where to get them. Identifying a record costs about a tenth
    of a cent, so the model account needs billing set up.
 

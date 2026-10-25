@@ -80,7 +80,7 @@ private struct WelcomeStep: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Bullet("Camera, microphone and speech permissions — and macOS Dictation switched on.")
                     Bullet("A free Discogs account and personal token (so it can add records to your Collection). Optional: lookups work without one.")
-                    Bullet("An OpenAI or Google AI key for reading artwork-heavy covers. Optional: labels and catalogue numbers work without one. Cost ≈ $2–4 per thousand records.")
+                    Bullet("An OpenAI, Google or Anthropic key for reading artwork-heavy covers. Optional: labels and catalogue numbers work without one. Cost runs from about 50¢ a thousand records on the cheapest rung to $20 on the best reader.")
                 }
             }
             Spacer()

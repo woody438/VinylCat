@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>How VinylCat finds a record</title>
-  <meta name="description" content="The six layers between holding a record up to the camera and hearing its name: camera watch, local OCR, the vision model and its exact prompt, Discogs search, ranking, and what happens next.">
+  <meta name="description" content="The six layers between holding a record up to the camera and hearing its name: camera watch, local OCR, the three vision models and their exact prompt, Discogs search, ranking, and what happens next.">
   <link rel="canonical" href="https://vinyl-cat.com/how-it-works.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="VinylCat">
@@ -75,7 +75,7 @@
         <g>
           <rect class="box" x="384" y="40" width="160" height="64" rx="3" style="stroke:#f0b26b"/>
           <text class="t" x="400" y="66" style="fill:#f0b26b">3 · Vision model</text>
-          <text class="sub" x="400" y="88">13 fields · ~$0.001</text>
+          <text class="sub" x="400" y="88">13 fields · from ~$0.0005</text>
         </g>
         <path class="edge" d="M544 72H576" marker-end="url(#ah)"/>
         <path class="edge-dash" d="M352 60C360 10 560 10 576 60" marker-end="url(#ah)"/>
@@ -109,7 +109,7 @@
     <nav class="index" aria-label="Layers">
       <a href="#l1"><span class="n">01</span><span class="t">Camera watch</span><span class="s">Decide when the record is steady and take one still</span></a>
       <a href="#l2"><span class="n">02</span><span class="t">Local read</span><span class="s">Free, on-device barcode and text recognition</span></a>
-      <a href="#l3"><span class="n">03</span><span class="t">Vision model</span><span class="s">Luna or Gemini turns the photo into fields</span></a>
+      <a href="#l3"><span class="n">03</span><span class="t">Vision model</span><span class="s">Claude, Luna or Gemini turns the photo into fields</span></a>
       <a href="#l4"><span class="n">04</span><span class="t">Discogs search</span><span class="s">Up to six queries, strongest key first</span></a>
       <a href="#l5"><span class="n">05</span><span class="t">Rank &amp; decide</span><span class="s">Score every hit, then match, ask or give up</span></a>
       <a href="#l6"><span class="n">06</span><span class="t">What happens next</span><span class="s">Save, ask you, ask for the label, or park it</span></a>
@@ -189,12 +189,12 @@
   <div class="wrap">
     <div class="layer-head">
       <div class="layer-num">3</div>
-      <div><h2>Vision model</h2><div class="where">your key · GPT-5.6 Luna or Gemini 3.8 Flash · about $0.001 and 4 s per photo</div></div>
+      <div><h2>Vision model</h2><div class="where">your key · Claude 5.5, GPT-5.6 Luna or Gemini 3.8 Flash · from $0.0005 and 2.7 s per photo</div></div>
     </div>
     <p class="measure sec">If there was no usable barcode, the photo goes to a multimodal model with everything the local pass found attached as hints. The model is not asked to identify the release. It is asked to <em>read</em> the sleeve or label into thirteen fixed fields, and it is forced to answer in exactly that shape.</p>
 
     <h3>The exact prompts</h3>
-    <p class="measure sec">Both providers get identical wording. The system prompt sets the job and the house rules. The user prompt is assembled per scan from the hints.</p>
+    <p class="measure sec">All three providers get identical wording. The system prompt sets the job and the house rules. The user prompt is assembled per scan from the hints.</p>
     <div class="prompt">
       <div class="tag">System prompt · sent verbatim</div>
 <pre>You identify vinyl records from a photo of a sleeve (cover) or the paper label in the centre of the disc. Extract only what is visible or can be inferred with high confidence. Catalogue numbers matter most: copy them exactly as printed (e.g. "POSP 113", "FAC 73", "7N 17241"). Do not guess a year unless printed. Set isLabelShot true when the photo shows the round centre label. formatGuess: "7in" for a small single label or 45 RPM marking, "12in" for a 45/33 RPM maxi single, "LP" for an album, "10in" for a ten-inch. confidence is your certainty that artist and title are right (0–1). Return JSON matching the schema; use null for unknown fields.</pre>
@@ -234,13 +234,31 @@ SIDE A</pre>
       <div>
         <h3>Details that matter</h3>
         <ul>
-          <li><strong>Image size.</strong> The still is downscaled to 1024 px on the long side and JPEG-compressed before upload, plus the zoomed close-ups from the local pass. That caps the per-image token cost.</li>
-          <li><strong>Strict output.</strong> OpenAI gets a JSON schema in strict mode; Google gets a response schema at low temperature. The reply cap is 2,500 tokens, because reasoning tokens count against it and a smaller cap cut the JSON off mid-field.</li>
+          <li><strong>Image size.</strong> The still goes up at 1600 px on the long side, JPEG-compressed, with the zoomed close-ups from the local pass beside it at 1024 px. 1024 px for the frame was tried first and left the catalogue number on a label about six pixels tall.</li>
+          <li><strong>Strict output.</strong> OpenAI gets a JSON schema in strict mode; Google gets the same schema in its own dialect at low temperature; Claude gets it as an output format. The reply cap is 2,500 tokens, 4,000 on Claude, because reasoning tokens count against it and a smaller cap cut the JSON off mid-field.</li>
+          <li><strong>Reasoning stays on, where it has to.</strong> Claude Opus and Sonnet 5.5 reason adaptively and refuse to have it switched off, so the app asks for low effort instead and pays for the thinking tokens as output. That is already in the prices below.</li>
           <li><strong>Cost meter.</strong> Every reply's token counts are priced and added to the LLM COST cell: this session on top, the month to date underneath, so the number you see matches the provider's bill. It turns amber once the month passes the figure you set in Settings (default $5) — a warning, never a stop. The all-time total is in Settings → About.</li>
           <li><strong>A model failure never aborts a scan.</strong> Timeout, bad key, malformed reply: the app carries on OCR-only and records the error against the scan.</li>
-          <li><strong>When OCR and the model disagree, the model wins.</strong> In the eval it gets the catalogue number right first time on 88% of photos against OCR's 49%.</li>
+          <li><strong>When OCR and the model disagree, the model wins.</strong> In the eval the weakest of the three readers gets the catalogue number right first time on 92% of photos, the best on 97%, against OCR's 49%.</li>
         </ul>
       </div>
+    </div>
+
+    <h3 style="margin-top:36px">Which reader</h3>
+    <p class="measure sec">Settings → Identification picks the provider, and Claude a rung within it. All three were run over the same 100 records on 25 October 2026, scored against each record's known catalogue number. The right-hand column is what the Discogs search actually gets to try: the catalogue number plus the other numbers the model returns alongside it.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Reader</th><th class="num">Right first time</th><th class="num">With other numbers</th><th class="num">$ per photo</th><th class="num">Seconds</th><th>Key</th></tr>
+      <tr><td class="k">Claude Opus 5.5</td><td class="num">97%</td><td class="num">98%</td><td class="num">0.0200</td><td class="num">4.3</td><td>Anthropic · the default rung</td></tr>
+      <tr><td class="k">Claude Sonnet 5.5</td><td class="num">not measured</td><td class="num">—</td><td class="num">≈0.010</td><td class="num">—</td><td>Anthropic · the middle rung</td></tr>
+      <tr><td class="k">Claude Haiku 5.5</td><td class="num">94%</td><td class="num">97%</td><td class="num">0.00052</td><td class="num">2.7</td><td>Anthropic · the cheap one</td></tr>
+      <tr><td class="k">GPT-5.6 Luna</td><td class="num">92%</td><td class="num">94%</td><td class="num">0.00084</td><td class="num">3.9</td><td>OpenAI · the app's default provider</td></tr>
+      <tr><td class="k">Gemini 3.8 Flash</td><td class="num">not re-run</td><td class="num">—</td><td class="num">≈0.002</td><td class="num">—</td><td>Google</td></tr>
+    </table></div>
+    <p class="measure sec">Read that table twice before paying for Opus. Three points over a hundred photos is three photos, which a sample this size does not establish; thirty-eight times the price is not in doubt. On the column that matters to the search the two Claude rungs are 98 against 97. The first 100 records are also the easy end of the box — local OCR manages 91% on them against 85% over all 347 — so Haiku across the whole library is 85% right first time, 92% counting the other numbers. Compare readers on the hundred; judge the app on the full set.</p>
+
+    <div class="callout blue">
+      <div class="tag">Claude without a stored key</div>
+      <p>A pasted API key sits in <code>keys.json</code> until you remove it. If Anthropic's <code>ant</code> CLI is signed in on this Mac — install it with <code>brew install anthropics/tap/ant</code> and sign in with <code>ant auth login</code> — VinylCat asks it for a short-lived token instead, caches that for four minutes, and re-mints it once on a 401. Nothing durable is stored and there is no key to leak. Settings → Identification says which of the two it is using. Max and Team plans include monthly API credits that expire with the billing cycle, so the spend may already be covered.</p>
     </div>
   </div>
 </section>
@@ -372,6 +390,8 @@ SIDE A</pre>
       <tr><td class="k">1</td><td>Auto capture</td><td class="num">on</td><td>CAPTURE switch in the top bar · "pause" / "resume"</td></tr>
       <tr><td class="k">2</td><td>Skip the model when a barcode of 8+ digits reads</td><td class="num">on</td><td>Settings → Identification</td></tr>
       <tr><td class="k">3</td><td>Provider</td><td class="num">GPT-5.6 Luna</td><td>Settings → Identification</td></tr>
+      <tr><td class="k">3</td><td>Claude rung, when Claude is the provider</td><td class="num">Opus 5.5</td><td>Settings → Identification</td></tr>
+      <tr><td class="k">3</td><td>Warn me past, per month</td><td class="num">$5</td><td>Settings → Identification · 0 never warns</td></tr>
       <tr><td class="k">4</td><td>Session format</td><td class="num">7" singles</td><td>FORMAT in the top bar · "forty-fives" / "twelve inch" / "albums"</td></tr>
       <tr><td class="k">5</td><td>Accept / ask thresholds</td><td class="num">0.85 / 0.60</td><td>fixed</td></tr>
       <tr><td class="k">5</td><td>Preferred country</td><td class="num">from your Discogs currency</td><td>Settings → Discogs</td></tr>
@@ -386,7 +406,7 @@ SIDE A</pre>
     <div class="dl-card">
       <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
       <div>
-        <h3>VinylCat <span data-version>0.2.1</span></h3>
+        <h3>VinylCat <span data-version>0.2.3</span></h3>
         <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free · <a href="install.html">read the install steps first</a></div>
       </div>
       <a class="btn" href="/download" data-download>
@@ -401,13 +421,13 @@ SIDE A</pre>
 
 <footer>
   <div class="wrap">
-    <span>VINYLCAT · v<span data-version>0.2.1</span> · macOS 15+ · Apple silicon</span>
+    <span>VINYLCAT · v<span data-version>0.2.3</span> · macOS 15+ · Apple silicon</span>
     <a href="index.html">Overview</a>
     <a href="compare.html">Compare</a>
     <a href="install.html">Install</a>
     <a href="https://ko-fi.com/woody438" rel="noopener">Ko-fi</a>
     <span class="grow"></span>
-    <span>Not affiliated with Discogs, OpenAI, Google or Apple.</span>
+    <span>Not affiliated with Discogs, Anthropic, OpenAI, Google or Apple.</span>
   </div>
 </footer>
 
