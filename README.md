@@ -30,7 +30,8 @@ later** — that old workaround is gone. The only way in is through System Setti
 6. VinylCat opens. **You only ever do this once** — every later launch is a normal double-click.
 
 If you want to skip all of the above, the app has to be signed with a paid Apple Developer ID ($99/year)
-and notarised by Apple. Until then, the steps above are the way in.
+and notarised by Apple. Until then, the steps above are the way in — but **only once, ever**: from then on VinylCat
+updates itself silently, with no further warnings (see [Updates](#updates)).
 
 ## First run
 
@@ -117,15 +118,63 @@ click ALLOW on each, once. They then enter their own Discogs token and model key
 Release builds send one anonymous tick to vinyl-cat.com per launch (the word "launch" and the version, nothing else) so
 you can see take-up on the site's download card; Settings → ABOUT switches it off. Debug builds never send it.
 
-Updates: the app reads [vinyl-cat.com/release.json](https://vinyl-cat.com/release.json) at launch and every six hours
-and shows an amber UPDATE chip in the top bar when a newer version is there (DOWNLOAD → vinyl-cat.com/download, or
-SKIP THIS VERSION; Settings → ABOUT has the switch and CHECK NOW). It never replaces itself: they drag the new app
-over the old one, and macOS asks for the Gatekeeper steps again because the build is not signed with a Developer ID.
-Their database and photos live in their own Application Support folder and survive the swap.
+Updates: the app installs them itself — see [Updates](#updates). Their database and photos live in their own
+Application Support folder and survive the swap.
 
-Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, `scripts/package.sh`, copy the DMG
-into `site-b/downloads/`, update `site-b/release.json` (`version`, `file`, `notes`), push — Vercel deploys the site
-from `main` — then tag it and attach the DMG to a GitHub release.
+Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, push to `main`, and the build
+workflow publishes the `latest` release that every copy updates to. The site is still the front door for first
+installs, so to put a DMG there as well: `scripts/package.sh`, copy it into `site-b/downloads/`, update
+`site-b/release.json` (`version`, `file`, `notes`), push — Vercel deploys the site from `main`.
+
+## Updates
+
+VinylCat updates itself. Every build GitHub Actions publishes carries its own build number and the release stream
+it came from, and the app checks at launch and every four hours. A newer build is installed when you are between
+records — never mid-scan or mid-import — and takes a second or two: the app quits, swaps itself and reopens. The
+catalogue, the photos and the keys are untouched, and because every build is signed with the same certificate macOS
+treats it as the same app, so Camera, Microphone and Speech permissions carry over. **There is no Open Anyway on an
+update** — only on the very first install.
+
+Left to itself it is silent. An amber UPDATE chip appears in the top bar only when a build is waiting that it has
+not installed yet — because a scan is open, or because you turned off installing on its own. Clicking it shows
+what's new and INSTALL NOW.
+
+Two streams, switched in **Settings → UPDATES**:
+
+| | where it comes from | who gets it |
+| --- | --- | --- |
+| `latest` | every push to `main` | everyone |
+| `preview` | whichever pull request built last | only with **Get preview builds** on |
+
+Switch previews off again while running one and main's build is *older* by number, so it is not offered as an
+update: **BACK TO MAIN RELEASE** installs it there and then. Otherwise the next build from main carries you back.
+
+An update is only ever installed if it is signed with the project's certificate — the same "VinylCat Local Signing"
+certificate this Mac builds with, held by GitHub as a secret. An ad-hoc build has nothing to match and so can never
+install anything, which is the point: without that check, anything that could write to the release page could
+replace the app. This replaced the old release.json notice (0.2.0–0.2.2), which could only point at a DMG, on the
+assumption that self-replacement needed a Developer ID. It doesn't — it needs a stable designated requirement,
+which a self-signed certificate gives.
+
+### Setting it up
+
+One-off, on this Mac:
+
+1. **Keychain Access → login → My Certificates → "VinylCat Local Signing" → right-click → Export…** as a `.p12`,
+   with a password.
+2. ```bash
+   scripts/signing-cert-to-ci.sh ~/Desktop/Certificates.p12
+   ```
+   It checks the file holds the right identity, copies it to the clipboard base64'd, and names the two repository
+   secrets to paste it into (`SIGNING_CERT_P12`, `SIGNING_CERT_PASSWORD`). Delete the `.p12` afterwards; keep the
+   password in your password manager.
+
+Until those secrets exist, CI still builds and publishes — but ad hoc, so nothing auto-updates to those builds and
+the run prints a warning saying so. A *replacement* certificate later costs every installed copy one more round of
+allowing Camera, Microphone and Speech, and one manual install.
+
+Builds made here with `scripts/build-app.sh` stamp a date for a version and no stream, so they take no part in
+updates and say so in Settings. Only CI's builds update themselves.
 
 Bug reports: REPORT A PROBLEM in Settings → ABOUT, or REPORT on a record in the Library. The note, the last 150 log
 lines and the record's scan evidence (both optional, keys masked) go to vinyl-cat.com/api/report, which files a GitHub
