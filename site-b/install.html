@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install VinylCat — the six steps past Gatekeeper</title>
-  <meta name="description" content="VinylCat is not signed by Apple, so macOS blocks the first launch. Here are the six steps, once, plus first-run setup and where your data lives.">
+  <meta name="description" content="VinylCat is not notarised by Apple, so macOS blocks the very first launch. Here are the six steps, once, plus first-run setup, how it updates itself afterwards, and where your data lives.">
   <link rel="canonical" href="https://vinyl-cat.com/install.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="VinylCat">
   <meta property="og:url" content="https://vinyl-cat.com/install.html">
   <meta property="og:title" content="Install VinylCat — the six steps past Gatekeeper">
-  <meta property="og:description" content="VinylCat is not signed by Apple, so macOS blocks the first launch. Here are the six steps, once, plus first-run setup and where your data lives.">
+  <meta property="og:description" content="VinylCat is not notarised by Apple, so macOS blocks the very first launch. Here are the six steps, once, plus first-run setup, how it updates itself afterwards, and where your data lives.">
   <meta property="og:image" content="https://vinyl-cat.com/assets/img/scan-matched.png">
   <meta property="og:image:width" content="1440">
   <meta property="og:image:height" content="900">
@@ -54,8 +54,8 @@
 <section class="hero" style="padding-bottom:0">
   <div class="wrap">
     <span class="eyebrow red">Read this first</span>
-    <h1 style="max-width:14ch">The app is not signed by Apple</h1>
-    <p class="lede">VinylCat is ad-hoc signed on the machine that built it. It is not signed with an Apple Developer ID and it is not notarised. <strong>macOS will refuse to open it the first time. This is expected.</strong> The download is not broken and there is nothing wrong with the app. It is Gatekeeper doing its job on an unnotarised app. Follow the six steps and you are in.</p>
+    <h1 style="max-width:16ch">The first launch, and only the first</h1>
+    <p class="lede">VinylCat is signed with the project's own certificate — not an Apple Developer ID, and not notarised. <strong>macOS will refuse to open it the first time. This is expected.</strong> The download is not broken and there is nothing wrong with the app. It is Gatekeeper doing its job on an unnotarised app. Follow the six steps and you are in. You do it once ever: from then on the app installs its own updates, and those never meet Gatekeeper.</p>
     <div class="callout amber" style="max-width:64ch">
       <div class="tag">Note</div>
       <p>Right-click → Open does <strong>not</strong> get round this on macOS 15 or later. That old workaround is gone. System Settings is the only way in.</p>
@@ -70,14 +70,14 @@
       <h2>Getting past Gatekeeper</h2>
     </div>
     <ol class="steps measure" style="max-width:72ch">
-      <li><div><b>Drag VinylCat onto Applications</b><p>Open the DMG and drag the app onto the Applications folder shortcut in the same window.</p></div></li>
+      <li><div><b>Unzip it and drag VinylCat to Applications</b><p>Double-click VinylCat.zip, then drag the app it leaves behind into your Applications folder.</p></div></li>
       <li><div><b>Double-click VinylCat. Click Done.</b><p>macOS says "Apple could not verify VinylCat is free of malware", with only a Done button. Click it.</p><p class="aside">Nothing has gone wrong. This step is required: it is what tells macOS that an app was blocked, which puts the button you need into System Settings.</p></div></li>
       <li><div><b>Open System Settings → Privacy &amp; Security</b><p>Apple menu → System Settings, then Privacy &amp; Security in the sidebar.</p></div></li>
       <li><div><b>Scroll all the way down to Security. Click Open Anyway.</b><p>You will see "VinylCat was blocked to protect your Mac." Click <strong>Open Anyway</strong> next to it.</p><p class="aside">That line only appears after step 2. If it isn't there, go back and double-click the app again.</p></div></li>
       <li><div><b>Authenticate, then Open Anyway again</b><p>Touch ID or your password if asked, then click Open Anyway once more in the confirmation dialog.</p></div></li>
       <li><div><b>VinylCat opens. You only do this once.</b><p>Every launch after this is a normal double-click.</p></div></li>
     </ol>
-    <p class="foot-note">Skipping all of the above would need a paid Apple Developer ID, $99 a year. VinylCat is free, so that is not happening. The six steps are the way in.</p>
+    <p class="foot-note">Skipping all of the above would need a paid Apple Developer ID, $99 a year. VinylCat is free, so that is not happening. The six steps are the way in — and they are a one-off, not a thing you repeat per version.</p>
   </div>
 </section>
 
@@ -109,8 +109,9 @@
     <div class="two">
       <div>
         <span class="eyebrow">Updating</span>
-        <h2>Drag the new one over the old one</h2>
-        <p class="lede" style="margin-top:16px">The app checks this site at launch and every six hours; when a newer version is out an amber UPDATE chip appears in the top bar with what changed and a download button (Settings → About switches the check off, or skips a version). Replace VinylCat in Applications with the new one. Your catalogue and photos live in your own Library folder and are not touched. Gatekeeper may ask once more for a new build.</p>
+        <h2>It does this part itself</h2>
+        <p class="lede" style="margin-top:16px">Every push to the project's main branch is built and published automatically, and the app checks at launch and every four hours. A newer build is installed when you are between records — never mid-scan or mid-import — and takes a second or two: it quits, swaps itself and reopens. Your catalogue, photos and keys are untouched, and because every build carries the same certificate macOS treats it as the same app, so Camera, Microphone and Speech permissions carry over. <strong>There is no Open Anyway on an update</strong>, only on that very first install.</p>
+        <p class="sec">Left alone it is silent. The amber UPDATE chip appears only when a build is waiting that it has not installed — a scan is open, or you turned off installing on its own — and INSTALL NOW does it. <b>Settings → UPDATES</b> has both switches, and <b>Get preview builds</b> opts into builds from open pull requests if you want changes early; switch it off and BACK TO MAIN RELEASE puts the main build back.</p>
       </div>
       <div>
         <span class="eyebrow">Where your data lives</span>
@@ -142,11 +143,11 @@ keys.json         your Discogs token and model key, 0600 (empty if the ant CLI s
       <img src="assets/img/icon-256.png" alt="VinylCat app icon" width="256" height="256">
       <div>
         <h3>VinylCat <span data-version>0.2.3</span></h3>
-        <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · DMG · free</div>
+        <div class="meta"><b>macOS 15</b> or later · <b>Apple silicon</b> · zip · free · updates itself after the first install</div>
       </div>
       <a class="btn" href="/download" data-download>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M4 20h16"/></svg>
-        Download the DMG
+        Download for macOS
       </a>
     </div>
   </div>

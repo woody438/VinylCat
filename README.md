@@ -121,10 +121,14 @@ you can see take-up on the site's download card; Settings → ABOUT switches it 
 Updates: the app installs them itself — see [Updates](#updates). Their database and photos live in their own
 Application Support folder and survive the swap.
 
-Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, push to `main`, and the build
-workflow publishes the `latest` release that every copy updates to. The site is still the front door for first
-installs, so to put a DMG there as well: `scripts/package.sh`, copy it into `site-b/downloads/`, update
-`site-b/release.json` (`version`, `file`, `notes`), push — Vercel deploys the site from `main`.
+Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist` and `version` in
+`site-b/release.json`, push to `main`, and the build workflow publishes the `latest` release that every copy
+updates to. The site is still the front door for first installs, and `/download` points straight at that
+release's `VinylCat.zip`, so there is nothing else to copy anywhere — Vercel deploys the site from `main`.
+
+Do not put a `scripts/package.sh` DMG on the site and point `release.json` at it instead. A locally built app
+carries no build number and no release stream, so `Updater.enabled` is false and whoever installs it is stuck on
+that build for good. `package.sh` is for handing someone a one-off copy, not for the download link.
 
 ## Updates
 

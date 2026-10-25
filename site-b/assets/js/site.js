@@ -1,6 +1,7 @@
-// release.json is the one place the version and DMG live: the pages show the version from it, and
-// /download (api/download.js) counts a hit and redirects to the file. Every download link on the
-// site carries data-download and already points at /download.
+// release.json is the one place the version and the download live: the pages show the version from
+// it, and /download (api/download.js) counts a hit and redirects to the file — the `latest` GitHub
+// release the build workflow republishes on every push to main. Every download link on the site
+// carries data-download and already points at /download.
 fetch("/release.json").then((r) => r.json()).then((rel) => {
   document.querySelectorAll("[data-version]").forEach((el) => { el.textContent = rel.version; });
 }).catch(() => {});

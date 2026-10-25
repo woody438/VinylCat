@@ -1,5 +1,4 @@
 {
   "version": "0.2.3",
-  "file": "downloads/VinylCat_v1_2026-10-25.dmg",
-  "notes": "Claude joins GPT-5.6 Luna and Gemini as a vision reader, with three rungs: Haiku reads the catalogue number right first time on 94% of photos for about 50¢ a thousand records, Opus on 97%. If the ant CLI is signed in, it uses a short-lived token and stores no key. Settings → Identification picks the reader and the rung."
+  "file": "https://github.com/woody438/VinylCat/releases/download/latest/VinylCat.zip"
 }

@@ -4,15 +4,20 @@ Four plain HTML pages, one stylesheet, no build step. Palette and type mirror th
 (`Sources/VinylCat/Support/Theme.swift`): Barlow Condensed + IBM Plex Mono / Sans, dark control-room.
 
 - `index.html` — overview: the six-step loop, the five outcomes, features, voice table, the measured reader table (2026-10-25, three providers over the same 100 records), needs and limits, download, coffee.
-- `install.html` — the six Gatekeeper steps, first-run wizard, updating, reporting a problem, where data lives.
+- `install.html` — the six Gatekeeper steps, first-run wizard, the self-updater, reporting a problem, where data lives.
 - `how-it-works.html` — the six layers with the exact model prompts, which reader to pick and what each costs, Discogs ladder, ranker weights, every knob.
 - `compare.html` — VinylCat against the Discogs app, CLZ Music, Record Scanner, VinylAI and VinylBox: eight rows, where it wins,
   where it loses. Source: `output/competitor-comparison_v1_2026-09-09.md`; the page carries its research date, refresh both together.
 - `assets/img/` — real screens from `.build/debug/VinylCat --render-ui`, plus the icon from `Resources/AppIcon.icns`.
-- `release.json` — the one place the version and DMG path live: the pages show the version from it, `/download` redirects to the file,
-  and the app reads it (`Sources/VinylCat/Support/UpdateCheck.swift`) to show its UPDATE chip when `version` is newer than its own.
-  `notes` is the one line shown under the chip. To ship a release: `scripts/package.sh`, copy the DMG into `downloads/`, bump
-  `version`, `file` and `notes` here, push.
+- `release.json` — the site's own pointer, two fields. `version` is what the pages print; `file` is where `/download` sends people,
+  since 0.2.3 the `latest` GitHub release that `.github/workflows/build.yml` republishes on every push to `main`. That URL is stable,
+  so the only field that ever needs touching is `version`, when `CFBundleShortVersionString` moves.
+  **The app no longer reads this file.** It updates itself from the release stream instead (`Support/Updater.swift`), and the `notes`
+  field that used to feed the UPDATE chip is gone with it. Shipping a release is now: bump `CFBundleShortVersionString` in
+  `Resources/Info.plist` and `version` here, push to `main`, and CI publishes the build everyone updates to.
+  Do **not** put a `scripts/package.sh` DMG here and point `file` at it: a locally built app has no build number and no release
+  stream, so `Updater.enabled` is false and whoever installs it can never update again. The download has to be a CI build.
+  The DMGs still in `downloads/` are the 0.2.0–0.2.2 releases, kept so old links resolve.
 - `assets/js/site.js` — fills in the version and the take-up counters.
 - `api/` + `lib/counter.js` — the take-up counter (below). `vercel.json` rewrites `/download` to `api/download.js`.
 - `api/report.js` — bug reports from the app (Settings → ABOUT → REPORT A PROBLEM, or REPORT on a record): the app POSTs
