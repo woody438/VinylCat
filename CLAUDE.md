@@ -133,14 +133,21 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
   (`launchPing`, default on) is the user's switch. The site side is `site-b/api/` + `lib/counter.js` (Upstash Redis, three
   integers, `/download` counts and redirects to the DMG, `/api/stats` feeds the download card) — see `site-b/README.md`.
   Nothing identifying is ever sent or stored; keep it that way, the site copy promises it.
-- `Support/UpdateCheck.swift` — the update notice (2026-09-14): a GET of `https://vinyl-cat.com/release.json` at launch and every six
-  hours (`VINYLCAT_RELEASE_URL` redirects it; a `file://` URL works for tests); when `version` there is newer than
-  `BuildInfo.versionNumber` the amber UPDATE chip appears in the top bar (`UpdateChip` / `UpdatePopover` in `VinylCatApp.swift`:
-  notes, DOWNLOAD → `vinyl-cat.com/download`, SKIP THIS VERSION → `updateSkippedVersion`). Settings → ABOUT has the switch
-  (`updateCheck`, default on), the status line and CHECK NOW. The app never replaces itself: no Developer ID, so the install stays
-  drag-over-the-old-one. Shipping a release: bump `CFBundleShortVersionString` in `Resources/Info.plist`, `scripts/package.sh`, copy
-  the DMG into `site-b/downloads/`, update `site-b/release.json` (`version`, `file`, `notes`), push. `--render-ui` writes
-  `update-available.png`; the self-test covers the version compare and the offer rules.
+- `Support/UpdateCheck.swift` + `Support/Updater.swift` — the self-updater (2026-10-25, ported from busy-bar-sign; it replaced
+  the release.json notice of 2026-09-14, which only pointed at a DMG because self-replacement was thought to need a Developer ID.
+  It doesn't: it needs a stable designated requirement, which the self-signed cert gives). `.github/workflows/build.yml` publishes
+  every push to `main` as the `latest` release and every pull request as `preview`, each with `VinylCat.zip` + `VinylCat.json`
+  (`build` = the run number, which is what's compared; `notes` = the commit subject, shown in the chip). The app checks at launch
+  and every four hours and installs when `AppState.midRecord` is false — never mid-scan or mid-import. A download is only installed
+  if it satisfies this app's own designated requirement, i.e. it carries the "VinylCat Local Signing" certificate (`scripts/sign.sh`,
+  from the `SIGNING_CERT_P12` secret that `scripts/signing-cert-to-ci.sh` installs); quarantine is stripped, so updates never hit
+  Gatekeeper. Settings → UPDATES (`Settings/UpdatesSettings.swift`, column one so it doesn't push Settings into scrolling) has the
+  two switches and BACK TO MAIN RELEASE, the one case where the build you want has the *lower* number. The amber UPDATE chip
+  (`UpdateChip` / `UpdatePopover` in `VinylCatApp.swift`) now means "waiting, not yet installed" — a scan is open, or installing on
+  its own is off — and INSTALL NOW does it. Local builds take no part: `build-app.sh` writes a date for CFBundleVersion and no
+  stream unless `VINYLCAT_BUILD` / `VINYLCAT_UPDATE_CHANNEL` are set (distinct from `VinylCatChannel`, which gates `LaunchPing`),
+  so `Updater.enabled` is false and nothing swaps. `--render-ui` writes `update-available.png`; the self-test covers the release
+  comparison and that a local build opts out.
 - `Support/BugReport.swift` — bug reports (2026-09-14): REPORT A PROBLEM in Settings → ABOUT, or REPORT on a record in the Library.
   The sheet (`BugReportSheet`) takes a note and an optional reply email, ticks for the last 150 log lines and the record's
   `ScanEvidence`, builds the whole thing as Markdown (`BugReport.markdown`; `scrub` masks anything key-shaped), PREVIEW shows it,

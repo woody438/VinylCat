@@ -1,0 +1,157 @@
+# Builds VinylCat on GitHub's Mac runners and publishes it, so a copy can update itself and
+# anyone can install it without a Mac toolchain:
+#   https://github.com/woody438/VinylCat/releases/latest
+# A push to main becomes the "latest" release; a pull request becomes the "preview" pre-release,
+# which a copy takes only with Settings → UPDATES → Get preview builds on. The build number the
+# updater compares is this run's number, so it counts up whichever branch it came from.
+# See Sources/VinylCat/Support/UpdateCheck.swift for what the app reads.
+name: Build Mac app
+
+on:
+  push:
+    branches: [main]
+    # Every build on main reaches every copy through the updater: prose and pictures alone don't make one.
+    paths-ignore: ['**.md', 'design/**', 'output/**', 'site-b/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write          # to publish the release
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      # The project's signing certificate, once it's been added (scripts/signing-cert-to-ci.sh).
+      # Without it the build is signed ad hoc: installable by hand, but no copy will auto-update to it.
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_CERT_P12 != '' }}
+      # What the updater compares, and which release the build goes to.
+      VINYLCAT_BUILD: ${{ github.run_number }}
+      VINYLCAT_UPDATE_CHANNEL: ${{ github.event_name == 'pull_request' && 'preview' || 'latest' }}
+      VINYLCAT_PREVIEW_PR: ${{ github.event.pull_request.number }}         # empty for main's builds
+      VINYLCAT_SKIP_SIGN: 1                                                # signed below, with the certificate
+      # No Discogs token and no model key on the runner, so nothing is spent and nothing is written
+      # to a live collection: the checks run OCR-only against what they carry.
+      VINYLCAT_NO_KEYCHAIN: 1
+      # One line of what's new for the top-bar chip. On a pull request the checkout is the synthetic
+      # refs/pull/N/merge commit, whose subject is "Merge <sha> into <sha>" — useless to a reader — so
+      # the PR's own title stands in; a push to main uses the commit subject.
+      VINYLCAT_NOTES: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      # The same script the Mac uses, so the two can't drift; the env above is all CI adds.
+      - name: Build
+        run: |
+          set -o pipefail
+          scripts/build-app.sh release 2>&1 | tee build.log
+          test -d build/VinylCat.app
+          test -x build/VinylCat.app/Contents/MacOS/VinylCat
+
+      - name: Built-in checks
+        run: |
+          set -o pipefail
+          .build/release/VinylCat --self-test 2>&1 | tee selftest.log
+
+      - name: Sign with the project's certificate
+        if: env.HAS_SIGNING_CERT == 'true'
+        env:
+          SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          echo "$SIGNING_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          scripts/sign.sh build/VinylCat.app "$RUNNER_TEMP/cert.p12" "$SIGNING_CERT_PASSWORD"
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      # build-app.sh didn't sign (VINYLCAT_SKIP_SIGN), so without the certificate the app would reach
+      # Package unsigned and fail its verify. Ad hoc keeps the build honest: it installs by hand, and
+      # the updater refuses it, which is the whole point of the check.
+      - name: No certificate yet — sign ad hoc and say so
+        if: env.HAS_SIGNING_CERT != 'true'
+        run: |
+          codesign --force --deep --sign - build/VinylCat.app
+          echo "::warning::Signed ad hoc: add SIGNING_CERT_P12 and SIGNING_CERT_PASSWORD (scripts/signing-cert-to-ci.sh) or no installed copy can auto-update to this build"
+
+      - name: Package
+        run: |
+          APP=build/VinylCat.app
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d -r- "$APP" 2>&1 | grep designated                 # what macOS knows this build by
+          # The three things the updater depends on being right in the bundle.
+          test "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" = "$VINYLCAT_BUILD"
+          test "$(plutil -extract VinylCatUpdateChannel raw "$APP/Contents/Info.plist")" = "$VINYLCAT_UPDATE_CHANNEL"
+          test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = com.woodall.vinylcat
+          if [ "$VINYLCAT_UPDATE_CHANNEL" = preview ]; then                    # Settings says which pull request
+            test "$(plutil -extract VinylCatPreviewPR raw "$APP/Contents/Info.plist")" = "$VINYLCAT_PREVIEW_PR"
+          fi
+          test -f "$APP/Contents/Resources/AppIcon.icns"                # the icon made it in
+          ditto -c -k --sequesterRsrc --keepParent "$APP" VinylCat.zip
+          ls -l VinylCat.zip
+          # Quotes and backslashes stripped so the JSON holds whatever the title or subject contains.
+          NOTES=$(printf '%s' "${VINYLCAT_NOTES:-$(git log -1 --pretty=%s)}" | tr -d '"\\' | cut -c1-120)
+          # What the updater reads (Sources/VinylCat/Support/UpdateCheck.swift).
+          cat > VinylCat.json <<EOF
+          {"build": $VINYLCAT_BUILD, "version": "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")", "commit": "$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)", "channel": "$VINYLCAT_UPDATE_CHANNEL", "notes": "$NOTES"}
+          EOF
+          cat VinylCat.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VinylCat
+          path: |
+            VinylCat.zip
+            VinylCat.json
+
+      - name: Publish as the latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest VinylCat.zip VinylCat.json \
+            --target "$GITHUB_SHA" \
+            --title "VinylCat — latest build" \
+            --notes "Built from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7} (build ${VINYLCAT_BUILD}).
+
+          **Already have VinylCat?** It updates itself — Settings → UPDATES, or wait: it checks every four hours and installs between records.
+
+          **First install:** download VinylCat.zip, double-click to unzip, drag **VinylCat** to Applications.
+
+          **First open:** the app isn't notarised by Apple, so macOS blocks it the first time only. Try to open it, then System Settings → Privacy & Security, scroll down and click **Open Anyway**. (Or in Terminal: \`xattr -dr com.apple.quarantine /Applications/VinylCat.app\`.) Updates after that install silently.
+
+          Then the setup wizard asks for Camera, Microphone and Speech Recognition, and for your own Discogs token and model key — none of mine ships with it.
+
+          Needs macOS 15 or later on an Apple silicon Mac."
+
+      - name: Publish a pull request's build as the preview release
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete preview --yes --cleanup-tag || true
+          gh release create preview VinylCat.zip VinylCat.json --prerelease \
+            --target "${{ github.event.pull_request.head.sha }}" \
+            --title "VinylCat — preview (PR #${{ github.event.pull_request.number }})" \
+            --notes "Built from pull request #${{ github.event.pull_request.number }} (\`${{ github.head_ref }}\`) at ${{ github.event.pull_request.head.sha }} (build ${VINYLCAT_BUILD}). For trying a change early; the latest release is still the one built from main.
+
+          **To take it:** Settings → UPDATES → **Get preview builds**, and it installs this as it would any update. Switch that off again and **BACK TO MAIN RELEASE** puts main's build back.
+
+          One preview at a time — whichever pull request built last."
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            build.log
+            selftest.log
+          if-no-files-found: ignore

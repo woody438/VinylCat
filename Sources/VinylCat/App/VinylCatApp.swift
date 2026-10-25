@@ -73,8 +73,6 @@ struct RootView: View {
         // First-run callouts: anchors are collected from the whole tree, the overlay draws above it.
         .overlayPreferenceValue(TourAnchorKey.self) { TourHost(anchors: $0) }
         .task { await state.tour.autoStartIfNeeded() }
-        // Reads vinyl-cat.com/release.json now and every six hours; the UPDATE chip in the top bar follows it.
-        .task { await state.updates.run() }
         // The big ask is a launch-time thing only: mid-session the 500th record gets the card, not this.
         .task {
             let store = Store.shared
@@ -213,12 +211,15 @@ struct CountBadge: View {
     }
 }
 
-/// Top-bar notice that a newer VinylCat is on the site (`UpdateCheck`). Draws nothing when up to date.
+/// Top-bar notice that a newer build is ready (`Updater`). Draws nothing when up to date, and
+/// nothing in a local build. With "Install updates on its own" left on this is only ever a glimpse —
+/// the updater installs by itself the moment you're between records; it's for when that's off, or
+/// while a scan is open.
 struct UpdateChip: View {
     @Environment(AppState.self) private var state
     @State private var open = false
     var body: some View {
-        if let r = state.updates.shown {
+        if let r = state.updater.shown {
             Button { open.toggle() } label: {
                 HStack(spacing: 7) {
                     Image(systemName: "arrow.down.circle.fill").font(.system(size: 12, weight: .semibold))
@@ -231,32 +232,43 @@ struct UpdateChip: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("VinylCat \(r.version) is out — click for what's new and the download")
+            .help("VinylCat \(r.version) (build \(r.build)) is ready — click to see what's new and install it")
             .popover(isPresented: $open, arrowEdge: .bottom) { UpdatePopover(release: r) { open = false } }
         }
     }
 }
 
-/// What's new, how to install it, and the two choices. The download opens in the browser: the app
-/// is not signed with a Developer ID, so it does not replace itself.
+/// What's new, and the one button. VinylCat installs this itself: it quits, swaps itself and
+/// reopens, keeping its permissions, the catalogue and the photos.
 struct UpdatePopover: View {
     @Environment(AppState.self) private var state
-    let release: UpdateCheck.Release
+    let release: Updates.Release
     let onClose: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Caption("VINYLCAT \(release.version) IS OUT", color: Theme.amber)
+            Caption("VINYLCAT \(release.version) IS READY", color: Theme.amber)
             if let notes = release.notes, !notes.isEmpty {
                 Text(notes).font(Theme.display(18, weight: .semibold)).foregroundStyle(Theme.text).fixedSize(horizontal: false, vertical: true)
             }
-            Text("You have \(state.updates.current ?? "?"). Download the DMG, quit VinylCat and drag the new one over the old one in Applications. Your catalogue, photos and keys stay where they are; macOS may ask once more to open it.")
+            Text(detail)
                 .font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
-                CoffeePill("DOWNLOAD", fill: true, compact: true) { state.updates.download(); onClose() }
-                CoffeePill("SKIP THIS VERSION", fill: false, compact: true) { state.updates.skip(); onClose() }
+                CoffeePill("INSTALL NOW", fill: true, compact: true) { state.updater.install(); onClose() }
+                CoffeePill("LATER", fill: false, compact: true) { onClose() }
             }
         }
         .padding(16).frame(width: 380).background(Theme.panel)
+    }
+
+    /// What will happen, which depends on whether the updater would have done it unprompted.
+    private var detail: String {
+        if let problem = state.updater.installProblem { return problem }
+        let base = "You have build \(state.updater.build). VinylCat closes and reopens in a second or two; "
+                 + "your catalogue, photos and keys stay where they are, and it keeps its camera, microphone "
+                 + "and speech permissions."
+        return state.updater.automatic
+            ? base + " It would install this on its own as soon as you're between records."
+            : base + " Installing on its own is off, so it waits for this button."
     }
 }
 

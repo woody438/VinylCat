@@ -117,10 +117,11 @@ enum CLI {
             if render(view, to: out.appendingPathComponent("\(name).png")) { written += 1 }
         }
         // The UPDATE chip in the top bar, as it looks when the site has a newer version.
-        state.updates.previewRelease = UpdateCheck.Release(version: "0.2.0", file: "downloads/VinylCat_v2.dmg", notes: "Update notice, faster label reads.")
+        state.updater.previewRelease = Updates.Release(build: 42, version: "0.2.3", commit: "a74c4ac", channel: "latest",
+                                                       notes: "Installs itself now; preview builds in Settings.")
         if render(RootView().environment(state).frame(width: 1440, height: 900).background(Theme.bg).preferredColorScheme(.dark)
                     .environment(\.previewPhase, .armed(reason: "empty")), to: out.appendingPathComponent("update-available.png")) { written += 1 }
-        state.updates.previewRelease = nil
+        state.updater.previewRelease = nil
         // The bug report sheet: from Settings (no record) and from a record's detail.
         if render(BugReportSheet(record: nil, onClose: {}).environment(state).environment(\.staticRender, true), to: out.appendingPathComponent("report-1-settings.png")) { written += 1 }
         if let r = Store.shared.all().first {

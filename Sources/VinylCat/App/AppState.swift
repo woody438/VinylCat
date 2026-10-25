@@ -41,6 +41,17 @@ final class AppState {
         importer.app = self
     }
 
+    /// Whether a record is part-scanned or an import is running: the moments an update must not
+    /// interrupt. `.paused`, `.learning` and `.armed` are the resting states — the camera may be
+    /// live, but nothing is between the shutter and the save.
+    var midRecord: Bool {
+        if importer.active { return true }
+        switch scan.phase {
+        case .paused, .learning, .armed: return false
+        default: return true
+        }
+    }
+
     /// Once the camera delivers, sample its brightness so a running-but-black stream is reported
     /// rather than shown as a blank preview. The camera session itself handles "no frames at all".
     private var lastCameraStatus = ""
@@ -78,6 +89,9 @@ final class AppState {
         scan.setAutoCapture(autoCapture)
         reviewCount = Store.shared.reviewCount()
         voice.onCommand = { [weak self] cmd in self?.scan.handle(command: cmd) }
+        // Never swap the app out from under a part-scanned record or a running import.
+        updater.isBusy = { [weak self] in self?.midRecord ?? true }
+        updater.start()
         scan.speaker.onSpeakingChanged = { [weak self] speaking in self?.voice.muted = speaking }
         Task {
             await camera.start()
@@ -102,5 +116,6 @@ final class AppState {
     let importer = PhotoImporter()
     /// The tip jar: free app, own keys, an ask that grows with the catalogue (see `Coffee`).
     let coffee = Coffee()
-    let updates = UpdateCheck()
+    /// Keeps the app up to date from its GitHub releases; off in a local build (see `Updater`).
+    let updater = Updater()
 }
