@@ -257,20 +257,37 @@ enum SelfTest {
         check(!LaunchPing.shouldSend(channel: "release", enabled: false, forced: true), "the Settings switch wins over everything")
         check(String(decoding: LaunchPing.body(event: "launch", version: "0.1.0"), as: UTF8.self) == #"{"event":"launch","version":"0.1.0"}"#, "the body is the event and the version, nothing else")
 
-        print("update check")
-        check(UpdateCheck.isNewer("0.2.0", than: "0.1.0"), "0.2.0 is newer than 0.1.0")
-        check(UpdateCheck.isNewer("0.1.10", than: "0.1.9"), "components compare as numbers, not strings")
-        check(UpdateCheck.isNewer("1.0", than: "0.9.9"), "shorter version string pads with zeros")
-        check(!UpdateCheck.isNewer("0.1.0", than: "0.1.0") && !UpdateCheck.isNewer("0.1.0", than: "0.2.0"), "same or older is not newer")
-        check(!UpdateCheck.isNewer("0.1.0-beta", than: "0.1.0"), "suffix text is ignored")
-        let rel = UpdateCheck.Release(version: "0.2.0", file: "downloads/x.dmg", notes: nil)
-        check(UpdateCheck.shouldOffer(rel, current: "0.1.0", skipped: ""), "newer release is offered")
-        check(!UpdateCheck.shouldOffer(rel, current: "0.1.0", skipped: "0.2.0"), "skipped version stays quiet")
-        check(UpdateCheck.shouldOffer(UpdateCheck.Release(version: "0.3.0", file: "", notes: nil), current: "0.1.0", skipped: "0.2.0"), "something newer than the skipped one shows again")
-        check(!UpdateCheck.shouldOffer(rel, current: nil, skipped: ""), "the bare binary never offers")
-        check(!UpdateCheck.shouldOffer(rel, current: "0.2.0", skipped: ""), "same version is up to date")
-        let decoded = try? JSONDecoder().decode(UpdateCheck.Release.self, from: Data(#"{"version":"0.2.0","file":"downloads/VinylCat_v2.dmg"}"#.utf8))
-        check(decoded?.version == "0.2.0" && decoded?.notes == nil, "release.json decodes without notes")
+        print("updates")
+        let mainRel = Updates.Release(build: 40, version: "0.2.2", commit: "a", channel: "latest", notes: nil)
+        let previewRel = Updates.Release(build: 43, version: "0.2.2", commit: "b", channel: "preview", notes: nil)
+        let relJSON = #"{"build": 41, "version": "0.2.2", "commit": "a677f40", "channel": "preview", "notes": "x"}"#
+        check(Updates.decode(Data(relJSON.utf8)) == Updates.Release(build: 41, version: "0.2.2", commit: "a677f40", channel: "preview", notes: "x"),
+              "reads VinylCat.json")
+        check(Updates.decode(Data(#"{"build":7,"version":"0.2.2","commit":"c","channel":"latest"}"#.utf8))?.notes == nil,
+              "a release without notes still decodes")
+        check(Updates.decode(Data("not json".utf8)) == nil, "rubbish isn't a release")
+        check(Updates.url("latest", "VinylCat.zip").absoluteString
+              == "https://github.com/woody438/VinylCat/releases/download/latest/VinylCat.zip", "download URL")
+        check(Updates.channels(previews: false) == ["latest"], "previews off: main only")
+        check(Updates.channels(previews: true) == ["preview", "latest"], "previews on: the preview, then main")
+        check(Updates.newest([mainRel, previewRel], after: 41) == previewRel, "the newest of two")
+        check(Updates.newest([mainRel], after: 41) == nil, "an older build isn't an update")
+        check(Updates.newest([mainRel], after: 40) == nil, "the same build isn't an update")
+        check(Updates.newest([], after: 2) == nil, "nothing found")
+        // Back to main from a preview: main's build, lower by number, once previews are off.
+        check(Updates.backToMain([mainRel], running: 43, channel: "preview", previews: false) == mainRel,
+              "a preview with previews off: main's build to go back to")
+        check(Updates.backToMain([mainRel], running: 43, channel: "preview", previews: true) == nil, "previews on: stay")
+        check(Updates.backToMain([mainRel], running: 43, channel: "latest", previews: false) == nil,
+              "main's own build: nowhere to go back to")
+        check(Updates.backToMain([Updates.Release(build: 44, version: "0.2.2", commit: "c", channel: "latest", notes: nil)],
+                                 running: 43, channel: "preview", previews: false) == nil, "main's newer: an ordinary update")
+        check(Updates.backToMain([], running: 43, channel: "preview", previews: false) == nil, "main not found")
+        // A build made on the Mac has a date for a version and no update channel, so it never swaps itself.
+        let updater = Updater()
+        check(!updater.enabled, "a local build takes no part in updates")
+        check(updater.statusLine.contains("local build"), "and says so in Settings")
+        check(updater.shown == nil, "and shows no chip")
 
         print("bug report")
         check(BugReport.title("Camera shows black\nafter waking") == "Camera shows black", "title is the first line")
