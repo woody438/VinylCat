@@ -95,8 +95,17 @@ jobs:
           test -f "$APP/Contents/Resources/AppIcon.icns"                # the icon made it in
           ditto -c -k --sequesterRsrc --keepParent "$APP" VinylCat.zip
           ls -l VinylCat.zip
+          # On a push, HEAD is usually GitHub's merge commit, whose subject is "Merge pull request #N
+          # from …" — noise in the chip. GitHub puts the pull request's title in that commit's BODY,
+          # so prefer the body's first line when HEAD has more than one parent. %P lists the parents
+          # from the commit object itself, so this still works in the shallow clone actions/checkout
+          # makes. An ordinary commit keeps its subject (its body is the long explanation).
+          if [ "$(git log -1 --pretty=%P | wc -w)" -gt 1 ]; then
+            SUBJECT=$(git log -1 --pretty=%b | head -1)
+          fi
+          [ -n "${SUBJECT:-}" ] || SUBJECT=$(git log -1 --pretty=%s)
           # Quotes and backslashes stripped so the JSON holds whatever the title or subject contains.
-          NOTES=$(printf '%s' "${VINYLCAT_NOTES:-$(git log -1 --pretty=%s)}" | tr -d '"\\' | cut -c1-120)
+          NOTES=$(printf '%s' "${VINYLCAT_NOTES:-$SUBJECT}" | tr -d '"\\' | cut -c1-120)
           # What the updater reads (Sources/VinylCat/Support/UpdateCheck.swift).
           cat > VinylCat.json <<EOF
           {"build": $VINYLCAT_BUILD, "version": "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")", "commit": "$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)", "channel": "$VINYLCAT_UPDATE_CHANNEL", "notes": "$NOTES"}
