@@ -50,7 +50,34 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - `Readers/` — `LocalReader` (Vision barcode + OCR in three orientations, then a zoom pass: the smallest print cropped, magnified 2–4× and
   read again; `closeUps` are those crops, sent to the model), `CatalogueNumber` (regex + shape scoring; the `--ocr-eval` rank list drives
   every rule in `shapeScore`), `SleeveReader` protocol + `LunaReader` (OpenAI Responses,
-  gpt-5.6-luna) + `GeminiReader` (gemini-3.8-flash), `Identifier` (local pass first, model second, cost meter).
+  gpt-5.6-luna) + `GeminiReader` (gemini-3.8-flash) + `ClaudeReader` (Anthropic Messages), `Identifier` (local pass first, model second, cost meter).
+- `ClaudeReader` covers three rungs through one type: `ClaudeModel` (`claudeModel` in UserDefaults, **default `.opus`**) picks
+  `claude-haiku-5-5` / `claude-sonnet-5-5` / `claude-opus-5-5` and carries their pricing. Thinking is adaptive and cannot be switched off
+  on Opus 5.5 or Sonnet 5.5 (`thinking: {type: "disabled"}` is a 400 there), so the only lever is `output_config.effort`, set to `low`;
+  reasoning tokens are billed as output and come out of `max_tokens`, which is 4000 here rather than the usual 2500. Structured output is
+  `output_config.format` with `ClaudeReader.schema` — `SleeveReading.jsonSchema` with one change, made at runtime and verified
+  2026-10-25: a property carrying an `enum` must not also declare a type union, so `formatGuess` loses its `["string","null"]` and keeps
+  the enum (with the null still in it). Without that the API rejects the whole schema — *"Enum value '7in' does not match declared type
+  '['string', 'null']'"*. Every other property's `["string","null"]` union is accepted as it stands, so this is one line, not Gemini's
+  dialect rewrite. A 400 mentioning schema/format/output_config still falls back to asking for the same JSON in the prompt and unwrapping
+  any code fence (`ClaudeReader.jsonBody`).
+  **Measured 2026-10-25**, `--ocr-eval 100 --model` over the same first 100 records for all three providers (model's catalogue number
+  usable first time / usable counting `otherNumbers` / $ per photo / s per photo):
+  Opus 5.5 **97% / 98% / $0.0200 / 4.3s** · Haiku 5.5 **94% / 97% / $0.00052 / 2.7s** · Luna **92% / 94% / $0.00084 / 3.9s**.
+  So Haiku beats the incumbent Luna outright and costs 38× less than Opus; Opus's 3-point lead is 3 photos in 100 and is *not*
+  established by a sample this size. On `catno+otherNumbers` — what `Matcher` actually searches — Haiku and Opus are 97 vs 98, a tie.
+  Haiku over the **full** set (347 records / 353 photos): 85% / 92% / $0.00053 / 2.8s. The first 100 records are materially easier than
+  the tail (local OCR scores 91% in-candidates on them against 85% over everything), so the head-to-head numbers flatter all three
+  equally — compare providers on the 100, not the full-set figure.
+- `AnthropicCredential` — short-lived credentials ahead of the pasted key, in that order: workload identity federation (all four
+  `ANTHROPIC_FEDERATION_*` / identity-token env vars set), then an OAuth profile, then `Secrets.Key.anthropic`. A bearer token goes on
+  `Authorization` **plus** `anthropic-beta: oauth-2025-04-20` — `/v1/messages` rejects it without that header. Both token paths shell out
+  to the `ant` CLI (`auth print-credentials --access-token`), which already owns the exchange, the refresh and the on-disk profile format;
+  do not hand-roll the `/v1/oauth/token` exchange against an undocumented layout. Tokens are cached for 4 minutes and re-minted once on a
+  401. Federation is for CI, not the Mac app: a personal Mac has no workload identity provider to federate from, and a JWT shipped in the
+  bundle would be a long-lived secret — worse than the key it replaced. The OAuth path is exercised and working (2026-10-25, Woody's
+  `ant auth login` profile, scopes `user:developer user:inference user:profile`, tokens good for 8h); the federation path still has not
+  been run — there is nothing on this Mac to federate from.
 - `Discogs/` — `DiscogsClient` (token auth, 60/min limiter from headers), `CandidateRanker` (catno/barcode/label/title/format/year),
   `Matcher` (search strategy + thresholds 0.85 / 0.60), `CollectionSync` (the pull half of two-way sync: once at launch and from
   Settings / Library "PULL FROM DISCOGS"; imports collection instances as photo-less records under `importSession`, adopts the
@@ -150,6 +177,7 @@ no SwiftUI previews. Fonts are SF Condensed/Mono stand-ins for the mockups' Barl
 - Model replies: `max_output_tokens` is 2500 (reasoning tokens count against it; at 600 Luna ran out mid-JSON, which surfaced
   as "The data couldn't be read because it isn't in the correct format"). An `incomplete` status or unparseable JSON throws
   `ReaderError.badResponse` with the reason, and `Identifier` carries on OCR-only.
+- Model replies on Claude: `max_tokens` is 4000 (see `ClaudeReader`), and `thinking` is omitted rather than disabled.
 - Secrets (`Secrets`, alias `Keychain`) live in `~/Library/Application Support/VinylCat/keys.json`, mode 0600 — NOT the login
   keychain any more (2026-09-07, Woody's call). The keychain pins each item to the storing build's code hash via the
   `partition_id` ACL entry; without an Apple team identity that cannot be widened or stripped (tested: "allow all

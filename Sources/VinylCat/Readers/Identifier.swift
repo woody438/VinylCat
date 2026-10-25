@@ -4,10 +4,66 @@ import Observation
 
 /// Which provider to use; persisted in UserDefaults.
 enum ReaderProvider: String, CaseIterable, Identifiable {
-    case luna, gemini
+    case luna, gemini, claude
     var id: String { rawValue }
-    var title: String { self == .luna ? "GPT-5.6 Luna" : "Gemini 3.8 Flash" }
-    var reader: any SleeveReader { self == .luna ? LunaReader() : GeminiReader() }
+
+    /// Claude's title follows the model picker, so the HUD step and any error name the rung.
+    var title: String {
+        switch self {
+        case .luna: "GPT-5.6 Luna"
+        case .gemini: "Gemini 3.8 Flash"
+        case .claude: "Claude \(ClaudeModel.current.short)"
+        }
+    }
+
+    var reader: any SleeveReader {
+        switch self {
+        case .luna: LunaReader()
+        case .gemini: GeminiReader()
+        case .claude: ClaudeReader()
+        }
+    }
+
+    var key: Secrets.Key {
+        switch self {
+        case .luna: .openAI
+        case .gemini: .gemini
+        case .claude: .anthropic
+        }
+    }
+
+    var keyLabel: String {
+        switch self {
+        case .luna: "OpenAI API key"
+        case .gemini: "Google AI key"
+        case .claude: "Anthropic API key"
+        }
+    }
+
+    var keyPlaceholder: String {
+        switch self {
+        case .luna: "sk-…"
+        case .gemini: "AIza…"
+        case .claude: "sk-ant-…"
+        }
+    }
+
+    var keysURL: URL {
+        switch self {
+        case .luna: URL(string: "https://platform.openai.com/api-keys")!
+        case .gemini: URL(string: "https://aistudio.google.com/apikey")!
+        case .claude: URL(string: "https://platform.claude.com/settings/keys")!
+        }
+    }
+
+    /// One line under the picker: roughly what a photo costs on this provider.
+    var costNote: String {
+        switch self {
+        case .luna: "about $0.001 per photo"
+        case .gemini: "about $0.002 per photo"
+        case .claude: String(format: "about $%.3f per photo on %@", ClaudeModel.current.perPhotoUSD, ClaudeModel.current.short)
+        }
+    }
 }
 
 /// Runs the local pass then (if needed) the model, and keeps the running cost.
@@ -39,7 +95,13 @@ final class Identifier {
         refreshKeys()
     }
 
-    func refreshKeys() { hasAnyKey = Keychain.get(.openAI) != nil || Keychain.get(.gemini) != nil }
+    /// The Claude reader also works with no stored key at all when the `ant` CLI can hand over a
+    /// short-lived token, so the presence of the CLI counts here — a sync filesystem probe, not a
+    /// token mint, so the HUD can call this without waiting on a subprocess.
+    func refreshKeys() {
+        hasAnyKey = Keychain.get(.openAI) != nil || Keychain.get(.gemini) != nil
+            || Keychain.get(.anthropic) != nil || AnthropicCredential.cliURL != nil
+    }
 
     struct Outcome: Sendable {
         var local: LocalReading

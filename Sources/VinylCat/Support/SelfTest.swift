@@ -411,6 +411,38 @@ enum SelfTest {
         let rolled = SpendLedger.load(from: suite, now: cal.date(from: DateComponents(year: 2026, month: 11, day: 3))!)
         check(rolled.monthCostUSD == 0 && rolled.monthKey == "2026-11" && rolled.totalReads == 3, "loading in a later month rolls the month, keeps the total")
         suite.removePersistentDomain(forName: "vinylcat-selftest-spend")
+        print("claude reader — model picker and credentials")
+        let savedModel = UserDefaults.standard.object(forKey: "claudeModel")
+        UserDefaults.standard.removeObject(forKey: "claudeModel")
+        check(ClaudeModel.current == .opus, "no choice stored yet → the best reader, not the cheapest")
+        check(ReaderProvider.claude.title == "Claude Opus 5.5", "the provider title follows the picker")
+        UserDefaults.standard.set("haiku", forKey: "claudeModel")
+        check(ClaudeModel.current == .haiku, "the picker switches the rung")
+        check(ReaderProvider.claude.title == "Claude Haiku 5.5", "and the title with it")
+        if let savedModel { UserDefaults.standard.set(savedModel, forKey: "claudeModel") } else { UserDefaults.standard.removeObject(forKey: "claudeModel") }
+        check(ClaudeModel.allCases.allSatisfy { $0.apiName.hasPrefix("claude-") && $0.apiName.hasSuffix("-5-5") }, "every rung names a current model id")
+        check(ClaudeModel.haiku.perPhotoUSD < ClaudeModel.sonnet.perPhotoUSD
+            && ClaudeModel.sonnet.perPhotoUSD < ClaudeModel.opus.perPhotoUSD, "cost rises with the rung")
+        check(ClaudeModel.opus.perPhotoUSD < 0.05, "even the dearest rung is pennies a photo")
+        check(ReaderProvider.claude.key == .anthropic && ReaderProvider.luna.key == .openAI
+            && ReaderProvider.gemini.key == .gemini, "each provider reads its own key")
+        // The schema-constrained reply is bare JSON; the prompt-only fallback can arrive fenced.
+        check(ClaudeReader.jsonBody(of: "{\"artist\":\"a\"}") == "{\"artist\":\"a\"}", "bare JSON passes through")
+        check(ClaudeReader.jsonBody(of: "```json\n{\"artist\":\"a\"}\n```") == "{\"artist\":\"a\"}", "a fenced reply is unwrapped")
+        check(ClaudeReader.jsonBody(of: "  ```\n{\"a\":1}\n```  ") == "{\"a\":1}", "fences survive surrounding space")
+        check(ClaudeReader.schemaText?.contains("catalogNumber") == true, "the schema serialises for the fallback prompt")
+        // An enum property must not also declare a type union, or the API rejects the whole schema.
+        let claudeProps = ClaudeReader.schema["properties"] as? [String: [String: Any]] ?? [:]
+        check(claudeProps["formatGuess"]?["enum"] != nil && claudeProps["formatGuess"]?["type"] == nil,
+              "formatGuess keeps its enum and loses the type union")
+        check(claudeProps["artist"]?["type"] as? [String] == ["string", "null"], "plain nullable unions are left alone")
+        check((SleeveReading.jsonSchema["properties"] as? [String: [String: Any]])?["formatGuess"]?["type"] != nil,
+              "the shared schema is untouched — only Claude's copy is adjusted")
+        // Federation needs all four env vars; a partial set must not count as configured.
+        check(AnthropicCredential.federationConfigured == false, "no federation env vars here → not configured")
+        check(AnthropicCredential.Source.federation.label.contains("federation")
+            && AnthropicCredential.Source.storedKey.label.contains("stored"), "each credential source names itself")
+        check(!AnthropicCredential.statusLine().isEmpty, "Settings always has a credential line to show")
 
         print("coffee")
         check(Coffee.milestone(reached: 24) == nil, "no ask below 25 scanned records")

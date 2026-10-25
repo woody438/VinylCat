@@ -15,6 +15,9 @@ enum Secrets {
     enum Key: String, CaseIterable {
         case openAI = "openai-api-key"
         case gemini = "gemini-api-key"
+        /// Optional for the Claude reader — a short-lived OAuth or federated token is preferred
+        /// when one is available (`AnthropicCredential`).
+        case anthropic = "anthropic-api-key"
         case discogsToken = "discogs-token"
     }
 

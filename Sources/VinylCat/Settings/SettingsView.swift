@@ -4,7 +4,9 @@ struct SettingsView: View {
     @Environment(AppState.self) private var state
     @State private var openAIKey = Keychain.get(.openAI) ?? ""
     @State private var geminiKey = Keychain.get(.gemini) ?? ""
+    @State private var anthropicKey = Keychain.get(.anthropic) ?? ""
     @State private var discogsToken = Keychain.get(.discogsToken) ?? ""
+    @AppStorage("claudeModel") private var claudeModel: ClaudeModel = .opus
     @AppStorage("discogsUsername") private var discogsUsername = ""
     @AppStorage("currency") private var currency = "GBP"
     @AppStorage("discogsSync") private var discogsSync = false
@@ -36,6 +38,17 @@ struct SettingsView: View {
                     .labelsHidden().pickerStyle(.radioGroup)
                     KeyField(label: "OpenAI API key", text: $openAIKey) { Keychain.set(openAIKey, for: .openAI); identifier.refreshKeys() }
                     KeyField(label: "Google AI key", text: $geminiKey) { Keychain.set(geminiKey, for: .gemini); identifier.refreshKeys() }
+                    if identifier.provider == .claude {
+                        Row("Claude model") {
+                            Picker("", selection: $claudeModel) {
+                                ForEach(ClaudeModel.allCases) { Text($0.short).tag($0) }
+                            }.labelsHidden().frame(width: 150)
+                        }
+                        Text(claudeModel.note).font(Theme.mono(11)).foregroundStyle(Theme.muted)
+                        Text(ClaudeModel.costAdvice).font(Theme.mono(11)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+                        Text(AnthropicCredential.statusLine()).font(Theme.mono(11)).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                        KeyField(label: "Anthropic API key", text: $anthropicKey) { Keychain.set(anthropicKey, for: .anthropic); identifier.refreshKeys() }
+                    }
                     Row("Skip model when barcode hits") { Toggle("", isOn: $identifier.skipModelWhenBarcode).labelsHidden().toggleStyle(.switch) }
                     Row("Spend this session") { Text(String(format: "$%.3f · %d reads", identifier.sessionCostUSD, identifier.reads)).foregroundStyle(Theme.secondary) }
                     Row("Spend this month") {

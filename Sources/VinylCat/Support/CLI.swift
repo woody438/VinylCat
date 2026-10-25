@@ -70,6 +70,8 @@ enum CLI {
         print("voices(en)  \(Speaker.availableVoices.count)  e.g. \(Speaker.availableVoices.prefix(3).map(\.name))")
         for k in Keychain.Key.allCases { print("key         \(k.rawValue): \(Keychain.get(k) == nil ? "missing" : "set") ") }
         print("provider    \(Identifier().provider.title)")
+        print("anthropic   \(AnthropicCredential.statusLine())")
+        if let ant = AnthropicCredential.cliURL { print("ant cli     \(ant.path)") }
         let store = Store.shared
         print("store       \(store.url.path) · \(store.count()) records · \(store.reviewCount()) in review")
         print("photos      \(PhotoStore.shared.root.path) · \((try? FileManager.default.contentsOfDirectory(atPath: PhotoStore.shared.root.path))?.count ?? 0) files")

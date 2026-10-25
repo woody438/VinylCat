@@ -176,8 +176,19 @@ private struct ModelStep: View {
     @Environment(AppState.self) private var state
     @State private var openAI = Keychain.get(.openAI) ?? ""
     @State private var gemini = Keychain.get(.gemini) ?? ""
+    @State private var anthropic = Keychain.get(.anthropic) ?? ""
     @State private var result = ""
     @State private var busy = false
+    @AppStorage("claudeModel") private var claudeModel: ClaudeModel = .opus
+
+    /// The field for whichever provider is selected — one place, three providers.
+    private func keyBinding(_ p: ReaderProvider) -> Binding<String> {
+        switch p {
+        case .luna: $openAI
+        case .gemini: $gemini
+        case .claude: $anthropic
+        }
+    }
 
     var body: some View {
         @Bindable var identifier = state.identifier
@@ -187,29 +198,32 @@ private struct ModelStep: View {
             Picker("", selection: $identifier.provider) {
                 ForEach(ReaderProvider.allCases) { Text($0.title).tag($0) }
             }.labelsHidden().pickerStyle(.radioGroup)
-            if identifier.provider == .luna {
-                HStack(spacing: 6) {
-                    Text("GPT-5.6 Luna · about $0.001 per photo · key from").font(Theme.mono(12)).foregroundStyle(Theme.muted)
-                    Link("platform.openai.com/api-keys", destination: URL(string: "https://platform.openai.com/api-keys")!).font(Theme.mono(12)).underline().foregroundStyle(Theme.green)
-                }
+            let p = identifier.provider
+            if p == .claude {
                 HStack(spacing: 12) {
-                    SecureField("sk-…", text: $openAI).textFieldStyle(.roundedBorder).frame(width: 360)
-                    WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(openAI, for: .openAI); state.identifier.refreshKeys(); Task { await test() } }
-                    WizardButton("GET A KEY", style: .quiet) { NSWorkspace.shared.open(URL(string: "https://platform.openai.com/api-keys")!) }
+                    Picker("", selection: $claudeModel) {
+                        ForEach(ClaudeModel.allCases) { Text($0.short).tag($0) }
+                    }.labelsHidden().frame(width: 150)
+                    Text(claudeModel.note).font(Theme.mono(12)).foregroundStyle(Theme.muted)
                 }
-            } else {
-                HStack(spacing: 6) {
-                    Text("Gemini 3.8 Flash · about $0.002 per photo · key from").font(Theme.mono(12)).foregroundStyle(Theme.muted)
-                    Link("aistudio.google.com/apikey", destination: URL(string: "https://aistudio.google.com/apikey")!).font(Theme.mono(12)).underline().foregroundStyle(Theme.green)
-                }
-                HStack(spacing: 12) {
-                    SecureField("AIza…", text: $gemini).textFieldStyle(.roundedBorder).frame(width: 360)
-                    WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(gemini, for: .gemini); state.identifier.refreshKeys(); Task { await test() } }
-                    WizardButton("GET A KEY", style: .quiet) { NSWorkspace.shared.open(URL(string: "https://aistudio.google.com/apikey")!) }
-                }
+                Text(ClaudeModel.costAdvice).font(Theme.mono(12)).foregroundStyle(Theme.muted).frame(maxWidth: 720).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 6) {
+                Text("\(p.title) · \(p.costNote) · key from").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                Link(p.keysURL.host ?? "", destination: p.keysURL).font(Theme.mono(12)).underline().foregroundStyle(Theme.green)
+            }
+            HStack(spacing: 12) {
+                SecureField(p.keyPlaceholder, text: keyBinding(p)).textFieldStyle(.roundedBorder).frame(width: 360)
+                WizardButton(busy ? "TESTING…" : "SAVE & TEST", style: .primary) { Keychain.set(keyBinding(p).wrappedValue, for: p.key); state.identifier.refreshKeys(); Task { await test() } }
+                WizardButton("GET A KEY", style: .quiet) { NSWorkspace.shared.open(p.keysURL) }
+            }
+            if p == .claude {
+                Text(AnthropicCredential.statusLine()).font(Theme.mono(12)).foregroundStyle(Theme.secondary).frame(maxWidth: 720).fixedSize(horizontal: false, vertical: true)
+                Text("A pasted key never expires. `brew install anthropics/tap/ant` then `ant auth login` and VinylCat uses short-lived tokens instead — nothing durable stored here, and no key to leak.")
+                    .font(Theme.mono(12)).foregroundStyle(Theme.muted).frame(maxWidth: 720).fixedSize(horizontal: false, vertical: true)
             }
             if !result.isEmpty { Text(result).font(Theme.mono(12)).foregroundStyle(result.hasPrefix("OK") ? Theme.green : Theme.red).frame(maxWidth: 720) }
-            Text("Keys are stored in the macOS Keychain and never leave this Mac except to call the provider you chose.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+            Text("Keys are stored in a 0600 file next to the database and never leave this Mac except to call the provider you chose.").font(Theme.mono(12)).foregroundStyle(Theme.muted)
         }
     }
 
